@@ -80,7 +80,36 @@ class FalkorClient:
     def _simulate_fallback_query(self, cypher: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Simulates key queries when offline."""
         logger.debug(f"[In-Memory Mode] Query: {cypher[:60]}... Params: {params}")
-        # Returns empty or simulated record structure to allow offline pipeline testing
+
+        # Handle node creation simulation
+        if "MERGE (f:Function" in cypher:
+            fname = params.get("name", "UnknownFn")
+            self._fallback_nodes[fname] = {"id": fname, "label": "Function", "name": fname, "props": params}
+        elif "MERGE (m:GlobalMemory" in cypher:
+            addr = params.get("addr", "0x0")
+            lbl = params.get("label", "MEM")
+            self._fallback_nodes[addr] = {"id": addr, "label": "GlobalMemory", "name": f"{lbl} ({addr})", "props": params}
+        elif "MERGE (t:TestCase" in cypher:
+            tid = params.get("tid", "TC0")
+            self._fallback_nodes[tid] = {"id": tid, "label": "TestCase", "name": tid, "props": params}
+
+        # Handle Cytoscape graph export
+        if "MATCH (n)" in cypher and "WHERE n:Function" in cypher:
+            return list(self._fallback_nodes.values())
+        if "MATCH (source)-[r]->(target)" in cypher:
+            return self._fallback_edges
+
+        # Memory source resolution simulation
+        if "MATCH (mem:GlobalMemory" in cypher and "initializer:Function" in cypher:
+            addr = params.get("addr", "")
+            return [{
+                "address": addr,
+                "label": "DIR_OFFSETS" if "6080" in addr else "SCATTER_CORNERS",
+                "data_type": "int[4][2]",
+                "producer_function": "init_game_tables",
+                "initialization_code": "void init_game_tables() { /* Offset vectors */ }"
+            }]
+
         return []
 
     def clear_graph(self) -> None:

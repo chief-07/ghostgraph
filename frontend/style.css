@@ -1,0 +1,42 @@
+/* Custom Styles for GhostGraph Dashboard */
+
+#cy {
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+}
+
+#agentTerminal::-webkit-scrollbar {
+  width: 6px;
+}
+
+#agentTerminal::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+#agentTerminal::-webkit-scrollbar-thumb {
+  background: #3B385E;
+  border-radius: 3px;
+}
+
+#agentTerminal::-webkit-scrollbar-thumb:hover {
+  background: #8B5CF6;
+}
+
+.terminal-entry {
+  line-height: 1.5;
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.glow-purple {
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+}
