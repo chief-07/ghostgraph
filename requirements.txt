@@ -1,0 +1,16 @@
+# Web Framework & Real-Time Streaming
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+sse-starlette>=2.0.0
+python-dotenv>=1.0.0
+pydantic>=2.6.0
+
+# Graph Database
+falkordb>=1.0.8
+
+# AI / LLM (Gemini API)
+google-genai>=0.1.0
+
+# Binary Analysis & Disassembly (Lightweight Engine)
+capstone>=5.0.0
+pefile>=2023.2.7
