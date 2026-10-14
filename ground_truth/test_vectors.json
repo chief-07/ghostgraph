@@ -1,0 +1,142 @@
+[
+  {
+    "id": "TC01_PACMAN_MOVE_LEFT",
+    "category": "player_movement",
+    "description": "Pac-Man moves LEFT from open corridor",
+    "args": ["--px", "14", "--py", "26", "--pdir", "1", "--action", "1"],
+    "expected_pacman": {"x": 13, "y": 26, "dir": 1}
+  },
+  {
+    "id": "TC02_PACMAN_MOVE_RIGHT",
+    "category": "player_movement",
+    "description": "Pac-Man moves RIGHT",
+    "args": ["--px", "14", "--py", "26", "--pdir", "3", "--action", "3"],
+    "expected_pacman": {"x": 15, "y": 26, "dir": 3}
+  },
+  {
+    "id": "TC03_PACMAN_WALL_BLOCKED",
+    "category": "collision",
+    "description": "Pac-Man attempts to walk into perimeter top wall (y=0)",
+    "args": ["--px", "14", "--py", "1", "--pdir", "0", "--action", "0"],
+    "expected_pacman": {"x": 14, "y": 1, "dir": 0}
+  },
+  {
+    "id": "TC04_TUNNEL_WRAP_LEFT",
+    "category": "tunnel_warp",
+    "description": "Pac-Man wraps through left tunnel exit (x=0, y=17)",
+    "args": ["--px", "0", "--py", "17", "--pdir", "1", "--action", "1"],
+    "expected_pacman": {"x": 27, "y": 17, "dir": 1}
+  },
+  {
+    "id": "TC05_TUNNEL_WRAP_RIGHT",
+    "category": "tunnel_warp",
+    "description": "Pac-Man wraps through right tunnel exit (x=27, y=17)",
+    "args": ["--px", "27", "--py", "17", "--pdir", "3", "--action", "3"],
+    "expected_pacman": {"x": 0, "y": 17, "dir": 3}
+  },
+  {
+    "id": "TC06_BLINKY_CHASE_DIRECT",
+    "category": "ghost_ai_blinky",
+    "description": "Blinky targets Pac-Man tile directly and steps south towards him",
+    "args": ["--px", "14", "--py", "20", "--bx", "14", "--by", "10", "--bdir", "2"],
+    "expected_blinky": {"x": 14, "y": 11, "dir": 2}
+  },
+  {
+    "id": "TC07_BLINKY_CORRIDOR_TURN",
+    "category": "ghost_ai_blinky",
+    "description": "Blinky turns LEFT at intersection to pursue Pac-Man",
+    "args": ["--px", "5", "--py", "10", "--bx", "10", "--by", "10", "--bdir", "1"],
+    "expected_blinky": {"x": 9, "y": 10, "dir": 1}
+  },
+  {
+    "id": "TC08_BLINKY_NO_REVERSAL",
+    "category": "ghost_ai_blinky",
+    "description": "Blinky cannot make an immediate 180-degree turn backwards",
+    "args": ["--px", "14", "--py", "5", "--bx", "14", "--by", "10", "--bdir", "2"],
+    "expected_blinky_not_dir": 0
+  },
+  {
+    "id": "TC09_PINKY_AMBUSH_LEFT",
+    "category": "ghost_ai_pinky",
+    "description": "Pinky projects target 4 tiles to the LEFT of Pac-Man",
+    "args": ["--px", "14", "--py", "20", "--pdir", "1", "--pinky_x", "10", "--pinky_y", "15", "--bdir", "2"],
+    "expected_target_x_offset": -4
+  },
+  {
+    "id": "TC10_PINKY_AMBUSH_UP",
+    "category": "ghost_ai_pinky",
+    "description": "Pinky projects target 4 tiles UP from Pac-Man",
+    "args": ["--px", "14", "--py", "20", "--pdir", "0", "--pinky_x", "14", "--pinky_y", "25"],
+    "expected_target_y_offset": -4
+  },
+  {
+    "id": "TC11_PINKY_AMBUSH_RIGHT",
+    "category": "ghost_ai_pinky",
+    "description": "Pinky projects target 4 tiles RIGHT from Pac-Man",
+    "args": ["--px", "10", "--py", "20", "--pdir", "3", "--pinky_x", "20", "--pinky_y", "20"],
+    "expected_target_x_offset": 4
+  },
+  {
+    "id": "TC12_INKY_VECTOR_DOUBLING",
+    "category": "ghost_ai_inky",
+    "description": "Inky uses pivot (Pac-Man+2) and doubles vector from Blinky",
+    "args": ["--px", "14", "--py", "20", "--pdir", "1", "--bx", "14", "--by", "10", "--inky_x", "10", "--inky_y", "20"],
+    "category_detail": "vector_flank"
+  },
+  {
+    "id": "TC13_INKY_FLANK_ADVANCE",
+    "category": "ghost_ai_inky",
+    "description": "Inky takes step toward calculated flanking vector",
+    "args": ["--px", "12", "--py", "20", "--pdir", "1", "--bx", "12", "--by", "16", "--inky_x", "8", "--inky_y", "20"],
+    "category_detail": "flank_movement"
+  },
+  {
+    "id": "TC14_CLYDE_CHASE_FAR",
+    "category": "ghost_ai_clyde",
+    "description": "Clyde Euclidean distance > 8 tiles (10 tiles): acts like Blinky (chases)",
+    "args": ["--px", "14", "--py", "20", "--clyde_x", "14", "--clyde_y", "10"],
+    "expected_behavior": "chase_pacman"
+  },
+  {
+    "id": "TC15_CLYDE_COWARD_NEAR",
+    "category": "ghost_ai_clyde",
+    "description": "Clyde Euclidean distance <= 8 tiles (5 tiles): coward retreats to corner (0, 35)",
+    "args": ["--px", "14", "--py", "20", "--clyde_x", "14", "--clyde_y", "15"],
+    "expected_behavior": "retreat_to_bottom_left_corner"
+  },
+  {
+    "id": "TC16_CLYDE_EXACT_BOUNDARY",
+    "category": "ghost_ai_clyde",
+    "description": "Clyde Euclidean distance exactly 8.0 tiles (dist_sq == 64): triggers coward retreat",
+    "args": ["--px", "14", "--py", "20", "--clyde_x", "14", "--clyde_y", "12"],
+    "expected_behavior": "retreat_corner"
+  },
+  {
+    "id": "TC17_SCATTER_MODE_CORNER",
+    "category": "modes",
+    "description": "In SCATTER mode (mode=1), Blinky targets Top-Right corner (27, 0)",
+    "args": ["--mode", "1", "--bx", "20", "--by", "5", "--px", "5", "--py", "30"],
+    "expected_target": {"x": 27, "y": 0}
+  },
+  {
+    "id": "TC18_FRIGHTENED_MODE_FLEE",
+    "category": "modes",
+    "description": "In FRIGHTENED mode (mode=2), ghosts run away from Pac-Man",
+    "args": ["--mode", "2", "--px", "14", "--py", "20", "--bx", "14", "--by", "19"],
+    "expected_mode": 2
+  },
+  {
+    "id": "TC19_COLLISION_CHASE_LOSE_LIFE",
+    "category": "scoring_and_lives",
+    "description": "Pac-Man and Blinky occupy same tile in CHASE mode: lose life",
+    "args": ["--mode", "0", "--px", "14", "--py", "11", "--bx", "14", "--by", "10", "--bdir", "2"],
+    "expected_lives": 2
+  },
+  {
+    "id": "TC20_COLLISION_FRIGHTENED_EAT_GHOST",
+    "category": "scoring_and_lives",
+    "description": "Pac-Man eats ghost in FRIGHTENED mode: gains 200 points bonus",
+    "args": ["--mode", "2", "--px", "14", "--py", "11", "--bx", "14", "--by", "11"],
+    "expected_score_bonus": 200
+  }
+]

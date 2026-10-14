@@ -1,0 +1,140 @@
+{
+  "target_name": "1980 Pac-Man Ghost AI & Maze Engine",
+  "arch": "x86_64",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "description": "Authentic Toru Iwatani Namco 1980 arcade ghost targeting and maze navigation engine.",
+  "global_memory": [
+    {
+      "address": "0x00406080",
+      "label": "DIR_OFFSETS",
+      "data_type": "int[4][2]",
+      "size": 32,
+      "description": "Direction step vectors for UP, LEFT, DOWN, RIGHT (dx, dy)",
+      "initial_values": [[0, -1], [-1, 0], [0, 1], [1, 0]]
+    },
+    {
+      "address": "0x004060C0",
+      "label": "SCATTER_CORNERS",
+      "data_type": "int[4][2]",
+      "size": 32,
+      "description": "Fixed scatter corner targets for Blinky, Pinky, Inky, Clyde",
+      "initial_values": [[27, 0], [0, 0], [27, 35], [0, 35]]
+    },
+    {
+      "address": "0x00406100",
+      "label": "MAZE_BITMASK",
+      "data_type": "unsigned char[36][28]",
+      "size": 1008,
+      "description": "Grid maze wall occupancy bitmask (0 = path, 1 = wall)"
+    }
+  ],
+  "structs": [
+    {
+      "name": "GameState",
+      "size": 72,
+      "fields": [
+        {"offset": 0, "name": "pacman_x", "type": "int"},
+        {"offset": 4, "name": "pacman_y", "type": "int"},
+        {"offset": 8, "name": "pacman_dir", "type": "int"},
+        {"offset": 12, "name": "blinky_x", "type": "int"},
+        {"offset": 16, "name": "blinky_y", "type": "int"},
+        {"offset": 20, "name": "blinky_dir", "type": "int"},
+        {"offset": 24, "name": "pinky_x", "type": "int"},
+        {"offset": 28, "name": "pinky_y", "type": "int"},
+        {"offset": 32, "name": "pinky_dir", "type": "int"},
+        {"offset": 36, "name": "inky_x", "type": "int"},
+        {"offset": 40, "name": "inky_y", "type": "int"},
+        {"offset": 44, "name": "inky_dir", "type": "int"},
+        {"offset": 48, "name": "clyde_x", "type": "int"},
+        {"offset": 52, "name": "clyde_y", "type": "int"},
+        {"offset": 56, "name": "clyde_dir", "type": "int"},
+        {"offset": 60, "name": "mode", "type": "int"},
+        {"offset": 64, "name": "frightened_timer", "type": "int"},
+        {"offset": 68, "name": "score", "type": "int"}
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "init_game_tables",
+      "address": "0x00401050",
+      "signature": "void init_game_tables(void)",
+      "pseudocode": "void init_game_tables(void) {\n    int *dir_ptr = (int *)0x00406080;\n    dir_ptr[0] = 0;   dir_ptr[1] = -1;\n    dir_ptr[2] = -1;  dir_ptr[3] = 0;\n    dir_ptr[4] = 0;   dir_ptr[5] = 1;\n    dir_ptr[6] = 1;   dir_ptr[7] = 0;\n\n    int *scatter_ptr = (int *)0x004060C0;\n    scatter_ptr[0] = 27; scatter_ptr[1] = 0;\n    scatter_ptr[2] = 0;  scatter_ptr[3] = 0;\n    scatter_ptr[4] = 27; scatter_ptr[5] = 35;\n    scatter_ptr[6] = 0;  scatter_ptr[7] = 35;\n\n    DAT_00406140 = 1; /* TABLES_INITIALIZED = 1 */\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00406080", "0x004060C0", "0x00406100"]
+    },
+    {
+      "name": "check_wall_collision",
+      "address": "0x00401120",
+      "signature": "int check_wall_collision(int x, int y)",
+      "pseudocode": "int check_wall_collision(int param_1, int param_2) {\n    if (param_2 == 17) {\n        if (param_1 < 0 || param_1 >= 28) return 0;\n    }\n    if (param_1 < 0 || param_1 >= 28 || param_2 < 0 || param_2 >= 36) {\n        return 1;\n    }\n    return (int)*(unsigned char *)(0x00406100 + (param_2 * 28) + param_1);\n}",
+      "callees": [],
+      "reads_memory": ["0x00406100"],
+      "writes_memory": []
+    },
+    {
+      "name": "euclidean_distance_sq",
+      "address": "0x00401180",
+      "signature": "double euclidean_distance_sq(int x1, int y1, int x2, int y2)",
+      "pseudocode": "double euclidean_distance_sq(int param_1, int param_2, int param_3, int param_4) {\n    int iVar1 = param_1 - param_3;\n    int iVar2 = param_2 - param_4;\n    return (double)(iVar1 * iVar1 + iVar2 * iVar2);\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": []
+    },
+    {
+      "name": "choose_next_ghost_dir",
+      "address": "0x00401200",
+      "signature": "int choose_next_ghost_dir(int cur_x, int cur_y, int cur_dir, int target_x, int target_y)",
+      "pseudocode": "int choose_next_ghost_dir(int param_1, int param_2, int param_3, int param_4, int param_5) {\n    int best_dir = param_3;\n    double min_dist = 1000000000.0;\n    int opposite_dir = (param_3 + 2) % 4;\n    int dirs[4] = { 0, 1, 2, 3 };\n\n    for (int i = 0; i < 4; i++) {\n        int d = dirs[i];\n        if (d == opposite_dir) continue;\n        int *vec = (int *)(0x00406080 + (d * 8));\n        int nx = param_1 + vec[0];\n        int ny = param_2 + vec[1];\n        if (param_2 == 17) {\n            if (nx < 0) nx = 27;\n            else if (nx >= 28) nx = 0;\n        }\n        if (check_wall_collision(nx, ny) == 0) {\n            double d_sq = euclidean_distance_sq(nx, ny, param_4, param_5);\n            if (d_sq < min_dist) {\n                min_dist = d_sq;\n                best_dir = d;\n            }\n        }\n    }\n    return best_dir;\n}",
+      "callees": ["check_wall_collision", "euclidean_distance_sq"],
+      "reads_memory": ["0x00406080"],
+      "writes_memory": []
+    },
+    {
+      "name": "update_blinky_ai",
+      "address": "0x00401340",
+      "signature": "void update_blinky_ai(GameState *s)",
+      "pseudocode": "void update_blinky_ai(long param_1) {\n    if (DAT_00406140 == 0) init_game_tables();\n    int target_x = *(int *)(param_1 + 0x00);\n    int target_y = *(int *)(param_1 + 0x04);\n    int mode = *(int *)(param_1 + 0x3C);\n\n    if (mode == 1) {\n        target_x = *(int *)(0x004060C0 + 0);\n        target_y = *(int *)(0x004060C0 + 4);\n    } else if (mode == 2) {\n        target_x = 27 - *(int *)(param_1 + 0x00);\n        target_y = 35 - *(int *)(param_1 + 0x04);\n    }\n\n    int cur_dir = *(int *)(param_1 + 0x14);\n    int cur_x = *(int *)(param_1 + 0x0C);\n    int cur_y = *(int *)(param_1 + 0x10);\n    int next_dir = choose_next_ghost_dir(cur_x, cur_y, cur_dir, target_x, target_y);\n    *(int *)(param_1 + 0x14) = next_dir;\n    int *vec = (int *)(0x00406080 + (next_dir * 8));\n    *(int *)(param_1 + 0x0C) = cur_x + vec[0];\n    *(int *)(param_1 + 0x10) = cur_y + vec[1];\n}",
+      "callees": ["init_game_tables", "choose_next_ghost_dir"],
+      "reads_memory": ["0x00406080", "0x004060C0"],
+      "writes_memory": []
+    },
+    {
+      "name": "update_pinky_ai",
+      "address": "0x00401480",
+      "signature": "void update_pinky_ai(GameState *s)",
+      "pseudocode": "void update_pinky_ai(long param_1) {\n    if (DAT_00406140 == 0) init_game_tables();\n    int pdir = *(int *)(param_1 + 0x08);\n    int *pvec = (int *)(0x00406080 + (pdir * 8));\n    int target_x = *(int *)(param_1 + 0x00) + (pvec[0] * 4);\n    int target_y = *(int *)(param_1 + 0x04) + (pvec[1] * 4);\n\n    if (*(int *)(param_1 + 0x3C) == 1) {\n        target_x = *(int *)(0x004060C0 + 8);\n        target_y = *(int *)(0x004060C0 + 12);\n    }\n\n    int cur_x = *(int *)(param_1 + 0x18);\n    int cur_y = *(int *)(param_1 + 0x1C);\n    int cur_dir = *(int *)(param_1 + 0x20);\n    int next_dir = choose_next_ghost_dir(cur_x, cur_y, cur_dir, target_x, target_y);\n    *(int *)(param_1 + 0x20) = next_dir;\n    int *vec = (int *)(0x00406080 + (next_dir * 8));\n    *(int *)(param_1 + 0x18) = cur_x + vec[0];\n    *(int *)(param_1 + 0x1C) = cur_y + vec[1];\n}",
+      "callees": ["init_game_tables", "choose_next_ghost_dir"],
+      "reads_memory": ["0x00406080", "0x004060C0"],
+      "writes_memory": []
+    },
+    {
+      "name": "update_inky_ai",
+      "address": "0x004015C0",
+      "signature": "void update_inky_ai(GameState *s)",
+      "pseudocode": "void update_inky_ai(long param_1) {\n    if (DAT_00406140 == 0) init_game_tables();\n    int pdir = *(int *)(param_1 + 0x08);\n    int *pvec = (int *)(0x00406080 + (pdir * 8));\n    int pivot_x = *(int *)(param_1 + 0x00) + (pvec[0] * 2);\n    int pivot_y = *(int *)(param_1 + 0x04) + (pvec[1] * 2);\n\n    int bx = *(int *)(param_1 + 0x0C);\n    int by = *(int *)(param_1 + 0x10);\n    int vec_x = pivot_x - bx;\n    int vec_y = pivot_y - by;\n    int target_x = bx + (vec_x * 2);\n    int target_y = by + (vec_y * 2);\n\n    if (*(int *)(param_1 + 0x3C) == 1) {\n        target_x = *(int *)(0x004060C0 + 16);\n        target_y = *(int *)(0x004060C0 + 20);\n    }\n\n    int cur_x = *(int *)(param_1 + 0x24);\n    int cur_y = *(int *)(param_1 + 0x28);\n    int cur_dir = *(int *)(param_1 + 0x2C);\n    int next_dir = choose_next_ghost_dir(cur_x, cur_y, cur_dir, target_x, target_y);\n    *(int *)(param_1 + 0x2C) = next_dir;\n    int *vec = (int *)(0x00406080 + (next_dir * 8));\n    *(int *)(param_1 + 0x24) = cur_x + vec[0];\n    *(int *)(param_1 + 0x28) = cur_y + vec[1];\n}",
+      "callees": ["init_game_tables", "choose_next_ghost_dir"],
+      "reads_memory": ["0x00406080", "0x004060C0"],
+      "writes_memory": []
+    },
+    {
+      "name": "update_clyde_ai",
+      "address": "0x00401720",
+      "signature": "void update_clyde_ai(GameState *s)",
+      "pseudocode": "void update_clyde_ai(long param_1) {\n    if (DAT_00406140 == 0) init_game_tables();\n    int cx = *(int *)(param_1 + 0x30);\n    int cy = *(int *)(param_1 + 0x34);\n    int px = *(int *)(param_1 + 0x00);\n    int py = *(int *)(param_1 + 0x04);\n    double dist_sq = euclidean_distance_sq(cx, cy, px, py);\n\n    int target_x, target_y;\n    if (dist_sq > 64.0 && *(int *)(param_1 + 0x3C) != 1) {\n        target_x = px;\n        target_y = py;\n    } else {\n        target_x = *(int *)(0x004060C0 + 24);\n        target_y = *(int *)(0x004060C0 + 28);\n    }\n\n    int cur_dir = *(int *)(param_1 + 0x38);\n    int next_dir = choose_next_ghost_dir(cx, cy, cur_dir, target_x, target_y);\n    *(int *)(param_1 + 0x38) = next_dir;\n    int *vec = (int *)(0x00406080 + (next_dir * 8));\n    *(int *)(param_1 + 0x30) = cx + vec[0];\n    *(int *)(param_1 + 0x34) = cy + vec[1];\n}",
+      "callees": ["init_game_tables", "euclidean_distance_sq", "choose_next_ghost_dir"],
+      "reads_memory": ["0x00406080", "0x004060C0"],
+      "writes_memory": []
+    },
+    {
+      "name": "tick_engine",
+      "address": "0x00401880",
+      "signature": "void tick_engine(GameState *s, int action_dir)",
+      "pseudocode": "void tick_engine(long param_1, int param_2) {\n    if (DAT_00406140 == 0) init_game_tables();\n    if (param_2 >= 0 && param_2 <= 3) {\n        int *vec = (int *)(0x00406080 + (param_2 * 8));\n        int nx = *(int *)(param_1 + 0x00) + vec[0];\n        int ny = *(int *)(param_1 + 0x04) + vec[1];\n        if (check_wall_collision(nx, ny) == 0) {\n            *(int *)(param_1 + 0x08) = param_2;\n        }\n    }\n    int pdir = *(int *)(param_1 + 0x08);\n    int *pvec = (int *)(0x00406080 + (pdir * 8));\n    int px = *(int *)(param_1 + 0x00) + pvec[0];\n    int py = *(int *)(param_1 + 0x04) + pvec[1];\n    if (check_wall_collision(px, py) == 0) {\n        *(int *)(param_1 + 0x00) = px;\n        *(int *)(param_1 + 0x04) = py;\n        *(int *)(param_1 + 0x44) += 10;\n    }\n    update_blinky_ai(param_1);\n    update_pinky_ai(param_1);\n    update_inky_ai(param_1);\n    update_clyde_ai(param_1);\n}",
+      "callees": ["init_game_tables", "check_wall_collision", "update_blinky_ai", "update_pinky_ai", "update_inky_ai", "update_clyde_ai"],
+      "reads_memory": ["0x00406080"],
+      "writes_memory": []
+    }
+  ]
+}
