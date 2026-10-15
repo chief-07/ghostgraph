@@ -132,13 +132,17 @@ def record_test_outcome(candidate_id: str, test_id: str, passed: bool, diff: str
     """
     if passed:
         cypher = """
-        MATCH (c:Candidate {id: $cid}), (t:TestCase {id: $tid})
+        MERGE (c:Candidate {id: $cid})
+        WITH c
+        MATCH (t:TestCase {id: $tid})
         MERGE (c)-[:PASSED]->(t)
         """
         falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id})
     else:
         cypher = """
-        MATCH (c:Candidate {id: $cid}), (t:TestCase {id: $tid})
+        MERGE (c:Candidate {id: $cid})
+        WITH c
+        MATCH (t:TestCase {id: $tid})
         CREATE (c)-[:FAILED_ON {diff: $diff, timestamp: timestamp()}]->(t)
         """
         falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id, "diff": diff})
