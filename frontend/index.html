@@ -133,26 +133,23 @@
           </div>
         </div>
 
-        <!-- Right Column: Raw Decompiled Pseudocode Viewer -->
-        <div class="w-full lg:w-[480px] bg-[#0E1424] rounded-lg border border-falkor-border overflow-hidden flex flex-col">
-          <div class="px-3.5 py-2 border-b border-falkor-border bg-black/30 flex items-center justify-between text-xs font-mono text-slate-400">
-            <span class="flex items-center gap-1.5"><i class="fa-solid fa-code text-slate-500"></i> Ghidra AST Decompilation</span>
+        <!-- Right Column: Raw Machine Code Disassembly & Ghidra Viewer -->
+        <div class="w-full lg:w-[500px] bg-[#0E1424] rounded-lg border border-falkor-border overflow-hidden flex flex-col">
+          <div class="px-3.5 py-2 border-b border-falkor-border bg-black/40 flex items-center justify-between text-xs font-mono">
+            <div class="flex items-center gap-1 bg-[#121A2C] p-0.5 rounded border border-falkor-border">
+              <button id="btnViewDisasm" class="px-2.5 py-1 rounded text-[11px] bg-purple-600/40 text-purple-200 border border-purple-500/50 flex items-center gap-1" onclick="toggleSnippetView('disasm')">
+                <i class="fa-solid fa-microchip text-[10px]"></i> Raw Machine Code (x86_64)
+              </button>
+              <button id="btnViewPseudo" class="px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white border border-transparent flex items-center gap-1" onclick="toggleSnippetView('pseudo')">
+                <i class="fa-solid fa-code text-[10px]"></i> Ghidra AST
+              </button>
+            </div>
             <span class="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
               <i class="fa-solid fa-link-slash"></i> 1 Detached Pointer
             </span>
           </div>
-          <div class="p-3 font-mono text-xs overflow-x-auto text-slate-300 max-h-56">
-            <pre id="decompiledSnippetCode"><code class="language-c">// Stripped Ghidra Pseudocode
-int verify_crc16_checksum(unsigned char *buf, int len, unsigned short expected_crc) {
-    unsigned short crc = 0xFFFF;
-    <span class="code-highlight-danger">/* UNRESOLVED POINTER: 0x00402010 not defined in local scope */
-    unsigned short *table = (unsigned short *)0x00402010;</span>
-    for (int i = 0; i < len; i++) {
-        unsigned char idx = (unsigned char)((crc >> 8) ^ buf[i]);
-        crc = (unsigned short)((crc << 8) ^ table[idx]);
-    }
-    return (crc == expected_crc) ? 1 : 0;
-}</code></pre>
+          <div class="p-3 font-mono text-xs overflow-x-auto text-slate-300 max-h-60">
+            <pre id="decompiledSnippetCode"><code class="language-asm">// Loading stripped binary opcodes...</code></pre>
           </div>
         </div>
 

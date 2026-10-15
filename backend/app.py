@@ -125,6 +125,7 @@ async def get_target_details(target_id: str = "telemetry"):
             "critical_mem": cfg["critical_mem"],
             "mem_label": cfg["mem_label"],
             "producer_fn": cfg["producer_fn"],
+            "raw_disassembly": cfg.get("raw_disassembly", ""),
             "decompiled_snippet": cfg["decompiled_snippet"],
             "reconstructed_c": cfg["reconstructed_c"]
         },

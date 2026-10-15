@@ -23,6 +23,31 @@ TARGET_CONFIGS = {
         "mem_label": "CRC16_LOOKUP_TABLE",
         "producer_fn": "init_crc16_poly",
         "ref_binary": "ground_truth/telemetry.bin",
+        "raw_disassembly": """; Target: libsatellite_downlink.so.1 (x86_64 stripped ELF)
+; Symbol: sub_401180 (verify_crc16_checksum)
+00401180:  55                      push   rbp
+00401181:  48 89 e5                mov    rbp, rsp
+00401184:  48 89 7d e8             mov    QWORD PTR [rbp-0x18], rdi
+00401188:  89 75 e4                mov    DWORD PTR [rbp-0x1c], esi
+0040118b:  66 89 55 e2             mov    WORD PTR [rbp-0x1e], dx
+0040118f:  66 c7 45 f6 ff ff       mov    WORD PTR [rbp-0xa], 0xffff
+00401195:  c7 45 f8 00 00 00 00    mov    DWORD PTR [rbp-0x8], 0x0
+0040119c:  eb 36                   jmp    004011d4
+; [CRITICAL UNGROUNDED MEMORY ACCESS]
+0040119e:  48 8b 05 6b 0e 00 00    mov    rax, QWORD PTR [rip+0xe6b] ; [0x00402010] UNRESOLVED
+004011a5:  0f b7 0c 10             movzx  ecx, WORD PTR [rax+rdx*2]  ; CRC16_LOOKUP_TABLE lookup
+004011a9:  66 31 c8                xor    ax, cx
+004011ac:  66 89 45 f6             mov    WORD PTR [rbp-0xa], ax
+004011b0:  83 45 f8 01             add    DWORD PTR [rbp-0x8], 0x1
+004011b4:  8b 45 f8                mov    eax, DWORD PTR [rbp-0x8]
+004011b7:  3b 45 e4                cmp    eax, DWORD PTR [rbp-0x1c]
+004011ba:  7c e2                   jl     0040119e
+004011bc:  0f b7 45 f6             movzx  eax, WORD PTR [rbp-0xa]
+004011c0:  66 3b 45 e2             cmp    ax, WORD PTR [rbp-0x1e]
+004011c4:  0f 94 c0                sete   al
+004011c7:  0f b6 c0                movzx  eax, al
+004011ca:  5d                      pop    rbp
+004011cb:  c3                      ret""",
         "decompiled_snippet": """int verify_crc16_checksum(unsigned char *buf, int len, unsigned short expected_crc) {
     unsigned short crc = 0xFFFF;
     /* UNRESOLVED MEMORY POINTER: Address 0x00402010 not defined in this scope */
@@ -70,6 +95,20 @@ int verify_crc16_checksum(const unsigned char *buf, int len, uint16_t expected_c
         "mem_label": "DIR_OFFSETS",
         "producer_fn": "init_game_tables",
         "ref_binary": "ground_truth/pacman_core.exe",
+        "raw_disassembly": """; Target: pacman_core.bin (x86_64 stripped binary)
+; Symbol: sub_401340 (update_blinky_ai)
+00401340:  55                      push   rbp
+00401341:  48 89 e5                mov    rbp, rsp
+00401344:  48 89 7d e8             mov    QWORD PTR [rbp-0x18], rdi  ; state
+; [CRITICAL UNGROUNDED MEMORY ACCESS]
+00401348:  8b 47 14                mov    eax, DWORD PTR [rdi+0x14]  ; cur_dir
+0040134b:  48 8b 0d 2e 4d 00 00    mov    rcx, QWORD PTR [rip+0x4d2e] ; [0x00406080] UNRESOLVED
+00401352:  8b 14 81                mov    edx, DWORD PTR [rcx+rax*8]  ; DIR_OFFSETS[dir][0]
+00401355:  01 57 0c                add    DWORD PTR [rdi+0xc], edx   ; blinky_x += dx
+00401358:  8b 54 81 04             mov    edx, DWORD PTR [rcx+rax*8+4]; DIR_OFFSETS[dir][1]
+0040135c:  01 57 10                add    DWORD PTR [rdi+0x10], edx  ; blinky_y += dy
+0040135f:  5d                      pop    rbp
+00401360:  c3                      ret""",
         "decompiled_snippet": """void update_blinky_ai(long param_1) {
     if (DAT_00406140 == 0) init_game_tables();
     int cur_dir = *(int *)(param_1 + 0x14);
@@ -114,6 +153,17 @@ void update_blinky_ai(GameState *s) {
         "mem_label": "SBOX_SUBSTITUTION_TABLE",
         "producer_fn": "init_crypto_sbox",
         "ref_binary": "ground_truth/keygen.bin",
+        "raw_disassembly": """; Target: crackme_dongle.exe (x86_64 stripped ELF)
+; Symbol: sub_401280 (validate_license_tier)
+00401280:  55                      push   rbp
+00401281:  48 89 e5                mov    rbp, rsp
+00401284:  48 89 7d e8             mov    QWORD PTR [rbp-0x18], rdi  ; serial
+; [CRITICAL UNGROUNDED MEMORY ACCESS]
+00401288:  48 8b 05 71 3e 00 00    mov    rax, QWORD PTR [rip+0x3e71] ; [0x00405100] UNRESOLVED
+0040128f:  0f b6 0c 10             movzx  ecx, BYTE PTR [rax+rdx]    ; S-BOX transform
+00401293:  33 0d 67 3f 00 00       xor    ecx, DWORD PTR [rip+0x3f67] ; [0x00405200] LICENSE_MAGIC
+00401299:  5d                      pop    rbp
+0040129a:  c3                      ret""",
         "decompiled_snippet": """int validate_license_tier(char *serial, int tier) {
     /* UNRESOLVED MEMORY POINTER: 0x00405100 non-linear S-box */
     unsigned char *sbox = (unsigned char *)0x00405100;
@@ -235,6 +285,7 @@ class SupervisorAgent:
         yield {
             "type": "CANDIDATE_GENERATED",
             "candidate_id": candidate_id,
+            "target_function": fn_to_reconstruct,
             "version": 1,
             "resolved_memory_count": 1 if use_graph_context else 0,
             "code_before": cfg["decompiled_snippet"],
@@ -267,13 +318,19 @@ class SupervisorAgent:
         parity = diff_report["parity_percentage"]
         passed = diff_report["passed"]
         total = diff_report["total_vectors"]
+        failed_test_ids = [r["test_id"] for r in diff_report.get("results", []) if r["status"] == "FAILED"]
+        passed_test_ids = [r["test_id"] for r in diff_report.get("results", []) if r["status"] == "PASSED"]
 
         yield {
             "type": "VERIFICATION_RESULT",
+            "candidate_id": candidate_id,
+            "target_function": fn_to_reconstruct,
             "version": 1,
             "passed": passed,
             "total": total,
             "parity_percentage": parity,
+            "failed_test_ids": failed_test_ids,
+            "passed_test_ids": passed_test_ids,
             "results": diff_report.get("results", []),
             "message": f"Differential Parity: {parity}% ({passed}/{total} Vectors Passed)"
         }

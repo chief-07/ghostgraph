@@ -2,6 +2,7 @@
 let cy = null;
 let currentTarget = "telemetry";
 let currentTargetData = null;
+let currentSnippetMode = "disasm"; // Default to authentic raw machine code!
 let eventSource = null;
 let isPlaying = false;
 let pacmanInterval = null;
@@ -48,7 +49,8 @@ async function switchTarget(targetId) {
     renderTargetDetails(currentTargetData);
 
     // Load graph topology & ingest
-    ingestCurrentTarget().then(() => loadGraphData()).catch(e => console.warn("Background ingest:", e));
+    await ingestCurrentTarget();
+    await loadGraphData();
   } catch (err) {
     console.error("Error in switchTarget:", err);
   }
@@ -65,8 +67,8 @@ function renderTargetDetails(data) {
   document.getElementById("targetSymbol").innerText = t.critical_symbol;
   document.getElementById("targetVectorsCount").innerText = `${data.test_vectors.length} Vectors`;
 
-  // Update decompiled code preview in Stage 1
-  document.getElementById("decompiledSnippetCode").innerHTML = `<code class="language-c">${escapeHtml(cfg.decompiled_snippet)}</code>`;
+  // Render initial snippet view (Disassembly or Pseudocode)
+  toggleSnippetView(currentSnippetMode);
 
   // Update Code Diff tab Before/After
   document.getElementById("codeDiffBefore").innerText = cfg.decompiled_snippet;
@@ -78,6 +80,25 @@ function renderTargetDetails(data) {
 
   // Render initial test vectors grid in neutral state
   renderTestVectorGrid(data.test_vectors, "PENDING");
+}
+
+function toggleSnippetView(mode) {
+  currentSnippetMode = mode;
+  const btnDisasm = document.getElementById("btnViewDisasm");
+  const btnPseudo = document.getElementById("btnViewPseudo");
+  const container = document.getElementById("decompiledSnippetCode");
+
+  if (!currentTargetData || !currentTargetData.config) return;
+
+  if (mode === "disasm") {
+    if (btnDisasm) btnDisasm.className = "px-2.5 py-1 rounded text-[11px] bg-purple-600/40 text-purple-200 border border-purple-500/50 flex items-center gap-1 font-bold";
+    if (btnPseudo) btnPseudo.className = "px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white border border-transparent flex items-center gap-1";
+    container.innerHTML = `<code class="language-asm text-purple-200">${escapeHtml(currentTargetData.config.raw_disassembly || "// Stripped binary opcodes unavailable")}</code>`;
+  } else {
+    if (btnPseudo) btnPseudo.className = "px-2.5 py-1 rounded text-[11px] bg-purple-600/40 text-purple-200 border border-purple-500/50 flex items-center gap-1 font-bold";
+    if (btnDisasm) btnDisasm.className = "px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white border border-transparent flex items-center gap-1";
+    container.innerHTML = `<code class="language-c text-slate-200">${escapeHtml(currentTargetData.config.decompiled_snippet || "// Pseudocode unavailable")}</code>`;
+  }
 }
 
 function updateRuntimeSubView(targetId) {
@@ -120,7 +141,6 @@ function switchTab(tabId) {
     }
   });
 
-  // Update nav-tab styles
   const buttons = document.querySelectorAll(".nav-tab");
   buttons.forEach(btn => {
     if (btn.getAttribute("onclick") && btn.getAttribute("onclick").includes(tabId)) {
@@ -131,7 +151,10 @@ function switchTab(tabId) {
   });
 
   if (tabId === "graph" && cy) {
-    setTimeout(() => cy.resize(), 100);
+    setTimeout(() => {
+      cy.resize();
+      applyCleanHierarchicalLayout();
+    }, 100);
   }
 }
 
@@ -166,12 +189,26 @@ function initCytoscape() {
           "text-valign": "bottom",
           "text-margin-y": "5px",
           "background-color": "#7C3AED",
-          "width": "26px",
-          "height": "26px",
+          "width": "28px",
+          "height": "28px",
           "border-width": "2px",
           "border-color": "#4C1D95",
           "transition-property": "background-color, border-color, width, height",
           "transition-duration": "0.3s"
+        }
+      },
+      {
+        selector: 'node[group = "Program"]',
+        style: {
+          "background-color": "#2563EB",
+          "border-color": "#1E40AF",
+          "shape": "round-rectangle",
+          "width": "140px",
+          "height": "32px",
+          "text-valign": "center",
+          "text-margin-y": "0px",
+          "font-weight": "bold",
+          "color": "#FFFFFF"
         }
       },
       {
@@ -180,8 +217,8 @@ function initCytoscape() {
           "background-color": "#F59E0B",
           "border-color": "#78350F",
           "shape": "diamond",
-          "width": "28px",
-          "height": "28px"
+          "width": "32px",
+          "height": "32px"
         }
       },
       {
@@ -190,7 +227,7 @@ function initCytoscape() {
           "background-color": "#10B981",
           "border-color": "#064E3B",
           "shape": "round-rectangle",
-          "width": "22px",
+          "width": "24px",
           "height": "16px",
           "font-size": "8px"
         }
@@ -201,18 +238,11 @@ function initCytoscape() {
           "background-color": "#EC4899",
           "border-color": "#831843",
           "shape": "hexagon",
-          "width": "26px",
-          "height": "26px"
-        }
-      },
-      {
-        selector: 'node[group = "Program"]',
-        style: {
-          "background-color": "#2563EB",
-          "border-color": "#1E40AF",
-          "shape": "barrel",
-          "width": "30px",
-          "height": "24px"
+          "width": "34px",
+          "height": "34px",
+          "border-width": "3px",
+          "font-weight": "bold",
+          "color": "#FDF2F8"
         }
       },
       {
@@ -239,12 +269,30 @@ function initCytoscape() {
         }
       },
       {
+        selector: 'edge[label = "RECONSTRUCTS"]',
+        style: {
+          "line-color": "#EC4899",
+          "target-arrow-color": "#EC4899",
+          "width": 2.5,
+          "line-style": "solid"
+        }
+      },
+      {
         selector: 'edge[label = "FAILED_ON"]',
         style: {
           "line-color": "#EF4444",
           "target-arrow-color": "#EF4444",
-          "width": 3,
-          "line-style": "dotted"
+          "width": 2.5,
+          "line-style": "dashed"
+        }
+      },
+      {
+        selector: 'edge[label = "PASSED"]',
+        style: {
+          "line-color": "#10B981",
+          "target-arrow-color": "#10B981",
+          "width": 2,
+          "line-style": "solid"
         }
       },
       // Dynamic Glowing Pulse Classes
@@ -252,11 +300,9 @@ function initCytoscape() {
         selector: ".node-pulsing",
         style: {
           "border-color": "#A78BFA",
-          "border-width": "5px",
-          "width": "34px",
-          "height": "34px",
-          "shadow-blur": "15px",
-          "shadow-color": "#8B5CF6"
+          "border-width": "6px",
+          "width": "38px",
+          "height": "38px"
         }
       },
       {
@@ -264,11 +310,9 @@ function initCytoscape() {
         style: {
           "background-color": "#FCD34D",
           "border-color": "#F59E0B",
-          "border-width": "5px",
-          "width": "36px",
-          "height": "36px",
-          "shadow-blur": "20px",
-          "shadow-color": "#F59E0B"
+          "border-width": "6px",
+          "width": "40px",
+          "height": "40px"
         }
       },
       {
@@ -281,14 +325,64 @@ function initCytoscape() {
       }
     ],
     elements: [],
-    layout: { name: "cose", animate: false, padding: 30 }
+    layout: { name: "preset" }
   });
 
-  // Click handler for node inspection drawer
   cy.on("tap", "node", (evt) => {
     const node = evt.target;
     openNodeDrawer(node.data());
   });
+}
+
+// ----------------------------------------------------------------------------
+// Hierarchical Zero-Lag Tiered Layout (Never freezes UI thread)
+// ----------------------------------------------------------------------------
+function applyCleanHierarchicalLayout() {
+  if (!cy) return;
+  const nodes = cy.nodes();
+  if (nodes.length === 0) return;
+
+  const w = cy.width() || 1000;
+  const programs = nodes.filter('[group = "Program"]');
+  const functions = nodes.filter('[group = "Function"]');
+  const memory = nodes.filter('[group = "GlobalMemory"]');
+  const testcases = nodes.filter('[group = "TestCase"]');
+  const candidates = nodes.filter('[group = "Candidate"]');
+
+  // Tier 1 (y=40): Program root
+  programs.forEach((n, i) => {
+    n.position({ x: w / 2 + (i - (programs.length - 1) / 2) * 200, y: 50 });
+  });
+
+  // Tier 2 (y=140): Functions
+  const fnCount = functions.length || 1;
+  const fnSpacing = Math.min(180, (w - 100) / fnCount);
+  functions.forEach((n, i) => {
+    n.position({ x: 80 + i * fnSpacing, y: 150 });
+  });
+
+  // Tier 3 (y=260): GlobalMemory
+  const memCount = memory.length || 1;
+  const memSpacing = Math.min(220, (w - 120) / memCount);
+  memory.forEach((n, i) => {
+    n.position({ x: 120 + i * memSpacing, y: 260 });
+  });
+
+  // Tier 4 (y=370): TestCases (compact rows)
+  const tcPerRow = Math.max(5, Math.ceil(testcases.length / 2));
+  const tcSpacing = Math.min(75, (w - 60) / tcPerRow);
+  testcases.forEach((n, i) => {
+    const row = Math.floor(i / tcPerRow);
+    const col = i % tcPerRow;
+    n.position({ x: 50 + col * tcSpacing, y: 370 + row * 40 });
+  });
+
+  // Tier 5 (y=480): Candidates
+  candidates.forEach((n, i) => {
+    n.position({ x: w / 2 + (i - (candidates.length - 1) / 2) * 200, y: 480 });
+  });
+
+  cy.fit(nodes, 40);
 }
 
 async function loadGraphData() {
@@ -297,12 +391,11 @@ async function loadGraphData() {
     const data = await res.json();
     if (data.nodes && data.nodes.length > 0 && cy) {
       cy.elements().remove();
-      // Ensure strict edge source/target existence to prevent Cytoscape crashes
       const nodeSet = new Set(data.nodes.map(n => String(n.data.id)));
       const safeEdges = (data.edges || []).filter(e => nodeSet.has(String(e.data.source)) && nodeSet.has(String(e.data.target)));
       cy.add(data.nodes);
       cy.add(safeEdges);
-      cy.layout({ name: "cose", padding: 35, animate: false }).run();
+      applyCleanHierarchicalLayout();
     }
   } catch (err) {
     console.warn("Could not load graph topology:", err);
@@ -313,13 +406,11 @@ async function loadGraphData() {
 // Multi-Agent Pipeline Execution: Mode A (Baseline) vs Mode B (GhostGraph)
 // ----------------------------------------------------------------------------
 
-// 1. Run Baseline Mode (Vanilla LLM - No Graph) -> PROVES RULE #3
 function runBaselineMode() {
   document.getElementById("swarmPipelineSection").classList.remove("hidden");
   document.getElementById("agentStatusBadge").innerText = "Executing Vanilla LLM (No Graph Context)...";
   document.getElementById("agentStatusBadge").className = "text-xs font-mono px-2.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-800/60 animate-pulse";
 
-  // Visual agent states
   setAgentStepState("cardAgentTopology", "badgeAgentTopology", "BYPASSED", "text-slate-500", "border-slate-800");
   setAgentStepState("cardAgentReconstruction", "badgeAgentReconstruction", "ISOLATED PROMPT", "text-amber-400 font-bold", "border-amber-600");
   setAgentStepState("cardAgentVerification", "badgeAgentVerification", "DIFF TESTING", "text-red-400 font-bold", "border-red-600");
@@ -331,11 +422,9 @@ function runBaselineMode() {
   logTerminal("LLM", `Attempting inference on isolated function '${currentTargetData?.config?.primary_fn}'...`, "text-slate-300");
   logTerminal("Warning", `LLM has no visibility into memory address ${currentTargetData?.config?.critical_mem}. Guessing zeroed placeholder!`, "text-amber-400 font-bold");
 
-  // Call stream endpoint with use_graph=false
   executePipelineStream(false);
 }
 
-// 2. Run GhostGraph Swarm (FalkorDB Connected Context) -> 100% PARITY
 function runGhostGraphSwarm() {
   document.getElementById("swarmPipelineSection").classList.remove("hidden");
   document.getElementById("agentStatusBadge").innerText = "GhostGraph Swarm Active (FalkorDB Context)...";
@@ -343,9 +432,7 @@ function runGhostGraphSwarm() {
 
   logTerminal("Supervisor", "Autonomous Swarm launched. Orchestrating multi-agent reverse engineering loop...", "text-purple-300 font-bold");
 
-  // Switch to Knowledge Graph tab so the user sees the graph actively working!
   switchTab("graph");
-
   executePipelineStream(true);
 }
 
@@ -366,6 +453,9 @@ function executePipelineStream(useGraph) {
   };
 }
 
+// ----------------------------------------------------------------------------
+// Real-Time Event Handler with Dynamic Graph Growth
+// ----------------------------------------------------------------------------
 function handlePipelineEvent(data, useGraph) {
   switch (data.type) {
     case "PIPELINE_START":
@@ -382,7 +472,7 @@ function handlePipelineEvent(data, useGraph) {
         setAgentStepState("cardAgentReconstruction", "badgeAgentReconstruction", "MCP CYPHER", "text-amber-400 font-bold", "border-amber-600");
         if (data.cypher) document.getElementById("lblActiveCypher").innerText = data.cypher;
 
-        // ANIMATE CYTOSCAPE GRAPH IN REAL TIME!
+        // Visual light pulse along traversal path
         animateGraphTraversal(data.highlight_nodes || []);
       } else if (data.action === "GCC_COMPILATION") {
         setAgentStepState("cardAgentVerification", "badgeAgentVerification", "COMPILING", "text-emerald-400 font-bold", "border-emerald-600");
@@ -400,12 +490,75 @@ function handlePipelineEvent(data, useGraph) {
     case "CANDIDATE_GENERATED":
       logTerminal("ReconstructionAgent", `Generated candidate ${data.candidate_id}. Code committed to FalkorDB.`, "text-pink-400");
       if (data.code_after) document.getElementById("codeDiffAfter").innerText = data.code_after;
+
+      // TRACK 02 PROOF: DYNAMICALLY SPAWN CANDIDATE NODE ON GRAPH CANVAS!
+      if (cy && !cy.getElementById(data.candidate_id).length) {
+        cy.add({
+          group: "nodes",
+          data: {
+            id: data.candidate_id,
+            label: data.candidate_id,
+            group: "Candidate",
+            properties: { version: data.version, memory: data.resolved_memory_count }
+          },
+          position: { x: (cy.width() || 1000) / 2, y: 480 }
+        });
+
+        // Connect RECONSTRUCTS edge to target function
+        if (data.target_function) {
+          const fnNode = cy.nodes().filter(n => n.data("label") === data.target_function);
+          if (fnNode.length) {
+            cy.add({
+              group: "edges",
+              data: {
+                source: data.candidate_id,
+                target: fnNode.id(),
+                label: "RECONSTRUCTS"
+              }
+            });
+          }
+        }
+        applyCleanHierarchicalLayout();
+      }
       break;
 
     case "VERIFICATION_RESULT":
       renderParityOutcome(data.parity_percentage, data.passed, data.total, data.results, useGraph);
       setAgentStepState("cardAgentVerification", "badgeAgentVerification", `${data.parity_percentage}% PARITY`, data.parity_percentage === 100.0 ? "text-emerald-400 font-bold" : "text-red-400 font-bold", "border-slate-700");
       setAgentStepState("cardAgentSupervisor", "badgeAgentSupervisor", "CONVERGED", "text-emerald-400 font-bold", "border-emerald-600");
+
+      // TRACK 02 PROOF: DYNAMICALLY CONNECT TEST RESULT EDGES ON GRAPH CANVAS!
+      if (cy && data.candidate_id) {
+        const candId = data.candidate_id;
+
+        // Draw FAILED_ON edges for failed test vectors
+        (data.failed_test_ids || []).forEach(tid => {
+          const tcNode = cy.nodes().filter(n => n.data("label") === tid);
+          if (tcNode.length) {
+            const edgeId = `edge_${candId}_${tid}`;
+            if (!cy.getElementById(edgeId).length) {
+              cy.add({
+                group: "edges",
+                data: { id: edgeId, source: candId, target: tcNode.id(), label: "FAILED_ON" }
+              });
+            }
+          }
+        });
+
+        // Draw PASSED edges for passing test vectors
+        (data.passed_test_ids || []).forEach(tid => {
+          const tcNode = cy.nodes().filter(n => n.data("label") === tid);
+          if (tcNode.length) {
+            const edgeId = `edge_${candId}_${tid}`;
+            if (!cy.getElementById(edgeId).length) {
+              cy.add({
+                group: "edges",
+                data: { id: edgeId, source: candId, target: tcNode.id(), label: "PASSED" }
+              });
+            }
+          }
+        });
+      }
       break;
 
     case "PIPELINE_COMPLETE":
@@ -422,7 +575,6 @@ function handlePipelineEvent(data, useGraph) {
 function animateGraphTraversal(nodeLabels) {
   if (!cy || !nodeLabels || nodeLabels.length === 0) return;
 
-  // Pulse nodes matching labels
   cy.nodes().forEach(node => {
     const lbl = node.data("label") || node.data("properties")?.address || "";
     if (nodeLabels.includes(lbl) || nodeLabels.some(nl => lbl.includes(nl))) {
@@ -433,12 +585,6 @@ function animateGraphTraversal(nodeLabels) {
       node.removeClass("node-active-memory");
     }
   });
-
-  // Fit camera around pulsed nodes
-  const matched = cy.nodes(".node-pulsing");
-  if (matched.length > 0) {
-    cy.animate({ fit: { eles: matched, padding: 80 }, duration: 600 });
-  }
 }
 
 // ----------------------------------------------------------------------------
@@ -464,7 +610,6 @@ function renderTestVectorGrid(vectors, defaultStatus = "PENDING") {
 }
 
 function renderParityOutcome(parity, passed, total, results, useGraph) {
-  // Update metric counters
   document.getElementById("lblParityPercentage").innerText = `${parity}%`;
   document.getElementById("lblPassedCount").innerText = `${passed} / ${total}`;
   document.getElementById("lblFailedCount").innerText = `${total - passed}`;
@@ -574,7 +719,6 @@ function renderPacmanCanvas() {
   pacmanCtx.lineWidth = 3;
   pacmanCtx.strokeRect(5, 5, w - 10, h - 10);
 
-  // Dots
   pacmanCtx.fillStyle = "#FEF08A";
   for (let x = 3; x < 25; x += 3) {
     for (let y = 3; y < 33; y += 4) {
@@ -584,14 +728,12 @@ function renderPacmanCanvas() {
     }
   }
 
-  // Pac-Man
   pacmanCtx.fillStyle = "#FACC15";
   pacmanCtx.beginPath();
   pacmanCtx.arc(gameState.px * cell, gameState.py * cell, 6, 0.2 * Math.PI, 1.8 * Math.PI);
   pacmanCtx.lineTo(gameState.px * cell, gameState.py * cell);
   pacmanCtx.fill();
 
-  // Blinky
   pacmanCtx.fillStyle = "#EF4444";
   pacmanCtx.beginPath();
   pacmanCtx.arc(gameState.bx * cell, gameState.by * cell - 2, 6, Math.PI, 0);
@@ -601,7 +743,6 @@ function renderPacmanCanvas() {
 }
 
 function togglePlayState() {
-  // Step single frame tick
   stepPacmanFrame();
 }
 
@@ -640,7 +781,6 @@ async function runCustomCypher() {
     const data = await res.json();
     if (data.status === "SUCCESS") {
       logTerminal("FalkorDB", `Returned ${data.count} records.`, "text-emerald-400 font-bold");
-      // Highlight matching nodes in Cytoscape
       const returnedNames = data.records.map(r => Object.values(r).map(v => String(v))).flat();
       animateGraphTraversal(returnedNames);
     } else {
@@ -656,19 +796,19 @@ function filterGraphPreset(preset) {
   if (preset === "memory") {
     cy.elements().style("display", "none");
     cy.elements('node[group = "GlobalMemory"], node[group = "Function"], edge[label = "READS"], edge[label = "WRITES"]').style("display", "element");
-    cy.layout({ name: "cose", padding: 30, animate: true }).run();
+    applyCleanHierarchicalLayout();
   } else if (preset === "calls") {
     cy.elements().style("display", "none");
     cy.elements('node[group = "Function"], edge[label = "CALLS"]').style("display", "element");
-    cy.layout({ name: "cose", padding: 30, animate: true }).run();
+    applyCleanHierarchicalLayout();
   } else {
     cy.elements().style("display", "element");
-    cy.layout({ name: "cose", padding: 30, animate: true }).run();
+    applyCleanHierarchicalLayout();
   }
 }
 
 // ----------------------------------------------------------------------------
-// Utility Helpers
+// Utility Helpers & Window Bindings
 // ----------------------------------------------------------------------------
 function openNodeDrawer(data) {
   const drawer = document.getElementById("nodeDetailsDrawer");
@@ -730,6 +870,7 @@ function escapeHtml(str) {
 
 // Explicit window bindings for inline HTML onclick handlers
 window.switchTarget = switchTarget;
+window.toggleSnippetView = toggleSnippetView;
 window.runBaselineMode = runBaselineMode;
 window.runGhostGraphSwarm = runGhostGraphSwarm;
 window.switchTab = switchTab;
@@ -738,4 +879,3 @@ window.filterGraphPreset = filterGraphPreset;
 window.openNodeDrawer = openNodeDrawer;
 window.closeNodeDrawer = closeNodeDrawer;
 window.togglePlayState = togglePlayState;
-
