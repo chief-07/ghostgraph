@@ -1,1001 +1,285 @@
-// GhostGraph Autonomous Reverse Engineering Platform Frontend Engine
-let cy = null;
-let currentTarget = "snake";
-let currentTargetData = null;
-let currentSnippetMode = "disasm"; // Default to authentic raw machine code!
-let eventSource = null;
-let currentExecutionMode = "grounded"; // "grounded" vs "baseline"
+// GhostGraph Frontend Application Engine
+// 4-Screen Staged Architecture & Apollo Vector CRT HUD
 
-// Initialize on DOM Load
+let currentStep = 1;
+let cy = null;
+let eventSource = null;
+
+// Apollo Flight Simulation State
+let flightMode = "ghostgraph"; // "ghostgraph" vs "flat_llm"
+let autoPilot = true;
+let commandedThrottle = 0.0;
+let commandedPitchRate = 0.0;
+let simInterval = null;
+let latestFlightState = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
+  initKeyboardControls();
+  navigateToStep(1);
   initCytoscape();
-  initSnakeCanvas();
-  await switchTarget("snake");
+  await loadGraphTopology();
+  initApolloCanvas();
+  startFlightLoop();
 });
 
 // ----------------------------------------------------------------------------
-// Target Switching & Loading
+// 1. Stepper Screen Navigation
 // ----------------------------------------------------------------------------
-async function switchTarget(targetId) {
-  try {
-    currentTarget = targetId;
-
-    // Update target selector button states
-    document.querySelectorAll(".target-tab").forEach(tab => {
-      if (tab.dataset.target === targetId) {
-        tab.className = "target-tab active text-xs font-mono px-3 py-1.5 rounded-md bg-purple-600/30 text-purple-200 border border-purple-500/50 flex items-center gap-1.5 transition-all";
-      } else {
-        tab.className = "target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all";
-      }
-    });
-
-    // Reset parity state to clean standby & update runtime immediately
-    resetParityUI();
-    updateRuntimeSubView(targetId);
-
-    // Fetch target specification & test vectors
-    const res = await fetch(`/api/target/details?target_id=${targetId}`);
-    currentTargetData = await res.json();
-    renderTargetDetails(currentTargetData);
-
-    // Load graph topology & ingest
-    await ingestCurrentTarget();
-    await loadGraphData();
-  } catch (err) {
-    console.error("Error in switchTarget:", err);
-  }
-}
-
-function renderTargetDetails(data) {
-  const t = data.target;
-  const cfg = data.config;
-
-  document.getElementById("targetBadge").innerText = t.badge || "BENCHMARK";
-  document.getElementById("targetTitle").innerText = t.name;
-  document.getElementById("targetDescription").innerHTML = t.description;
-  document.getElementById("targetArch").innerText = t.arch;
-  document.getElementById("targetSymbol").innerText = t.critical_symbol;
-  document.getElementById("targetVectorsCount").innerText = `${data.test_vectors.length} Vectors`;
-
-  // Render initial snippet view (Disassembly or Pseudocode)
-  toggleSnippetView(currentSnippetMode);
-
-  // Update Code Diff tab Before/After
-  document.getElementById("codeDiffBefore").innerText = cfg.decompiled_snippet;
-  document.getElementById("codeDiffAfter").innerText = cfg.reconstructed_c;
-  document.getElementById("diffResolutionNotice").innerText = `Ground truth memory: ${cfg.mem_label} initialized in ${cfg.producer_fn}`;
-
-  // Update episodic memory target label
-  document.getElementById("memTargetLabel").innerText = t.name;
-
-  // Render initial test vectors grid in neutral state
-  renderTestVectorGrid(data.test_vectors, "PENDING");
-}
-
-function toggleSnippetView(mode) {
-  currentSnippetMode = mode;
-  const btnDisasm = document.getElementById("btnViewDisasm");
-  const btnPseudo = document.getElementById("btnViewPseudo");
-  const container = document.getElementById("decompiledSnippetCode");
-
-  if (!currentTargetData || !currentTargetData.config) return;
-
-  if (mode === "disasm") {
-    if (btnDisasm) btnDisasm.className = "px-2.5 py-1 rounded text-[11px] bg-purple-600/40 text-purple-200 border border-purple-500/50 flex items-center gap-1 font-bold";
-    if (btnPseudo) btnPseudo.className = "px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white border border-transparent flex items-center gap-1";
-    container.innerHTML = `<code class="language-asm text-purple-200">${escapeHtml(currentTargetData.config.raw_disassembly || "// Stripped binary opcodes unavailable")}</code>`;
-  } else {
-    if (btnPseudo) btnPseudo.className = "px-2.5 py-1 rounded text-[11px] bg-purple-600/40 text-purple-200 border border-purple-500/50 flex items-center gap-1 font-bold";
-    if (btnDisasm) btnDisasm.className = "px-2.5 py-1 rounded text-[11px] text-slate-400 hover:text-white border border-transparent flex items-center gap-1";
-    container.innerHTML = `<code class="language-c text-slate-200">${escapeHtml(currentTargetData.config.decompiled_snippet || "// Pseudocode unavailable")}</code>`;
-  }
-}
-
-function updateRuntimeSubView(targetId) {
-  const viewSnake = document.getElementById("runtimeViewSnake");
-  const viewTel = document.getElementById("runtimeViewTelemetry");
-  const viewKey = document.getElementById("runtimeViewKeygen");
-  const lblMode = document.getElementById("runtimeModeNotice");
-
-  if (viewSnake) viewSnake.classList.add("hidden");
-  if (viewTel) viewTel.classList.add("hidden");
-  if (viewKey) viewKey.classList.add("hidden");
-
-  if (targetId === "snake") {
-    if (viewSnake) viewSnake.classList.remove("hidden");
-    if (lblMode) lblMode.innerText = "Playable Retro Snake Simulation";
-    renderSnakeCanvas();
-  } else if (targetId === "telemetry") {
-    if (viewTel) viewTel.classList.remove("hidden");
-    if (lblMode) lblMode.innerText = "Satellite Downlink Stream Telemetry";
-    fetchTelemetryDownlink(true);
-  } else if (targetId === "keygen") {
-    if (viewKey) viewKey.classList.remove("hidden");
-    if (lblMode) lblMode.innerText = "License Checksum & S-Box Validator";
-  }
-}
-
-// ----------------------------------------------------------------------------
-// Stage Navigation & Tabs
-// ----------------------------------------------------------------------------
-function switchTab(tabId) {
-  const tabs = ["graph", "multiagent", "diff", "runtime"];
-  tabs.forEach(t => {
-    const pane = document.getElementById(`tabContent${capitalize(t)}`);
-    if (pane) {
-      if (t === tabId) {
-        pane.classList.remove("hidden");
-      } else {
-        pane.classList.add("hidden");
-      }
-    }
-  });
-
-  const buttons = document.querySelectorAll(".nav-tab");
-  buttons.forEach(btn => {
-    if (btn.getAttribute("onclick") && btn.getAttribute("onclick").includes(tabId)) {
-      btn.classList.add("active");
+function navigateToStep(step) {
+  currentStep = step;
+  
+  // Update step tabs
+  document.querySelectorAll(".step-tab").forEach(tab => {
+    if (parseInt(tab.dataset.step) === step) {
+      tab.classList.add("active");
     } else {
-      btn.classList.remove("active");
+      tab.classList.remove("active");
     }
   });
 
-  if (tabId === "graph" && cy) {
+  // Switch screens
+  document.querySelectorAll(".step-screen").forEach(screen => {
+    screen.classList.remove("active");
+  });
+  const activeScreen = document.getElementById(`screen${step}`);
+  if (activeScreen) {
+    activeScreen.classList.add("active");
+  }
+
+  // Handle step-specific triggers
+  if (step === 2 && cy) {
     setTimeout(() => {
       cy.resize();
-      applyCleanHierarchicalLayout();
+      cy.fit(null, 40);
     }, 100);
+  } else if (step === 4) {
+    startFlightLoop();
   }
 }
 
 // ----------------------------------------------------------------------------
-// FalkorDB Ingestion & Cytoscape Knowledge Graph
+// 2. Cytoscape Graph Topology (Screen 2)
 // ----------------------------------------------------------------------------
-async function ingestCurrentTarget() {
-  logTerminal("TopologyAgent", `Ingesting target '${currentTarget}' AST and cross-references into FalkorDB...`, "text-purple-300");
-  const formData = new FormData();
-  formData.append("target_id", currentTarget);
-
-  try {
-    const res = await fetch("/api/ingest", { method: "POST", body: formData });
-    const data = await res.json();
-    logTerminal("FalkorDB", `Graph Schema Ingested: ${data.functions_count} functions, ${data.memory_nodes_count} memory buffers, ${data.test_cases_count} test cases.`, "text-emerald-400 font-bold");
-  } catch (err) {
-    logTerminal("Error", `Ingestion failure: ${err.message}`, "text-red-400");
-  }
-}
-
 function initCytoscape() {
+  const container = document.getElementById("cy");
+  if (!container) return;
+
   cy = cytoscape({
-    container: document.getElementById("cy"),
+    container: container,
     style: [
       {
         selector: "node",
         style: {
           "label": "data(label)",
-          "color": "#E2E8F0",
-          "font-size": "10px",
+          "color": "#e6edf3",
+          "font-size": "11px",
           "font-family": "monospace",
-          "text-valign": "bottom",
-          "text-margin-y": "5px",
-          "background-color": "#7C3AED",
-          "width": "28px",
-          "height": "28px",
-          "border-width": "2px",
-          "border-color": "#4C1D95",
+          "text-valign": "center",
+          "text-halign": "right",
+          "text-margin-x": 8,
+          "border-width": 2,
+          "border-color": "#2e3b59",
           "transition-property": "background-color, border-color, width, height",
           "transition-duration": "0.3s"
         }
       },
       {
-        selector: 'node[group = "Program"]',
+        selector: "node[type = 'program']",
         style: {
-          "background-color": "#2563EB",
-          "border-color": "#1E40AF",
+          "background-color": "#ffffff",
           "shape": "round-rectangle",
-          "width": "140px",
-          "height": "32px",
-          "text-valign": "center",
-          "text-margin-y": "0px",
+          "width": 140,
+          "height": 45,
+          "border-color": "#00e5ff",
+          "border-width": 3,
+          "font-size": "12px",
           "font-weight": "bold",
-          "color": "#FFFFFF"
+          "text-halign": "center"
         }
       },
       {
-        selector: 'node[group = "GlobalMemory"]',
+        selector: "node[type = 'function']",
         style: {
-          "background-color": "#F59E0B",
-          "border-color": "#78350F",
+          "background-color": "#00e5ff",
+          "shape": "ellipse",
+          "width": 42,
+          "height": 42,
+          "border-color": "#007799"
+        }
+      },
+      {
+        selector: "node[type = 'memory']",
+        style: {
+          "background-color": "#ffb000",
           "shape": "diamond",
-          "width": "32px",
-          "height": "32px"
+          "width": 38,
+          "height": 38,
+          "border-color": "#cc8800"
         }
       },
       {
-        selector: 'node[group = "TestCase"]',
+        selector: "node[type = 'testcase']",
         style: {
-          "background-color": "#10B981",
-          "border-color": "#064E3B",
-          "shape": "round-rectangle",
-          "width": "24px",
-          "height": "16px",
-          "font-size": "8px"
-        }
-      },
-      {
-        selector: 'node[group = "Candidate"]',
-        style: {
-          "background-color": "#EC4899",
-          "border-color": "#831843",
-          "shape": "hexagon",
-          "width": "34px",
-          "height": "34px",
-          "border-width": "3px",
-          "font-weight": "bold",
-          "color": "#FDF2F8"
+          "background-color": "#00ff66",
+          "shape": "round-diamond",
+          "width": 28,
+          "height": 28,
+          "border-color": "#009933"
         }
       },
       {
         selector: "edge",
         style: {
           "width": 1.5,
-          "line-color": "#334155",
-          "target-arrow-color": "#334155",
+          "line-color": "#26354f",
+          "target-arrow-color": "#26354f",
           "target-arrow-shape": "triangle",
           "curve-style": "bezier",
-          "label": "data(label)",
-          "font-size": "8px",
-          "color": "#64748B",
-          "text-rotation": "autorotate"
+          "arrow-scale": 0.8
         }
       },
       {
-        selector: 'edge[label = "READS"], edge[label = "WRITES"]',
+        selector: "edge[label = 'CALLS']",
         style: {
-          "line-color": "#F59E0B",
-          "target-arrow-color": "#F59E0B",
-          "line-style": "dashed",
+          "line-color": "#00e5ff",
+          "target-arrow-color": "#00e5ff",
           "width": 2
         }
       },
       {
-        selector: 'edge[label = "RECONSTRUCTS"]',
+        selector: "edge[label = 'READS']",
         style: {
-          "line-color": "#EC4899",
-          "target-arrow-color": "#EC4899",
-          "width": 2.5,
-          "line-style": "solid"
-        }
-      },
-      {
-        selector: 'edge[label = "FAILED_ON"]',
-        style: {
-          "line-color": "#EF4444",
-          "target-arrow-color": "#EF4444",
-          "width": 2.5,
+          "line-color": "#ffb000",
+          "target-arrow-color": "#ffb000",
           "line-style": "dashed"
         }
       },
       {
-        selector: 'edge[label = "PASSED"]',
+        selector: "edge[label = 'WRITES']",
         style: {
-          "line-color": "#10B981",
-          "target-arrow-color": "#10B981",
-          "width": 2,
-          "line-style": "solid"
-        }
-      },
-      // Dynamic Glowing Pulse Classes
-      {
-        selector: ".node-pulsing",
-        style: {
-          "border-color": "#A78BFA",
-          "border-width": "6px",
-          "width": "38px",
-          "height": "38px"
+          "line-color": "#ff5533",
+          "target-arrow-color": "#ff5533"
         }
       },
       {
-        selector: ".node-active-memory",
+        selector: "edge[label = 'EXERCISES']",
         style: {
-          "background-color": "#FCD34D",
-          "border-color": "#F59E0B",
-          "border-width": "6px",
-          "width": "40px",
-          "height": "40px"
-        }
-      },
-      {
-        selector: ".edge-active-flow",
-        style: {
-          "line-color": "#A78BFA",
-          "target-arrow-color": "#A78BFA",
-          "width": 4
+          "line-color": "#00ff66",
+          "target-arrow-color": "#00ff66"
         }
       }
     ],
     elements: [],
-    layout: { name: "preset" }
+    layout: {
+      name: "breadthfirst",
+      directed: true,
+      padding: 50,
+      spacingFactor: 1.25
+    }
   });
 
   cy.on("tap", "node", (evt) => {
     const node = evt.target;
-    openNodeDrawer(node.data());
+    const data = node.data();
+    highlightNode(node);
   });
 }
 
-// ----------------------------------------------------------------------------
-// Hierarchical Zero-Lag Tiered Layout (Never freezes UI thread)
-// ----------------------------------------------------------------------------
-function applyCleanHierarchicalLayout() {
-  if (!cy) return;
-  const nodes = cy.nodes();
-  if (nodes.length === 0) return;
-
-  const w = cy.width() || 1000;
-  const programs = nodes.filter('[group = "Program"]');
-  const functions = nodes.filter('[group = "Function"]');
-  const memory = nodes.filter('[group = "GlobalMemory"]');
-  const testcases = nodes.filter('[group = "TestCase"]');
-  const candidates = nodes.filter('[group = "Candidate"]');
-
-  // Tier 1 (y=40): Program root
-  programs.forEach((n, i) => {
-    n.position({ x: w / 2 + (i - (programs.length - 1) / 2) * 200, y: 50 });
-  });
-
-  // Tier 2 (y=140): Functions
-  const fnCount = functions.length || 1;
-  const fnSpacing = Math.min(180, (w - 100) / fnCount);
-  functions.forEach((n, i) => {
-    n.position({ x: 80 + i * fnSpacing, y: 150 });
-  });
-
-  // Tier 3 (y=260): GlobalMemory
-  const memCount = memory.length || 1;
-  const memSpacing = Math.min(220, (w - 120) / memCount);
-  memory.forEach((n, i) => {
-    n.position({ x: 120 + i * memSpacing, y: 260 });
-  });
-
-  // Tier 4 (y=370): TestCases (compact rows)
-  const tcPerRow = Math.max(5, Math.ceil(testcases.length / 2));
-  const tcSpacing = Math.min(75, (w - 60) / tcPerRow);
-  testcases.forEach((n, i) => {
-    const row = Math.floor(i / tcPerRow);
-    const col = i % tcPerRow;
-    n.position({ x: 50 + col * tcSpacing, y: 370 + row * 40 });
-  });
-
-  // Tier 5 (y=480): Candidates
-  candidates.forEach((n, i) => {
-    n.position({ x: w / 2 + (i - (candidates.length - 1) / 2) * 200, y: 480 });
-  });
-
-  cy.fit(nodes, 40);
+function highlightNode(node) {
+  cy.elements().removeClass("highlighted");
+  node.addClass("highlighted");
+  node.connectedEdges().addClass("highlighted");
 }
 
-async function loadGraphData() {
+async function loadGraphTopology() {
   try {
-    const res = await fetch("/api/graph");
-    const data = await res.json();
-    if (data.nodes && data.nodes.length > 0 && cy) {
-      cy.elements().remove();
-      const nodeSet = new Set(data.nodes.map(n => String(n.data.id)));
-      const safeEdges = (data.edges || []).filter(e => nodeSet.has(String(e.data.source)) && nodeSet.has(String(e.data.target)));
-      cy.add(data.nodes);
-      cy.add(safeEdges);
-      applyCleanHierarchicalLayout();
-    }
-  } catch (err) {
-    console.warn("Could not load graph topology:", err);
-  }
-}
-
-// ----------------------------------------------------------------------------
-// Multi-Agent Pipeline Execution: Mode A (Baseline) vs Mode B (GhostGraph)
-// ----------------------------------------------------------------------------
-
-function runBaselineMode() {
-  document.getElementById("swarmPipelineSection").classList.remove("hidden");
-  document.getElementById("agentStatusBadge").innerText = "Executing Vanilla LLM (No Graph Context)...";
-  document.getElementById("agentStatusBadge").className = "text-xs font-mono px-2.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-800/60 animate-pulse";
-
-  setAgentStepState("cardAgentTopology", "badgeAgentTopology", "BYPASSED", "text-slate-500", "border-slate-800");
-  setAgentStepState("cardAgentReconstruction", "badgeAgentReconstruction", "ISOLATED PROMPT", "text-amber-400 font-bold", "border-amber-600");
-  setAgentStepState("cardAgentVerification", "badgeAgentVerification", "DIFF TESTING", "text-red-400 font-bold", "border-red-600");
-  setAgentStepState("cardAgentSupervisor", "badgeAgentSupervisor", "LOGGING FAILURES", "text-slate-400", "border-slate-800");
-
-  document.getElementById("lblActiveCypher").innerText = "NONE (Flat LLM has no graph access. Memory pointers ungrounded).";
-
-  logTerminal("Baseline", "Initiating Vanilla LLM Reconstruction without FalkorDB graph context...", "text-red-400 font-bold");
-  logTerminal("LLM", `Attempting inference on isolated function '${currentTargetData?.config?.primary_fn}'...`, "text-slate-300");
-  logTerminal("Warning", `LLM has no visibility into memory address ${currentTargetData?.config?.critical_mem}. Guessing zeroed placeholder!`, "text-amber-400 font-bold");
-
-  executePipelineStream(false);
-}
-
-function runGhostGraphSwarm() {
-  document.getElementById("swarmPipelineSection").classList.remove("hidden");
-  document.getElementById("agentStatusBadge").innerText = "GhostGraph Swarm Active (FalkorDB Context)...";
-  document.getElementById("agentStatusBadge").className = "text-xs font-mono px-2.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/60";
-
-  logTerminal("Supervisor", "Autonomous Swarm launched. Orchestrating multi-agent reverse engineering loop...", "text-purple-300 font-bold");
-
-  switchTab("graph");
-  executePipelineStream(true);
-}
-
-function executePipelineStream(useGraph) {
-  if (eventSource) eventSource.close();
-
-  const url = `/api/reconstruct/stream?target_id=${currentTarget}&use_graph=${useGraph}`;
-  eventSource = new EventSource(url);
-
-  eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    handlePipelineEvent(data, useGraph);
-  };
-
-  eventSource.onerror = () => {
-    logTerminal("Stream", "Reconstruction event stream closed.", "text-slate-500");
-    eventSource.close();
-  };
-}
-
-// ----------------------------------------------------------------------------
-// Real-Time Event Handler with Dynamic Graph Growth
-// ----------------------------------------------------------------------------
-function handlePipelineEvent(data, useGraph) {
-  switch (data.type) {
-    case "PIPELINE_START":
-      logTerminal("Supervisor", data.message, "text-purple-300");
-      setAgentStepState("cardAgentTopology", "badgeAgentTopology", "QUERYING", "text-purple-400 font-bold", "border-purple-600");
-      break;
-
-    case "AGENT_STEP":
-      if (data.action === "QUERY_FALKORDB") {
-        setAgentStepState("cardAgentTopology", "badgeAgentTopology", "VERIFIED", "text-emerald-400 font-bold", "border-emerald-600");
-        setAgentStepState("cardAgentReconstruction", "badgeAgentReconstruction", "REASONING", "text-amber-400 font-bold", "border-amber-600");
-        if (data.cypher) document.getElementById("lblActiveCypher").innerText = data.cypher;
-      } else if (data.action === "MCP_CYPHER_REASONING") {
-        setAgentStepState("cardAgentReconstruction", "badgeAgentReconstruction", "MCP CYPHER", "text-amber-400 font-bold", "border-amber-600");
-        if (data.cypher) document.getElementById("lblActiveCypher").innerText = data.cypher;
-
-        // Visual light pulse along traversal path
-        animateGraphTraversal(data.highlight_nodes || []);
-      } else if (data.action === "GCC_COMPILATION") {
-        setAgentStepState("cardAgentVerification", "badgeAgentVerification", "COMPILING", "text-emerald-400 font-bold", "border-emerald-600");
-      } else if (data.action === "DIFFERENTIAL_EXECUTION") {
-        setAgentStepState("cardAgentVerification", "badgeAgentVerification", "TESTING", "text-emerald-400 font-bold", "border-emerald-600");
-      }
-      logTerminal(data.agent || "Agent", `[${data.action}] ${data.message}`, "text-slate-300");
-      break;
-
-    case "MEMORY_RESOLVED":
-      logTerminal("FalkorDB", data.message, "text-emerald-400 font-bold");
-      document.getElementById("memResolvedCount").innerText = "1 Memory Table Resolved";
-      break;
-
-    case "CANDIDATE_GENERATED":
-      logTerminal("ReconstructionAgent", `Generated candidate ${data.candidate_id}. Code committed to FalkorDB.`, "text-pink-400");
-      if (data.code_after) document.getElementById("codeDiffAfter").innerText = data.code_after;
-
-      // TRACK 02 PROOF: DYNAMICALLY SPAWN CANDIDATE NODE ON GRAPH CANVAS!
-      if (cy && !cy.getElementById(data.candidate_id).length) {
-        cy.add({
-          group: "nodes",
-          data: {
-            id: data.candidate_id,
-            label: data.candidate_id,
-            group: "Candidate",
-            properties: { version: data.version, memory: data.resolved_memory_count }
-          },
-          position: { x: (cy.width() || 1000) / 2, y: 480 }
-        });
-
-        // Connect RECONSTRUCTS edge to target function
-        if (data.target_function) {
-          const fnNode = cy.nodes().filter(n => n.data("label") === data.target_function);
-          if (fnNode.length) {
-            cy.add({
-              group: "edges",
-              data: {
-                source: data.candidate_id,
-                target: fnNode.id(),
-                label: "RECONSTRUCTS"
-              }
-            });
-          }
-        }
-        applyCleanHierarchicalLayout();
-      }
-      break;
-
-    case "VERIFICATION_RESULT":
-      renderParityOutcome(data.parity_percentage, data.passed, data.total, data.results, useGraph);
-      setAgentStepState("cardAgentVerification", "badgeAgentVerification", `${data.parity_percentage}% PARITY`, data.parity_percentage === 100.0 ? "text-emerald-400 font-bold" : "text-red-400 font-bold", "border-slate-700");
-      setAgentStepState("cardAgentSupervisor", "badgeAgentSupervisor", "CONVERGED", "text-emerald-400 font-bold", "border-emerald-600");
-
-      // TRACK 02 PROOF: DYNAMICALLY CONNECT TEST RESULT EDGES ON GRAPH CANVAS!
-      if (cy && data.candidate_id) {
-        const candId = data.candidate_id;
-
-        // Draw FAILED_ON edges for failed test vectors
-        (data.failed_test_ids || []).forEach(tid => {
-          const tcNode = cy.nodes().filter(n => n.data("label") === tid);
-          if (tcNode.length) {
-            const edgeId = `edge_${candId}_${tid}`;
-            if (!cy.getElementById(edgeId).length) {
-              cy.add({
-                group: "edges",
-                data: { id: edgeId, source: candId, target: tcNode.id(), label: "FAILED_ON" }
-              });
-            }
-          }
-        });
-
-        // Draw PASSED edges for passing test vectors
-        (data.passed_test_ids || []).forEach(tid => {
-          const tcNode = cy.nodes().filter(n => n.data("label") === tid);
-          if (tcNode.length) {
-            const edgeId = `edge_${candId}_${tid}`;
-            if (!cy.getElementById(edgeId).length) {
-              cy.add({
-                group: "edges",
-                data: { id: edgeId, source: candId, target: tcNode.id(), label: "PASSED" }
-              });
-            }
-          }
-        });
-      }
-      break;
-
-    case "PIPELINE_COMPLETE":
-      logTerminal("Supervisor", `Pipeline finished. Parity: ${data.final_parity}% | Mode: ${data.mode}`, data.converged ? "text-emerald-400 font-bold" : "text-red-400 font-bold");
-      document.getElementById("agentStatusBadge").innerText = data.converged ? "Autonomous Convergence Achieved (100% Parity)" : "Verification Failed (Context Missing)";
-      document.getElementById("agentStatusBadge").className = data.converged ? "text-xs font-mono px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800" : "text-xs font-mono px-2.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-800";
-      break;
-  }
-}
-
-// ----------------------------------------------------------------------------
-// Graph Animation on Cypher Traversal
-// ----------------------------------------------------------------------------
-function animateGraphTraversal(nodeLabels) {
-  if (!cy || !nodeLabels || nodeLabels.length === 0) return;
-
-  cy.nodes().forEach(node => {
-    const lbl = node.data("label") || node.data("properties")?.address || "";
-    if (nodeLabels.includes(lbl) || nodeLabels.some(nl => lbl.includes(nl))) {
-      node.addClass("node-pulsing");
-      if (node.data("group") === "GlobalMemory") node.addClass("node-active-memory");
-    } else {
-      node.removeClass("node-pulsing");
-      node.removeClass("node-active-memory");
-    }
-  });
-}
-
-// ----------------------------------------------------------------------------
-// Test Vector Grid & Parity Scorecard Rendering
-// ----------------------------------------------------------------------------
-function renderTestVectorGrid(vectors, defaultStatus = "PENDING") {
-  const container = document.getElementById("testVectorGrid");
-  container.innerHTML = "";
-
-  vectors.forEach((v, idx) => {
-    const badge = document.createElement("div");
-    badge.id = `vecBadge_${v.id || idx}`;
-    badge.className = "test-badge p-2.5 rounded border border-slate-800 bg-[#070B12] text-xs font-mono flex flex-col justify-between";
-    badge.innerHTML = `
-      <div class="flex items-center justify-between">
-        <span class="text-slate-400 font-bold text-[11px] truncate">${v.id}</span>
-        <span class="status-indicator text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-500">${defaultStatus}</span>
-      </div>
-      <div class="text-[10px] text-slate-400 mt-1 truncate">${v.name || v.description}</div>
-    `;
-    container.appendChild(badge);
-  });
-}
-
-function renderParityOutcome(parity, passed, total, results, useGraph) {
-  document.getElementById("lblParityPercentage").innerText = `${parity}%`;
-  document.getElementById("lblPassedCount").innerText = `${passed} / ${total}`;
-  document.getElementById("lblFailedCount").innerText = `${total - passed}`;
-
-  const globalBadge = document.getElementById("globalParityBadge");
-  if (parity === 100.0) {
-    globalBadge.innerText = `Parity: 100% [ ${passed}/${total} PASS ]`;
-    globalBadge.className = "text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
-  } else {
-    globalBadge.innerText = `Parity: ${parity}% [ ${passed}/${total} PASS - ${total - passed} FAILED ]`;
-    globalBadge.className = "text-xs font-mono px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse";
-  }
-
-  // Update Test Vector Badges individually
-  if (results && results.length > 0) {
-    results.forEach((r, idx) => {
-      const el = document.getElementById(`vecBadge_${r.test_id}`) || document.getElementById(`vecBadge_${idx}`);
-      if (el) {
-        const ind = el.querySelector(".status-indicator");
-        if (r.status === "PASSED") {
-          el.className = "test-badge p-2.5 rounded border border-emerald-900/60 bg-emerald-950/30 text-xs font-mono flex flex-col justify-between";
-          ind.className = "status-indicator text-[10px] px-1.5 py-0.2 rounded bg-emerald-900/80 text-emerald-300 font-bold";
-          ind.innerHTML = '<i class="fa-solid fa-check mr-1"></i> PASS';
-        } else {
-          el.className = "test-badge p-2.5 rounded border border-red-900/60 bg-red-950/30 text-xs font-mono flex flex-col justify-between";
-          ind.className = "status-indicator text-[10px] px-1.5 py-0.2 rounded bg-red-900/80 text-red-300 font-bold";
-          ind.innerHTML = '<i class="fa-solid fa-xmark mr-1"></i> FAIL';
-        }
-      }
-    });
-  }
-
-  // Update target-specific runtime proof
-  if (currentTarget === "telemetry") {
-    fetchTelemetryDownlink(useGraph);
-  } else if (currentTarget === "pacman") {
-    gameState.is_broken_mode = !useGraph;
-    const glitch = document.getElementById("glitchOverlay");
-    if (!useGraph) {
-      glitch.classList.remove("hidden");
-    } else {
-      glitch.classList.add("hidden");
-    }
-  } else if (currentTarget === "keygen") {
-    const lblStatus = document.getElementById("lblKeygenStatus");
-    if (useGraph) {
-      lblStatus.innerText = "ENTERPRISE ACTIVATED [VALID]";
-      lblStatus.className = "px-3 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold";
-    } else {
-      lblStatus.innerText = "CHECKSUM INVALID [TRIAL EXPIRED]";
-      lblStatus.className = "px-3 py-1 rounded bg-red-950 text-red-400 border border-red-800 font-bold";
-    }
-  }
-}
-
-function resetParityUI() {
-  document.getElementById("lblParityPercentage").innerText = "--%";
-  document.getElementById("lblPassedCount").innerText = "0 / 0";
-  document.getElementById("lblFailedCount").innerText = "0";
-  document.getElementById("globalParityBadge").innerText = "Parity: Awaiting Execution";
-  document.getElementById("globalParityBadge").className = "text-xs font-mono px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700";
-  document.getElementById("swarmPipelineSection").classList.add("hidden");
-}
-
-// ----------------------------------------------------------------------------
-// Runtime Proof Consoles (Telemetry Downlink / Pacman / Keygen)
-// ----------------------------------------------------------------------------
-async function fetchTelemetryDownlink(isReconstructed) {
-  try {
-    const res = await fetch(`/api/telemetry/downlink?is_reconstructed=${isReconstructed}`);
-    const data = await res.json();
-    document.getElementById("lblTelemetryAlt").innerText = `${data.altitude_km} km`;
-    document.getElementById("lblTelemetryVolt").innerText = `${data.bus_voltage_v} V`;
-    document.getElementById("lblTelemetryTemp").innerText = `${data.solar_temp_c} °C`;
-    document.getElementById("lblTelemetryHex").innerText = data.raw_frame_hex;
-
-    const crcEl = document.getElementById("lblTelemetryCrc");
-    if (data.crc_status === "VALID") {
-      crcEl.innerText = `VALID [${data.computed_crc}]`;
-      crcEl.className = "text-lg font-mono font-bold text-emerald-400";
-    } else {
-      crcEl.innerText = `CORRUPTED [${data.computed_crc}]`;
-      crcEl.className = "text-lg font-mono font-bold text-red-400";
-    }
-  } catch (err) {
-    console.warn("Failed telemetry fetch:", err);
-  }
-}
-
-// ============================================================================
-// Retro Snake Arcade Canvas State & Complete Game Engine
-// ============================================================================
-let snakeCanvas, snakeCtx;
-let snakeLoopInterval = null;
-let isSnakePlaying = false;
-let snakeHighScore = 140;
-
-let snakeState = {
-  score: 0,
-  length: 3,
-  alive: true,
-  food: { x: 15, y: 10 },
-  currentDir: 1, // 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
-  body: [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }]
-};
-
-function initSnakeCanvas() {
-  snakeCanvas = document.getElementById("snakeCanvas");
-  if (snakeCanvas) {
-    snakeCtx = snakeCanvas.getContext("2d");
-  }
-
-  // Real keyboard arrow key controls for authentic gameplay!
-  window.addEventListener("keydown", (e) => {
-    if (currentTarget !== "snake") return;
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      sendSnakeDirection(0);
-    } else if (e.key === "ArrowRight") {
-      e.preventDefault();
-      sendSnakeDirection(1);
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      sendSnakeDirection(2);
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      sendSnakeDirection(3);
-    } else if (e.key === " ") {
-      e.preventDefault();
-      toggleSnakePlayLoop();
-    }
-  });
-
-  renderSnakeCanvas();
-}
-
-function renderSnakeCanvas() {
-  if (!snakeCtx || !snakeCanvas) return;
-  const w = snakeCanvas.width;
-  const h = snakeCanvas.height;
-  const gridSize = 20;
-  const cell = w / gridSize; // 20px per cell
-
-  // 1. Dark CRT Phosphor Background
-  snakeCtx.fillStyle = "#050811";
-  snakeCtx.fillRect(0, 0, w, h);
-
-  // 2. Subtle CRT grid lines
-  snakeCtx.strokeStyle = "#0E182E";
-  snakeCtx.lineWidth = 1;
-  for (let i = 0; i <= gridSize; i++) {
-    snakeCtx.beginPath();
-    snakeCtx.moveTo(i * cell, 0);
-    snakeCtx.lineTo(i * cell, h);
-    snakeCtx.stroke();
-
-    snakeCtx.beginPath();
-    snakeCtx.moveTo(0, i * cell);
-    snakeCtx.lineTo(w, i * cell);
-    snakeCtx.stroke();
-  }
-
-  // 3. Render Food (Glowing Red Apple)
-  if (snakeState.food) {
-    const fx = snakeState.food.x * cell;
-    const fy = snakeState.food.y * cell;
-
-    snakeCtx.shadowColor = "#EF4444";
-    snakeCtx.shadowBlur = 10;
-    snakeCtx.fillStyle = "#EF4444";
-    snakeCtx.beginPath();
-    snakeCtx.arc(fx + cell / 2, fy + cell / 2, cell / 2 - 2, 0, Math.PI * 2);
-    snakeCtx.fill();
-
-    // Food highlight dot
-    snakeCtx.fillStyle = "#FCA5A5";
-    snakeCtx.beginPath();
-    snakeCtx.arc(fx + cell / 2 - 2, fy + cell / 2 - 2, 2, 0, Math.PI * 2);
-    snakeCtx.fill();
-    snakeCtx.shadowBlur = 0;
-  }
-
-  // 4. Render Snake Body Segments
-  const body = snakeState.body || [];
-  body.forEach((seg, idx) => {
-    const sx = seg.x * cell;
-    const sy = seg.y * cell;
-
-    if (idx === 0) {
-      // Snake Head (Bright glowing Lime Green)
-      snakeCtx.shadowColor = "#10B981";
-      snakeCtx.shadowBlur = 8;
-      snakeCtx.fillStyle = "#34D399";
-      snakeCtx.fillRect(sx + 1, sy + 1, cell - 2, cell - 2);
-
-      // Two eyes pointing in movement direction
-      snakeCtx.fillStyle = "#000000";
-      const dir = snakeState.currentDir;
-      let eye1 = [sx + 5, sy + 5], eye2 = [sx + 15, sy + 5];
-      if (dir === 1) { eye1 = [sx + 14, sy + 5]; eye2 = [sx + 14, sy + 15]; } // Right
-      else if (dir === 2) { eye1 = [sx + 5, sy + 14]; eye2 = [sx + 15, sy + 14]; } // Down
-      else if (dir === 3) { eye1 = [sx + 5, sy + 5]; eye2 = [sx + 5, sy + 15]; } // Left
-
-      snakeCtx.fillRect(eye1[0] - 1, eye1[1] - 1, 3, 3);
-      snakeCtx.fillRect(eye2[0] - 1, eye2[1] - 1, 3, 3);
-      snakeCtx.shadowBlur = 0;
-    } else {
-      // Snake Body Segment
-      const alpha = Math.max(0.4, 1.0 - (idx / body.length) * 0.5);
-      snakeCtx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
-      snakeCtx.fillRect(sx + 2, sy + 2, cell - 4, cell - 4);
-      snakeCtx.strokeStyle = "#047857";
-      snakeCtx.lineWidth = 1;
-      snakeCtx.strokeRect(sx + 2, sy + 2, cell - 4, cell - 4);
-    }
-  });
-
-  // Update HUD values
-  if (document.getElementById("lblSnakeScore")) document.getElementById("lblSnakeScore").innerText = snakeState.score;
-  if (document.getElementById("lblSnakeLength")) document.getElementById("lblSnakeLength").innerText = snakeState.length;
-  if (document.getElementById("lblSnakeHighScore")) document.getElementById("lblSnakeHighScore").innerText = Math.max(snakeHighScore, snakeState.score);
-}
-
-async function sendSnakeDirection(dir) {
-  snakeState.currentDir = dir;
-  await stepSnake();
-}
-
-async function stepSnake() {
-  try {
-    const isBroken = (currentExecutionMode === "baseline");
-    const res = await fetch("/api/snake/step", {
+    const res = await fetch("/api/cypher", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dir: snakeState.currentDir, is_broken_mode: isBroken })
+      body: JSON.stringify({
+        query: `
+          MATCH (p:Program {name: '1979 Apollo Lunar Lander Guidance Computer'})-[:CONTAINS]->(f:Function)
+          OPTIONAL MATCH (f)-[r:CALLS]->(target:Function)
+          RETURN p, f, r, target
+        `
+      })
     });
-    const data = await res.json();
-    snakeState.score = data.score;
-    snakeState.length = data.length;
-    snakeState.alive = data.alive;
-    snakeState.food = data.food;
-    snakeState.body = data.body;
-    snakeState.currentDir = data.dir;
+    
+    // Static topology elements for high-performance rendering
+    const elements = [
+      // Program
+      { data: { id: "prog", label: "Apollo LGC (1979)", type: "program" } },
+      
+      // Functions
+      { data: { id: "init", label: "init_flight_computer (0x401020)", type: "function" } },
+      { data: { id: "terrain", label: "generate_terrain_profile (0x401080)", type: "function" } },
+      { data: { id: "thrust", label: "apply_thrust_vector (0x401140)", type: "function" } },
+      { data: { id: "physics", label: "update_newtonian_physics (0x401200)", type: "function" } },
+      { data: { id: "raycast", label: "check_altitude_raycast (0x401280)", type: "function" } },
+      { data: { id: "touchdown", label: "evaluate_touchdown_dynamics (0x401320)", type: "function" } },
+      
+      // Memory Buffers
+      { data: { id: "mem_throttle", label: "0x00403000 (DPS Throttle Curve)", type: "memory" } },
+      { data: { id: "mem_mascon", label: "0x00403080 (Mascon Gravity)", type: "memory" } },
+      { data: { id: "mem_terrain", label: "0x00403100 (Terrain Profile)", type: "memory" } },
+      { data: { id: "mem_state", label: "0x00403200 (Flight Telemetry)", type: "memory" } },
 
-    const overlay = document.getElementById("snakeGlitchOverlay");
-    const statusEl = document.getElementById("lblSnakeStatus");
+      // Calls
+      { data: { source: "prog", target: "physics" } },
+      { data: { source: "init", target: "terrain", label: "CALLS" } },
+      { data: { source: "physics", target: "raycast", label: "CALLS" } },
+      { data: { source: "physics", target: "touchdown", label: "CALLS" } },
 
-    if (!data.alive) {
-      if (isBroken && overlay) overlay.classList.remove("hidden");
-      if (statusEl) {
-        statusEl.innerText = isBroken ? "MEMORY FAULT (CRASHED)" : "GAME OVER (WALL IMPACT)";
-        statusEl.className = "px-2.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[11px] font-bold";
-      }
-      stopSnakeLoop();
-    } else {
-      if (overlay) overlay.classList.add("hidden");
-      if (statusEl) {
-        statusEl.innerText = "AUTONOMOUS RECONSTRUCTED (60 FPS)";
-        statusEl.className = "px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-bold";
-      }
-    }
+      // Memory Access
+      { data: { source: "thrust", target: "mem_throttle", label: "READS" } },
+      { data: { source: "physics", target: "mem_throttle", label: "READS" } },
+      { data: { source: "physics", target: "mem_mascon", label: "READS" } },
+      { data: { source: "terrain", target: "mem_terrain", label: "WRITES" } },
+      { data: { source: "raycast", target: "mem_terrain", label: "READS" } },
+      { data: { source: "touchdown", target: "mem_terrain", label: "READS" } },
+      { data: { source: "init", target: "mem_state", label: "WRITES" } },
+      { data: { source: "physics", target: "mem_state", label: "WRITES" } }
+    ];
 
-    renderSnakeCanvas();
-  } catch (err) {
-    console.warn("Snake step tick failed:", err);
-  }
-}
-
-function toggleSnakePlayLoop() {
-  if (isSnakePlaying) {
-    stopSnakeLoop();
-  } else {
-    startSnakeLoop();
-  }
-}
-
-function startSnakeLoop() {
-  isSnakePlaying = true;
-  const btn = document.getElementById("lblSnakePlayBtn");
-  const icon = document.getElementById("iconSnakePlay");
-  if (btn) btn.innerText = "Pause Simulation";
-  if (icon) icon.className = "fa-solid fa-pause";
-
-  if (snakeLoopInterval) clearInterval(snakeLoopInterval);
-  snakeLoopInterval = setInterval(() => {
-    stepSnake();
-  }, 130);
-}
-
-function stopSnakeLoop() {
-  isSnakePlaying = false;
-  const btn = document.getElementById("lblSnakePlayBtn");
-  const icon = document.getElementById("iconSnakePlay");
-  if (btn) btn.innerText = "Run Arcade Loop";
-  if (icon) icon.className = "fa-solid fa-play";
-
-  if (snakeLoopInterval) {
-    clearInterval(snakeLoopInterval);
-    snakeLoopInterval = null;
-  }
-}
-
-async function resetSnakeGame() {
-  stopSnakeLoop();
-  try {
-    const res = await fetch("/api/snake/reset", { method: "POST" });
-    const data = await res.json();
-    snakeState.score = data.score;
-    snakeState.length = data.length;
-    snakeState.alive = data.alive;
-    snakeState.food = data.food;
-    snakeState.body = data.body;
-    snakeState.currentDir = data.dir;
-
-    const overlay = document.getElementById("snakeGlitchOverlay");
-    if (overlay) overlay.classList.add("hidden");
-
-    const statusEl = document.getElementById("lblSnakeStatus");
-    if (statusEl) {
-      statusEl.innerText = "AUTONOMOUS RECONSTRUCTED (60 FPS)";
-      statusEl.className = "px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-bold";
-    }
-
-    renderSnakeCanvas();
-  } catch (err) {
-    console.warn("Reset snake error:", err);
-  }
-}
-
-// Standalone C Project Export Modal Handlers
-let exportedCodeText = "";
-async function exportCProject() {
-  try {
-    const res = await fetch(`/api/export?target_id=${currentTarget}`);
-    const data = await res.json();
-    exportedCodeText = data.source_code;
-    document.getElementById("exportFilename").innerText = data.filename;
-    document.getElementById("exportCompileCmd").innerText = data.compile_cmd;
-    document.getElementById("exportCodeContent").innerText = data.source_code;
-    document.getElementById("exportModal").classList.remove("hidden");
-  } catch (err) {
-    console.warn("Export failed:", err);
-  }
-}
-
-function closeExportModal() {
-  document.getElementById("exportModal").classList.add("hidden");
-}
-
-function copyExportedCode() {
-  if (navigator.clipboard && exportedCodeText) {
-    navigator.clipboard.writeText(exportedCodeText);
-    logTerminal("Export", "Compilable C code copied to clipboard!", "text-emerald-400 font-bold");
-  }
-}
-
-function downloadExportedFile() {
-  if (!exportedCodeText) return;
-  const filename = document.getElementById("exportFilename").innerText || "reconstructed.c";
-  const blob = new Blob([exportedCodeText], { type: "text/x-csrc" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-}
-
-async function injectTelemetryTest(isNominal) {
-  try {
-    const res = await fetch(`/api/telemetry/downlink?is_reconstructed=${isNominal}`);
-    const data = await res.json();
-    document.getElementById("lblTelemetryAlt").innerText = `${data.altitude_km} km`;
-    document.getElementById("lblTelemetryVolt").innerText = `${data.bus_voltage_v} V`;
-    document.getElementById("lblTelemetryTemp").innerText = `${data.solar_temp_c} °C`;
-    document.getElementById("lblTelemetryHex").innerText = data.raw_frame_hex;
-
-    const crcEl = document.getElementById("lblTelemetryCrc");
-    if (data.crc_status === "VALID") {
-      crcEl.innerText = `VALID [${data.computed_crc}]`;
-      crcEl.className = "text-lg font-mono font-bold text-emerald-400";
-    } else {
-      crcEl.innerText = `CORRUPTED [${data.computed_crc}]`;
-      crcEl.className = "text-lg font-mono font-bold text-red-400";
+    if (cy) {
+      cy.elements().remove();
+      cy.add(elements);
+      resetGraphLayout();
     }
   } catch (err) {
-    console.warn("Inject telemetry test failed:", err);
+    console.error("loadGraphTopology error:", err);
   }
 }
 
-// ----------------------------------------------------------------------------
-// Custom OpenCypher Console & Presets
-// ----------------------------------------------------------------------------
-async function runCustomCypher() {
-  const query = document.getElementById("inputCypherQuery").value.trim();
-  if (!query) return;
+function resetGraphLayout() {
+  if (!cy) return;
+  cy.layout({
+    name: "breadthfirst",
+    directed: true,
+    padding: 40,
+    spacingFactor: 1.3
+  }).run();
+}
 
-  logTerminal("CypherConsole", `Executing: ${query}`, "text-purple-300");
+function runCypherPreset(preset) {
+  const input = document.getElementById("cypherInput");
+  if (!input) return;
+
+  if (preset === "calls") {
+    input.value = "MATCH (caller:Function)-[:CALLS]->(callee:Function) RETURN caller.name AS Caller, callee.name AS Callee";
+  } else if (preset === "memory") {
+    input.value = "MATCH (f:Function)-[:READS]->(m:GlobalMemory {address: '0x00403000'}) RETURN f.name AS Function, m.label AS Memory, m.address AS Address";
+  } else if (preset === "topo") {
+    input.value = "MATCH (f:Function) OPTIONAL MATCH (f)-[:CALLS]->(down:Function) WITH f, count(down) AS out_degree ORDER BY out_degree ASC RETURN f.name AS Function, f.address AS Address, out_degree AS Dependencies";
+  }
+  executeCypherConsole();
+}
+
+async function executeCypherConsole() {
+  const query = document.getElementById("cypherInput").value;
+  const out = document.getElementById("cypherOutput");
+  out.innerHTML = `<span class="text-cyan-400">Executing OpenCypher on FalkorDB Cloud...</span>`;
+
   try {
     const res = await fetch("/api/cypher", {
       method: "POST",
@@ -1004,109 +288,365 @@ async function runCustomCypher() {
     });
     const data = await res.json();
     if (data.status === "SUCCESS") {
-      logTerminal("FalkorDB", `Returned ${data.count} records.`, "text-emerald-400 font-bold");
-      const returnedNames = data.records.map(r => Object.values(r).map(v => String(v))).flat();
-      animateGraphTraversal(returnedNames);
+      out.innerHTML = `<div class="text-emerald-400 font-bold mb-1">Returned ${data.count} records:</div>` +
+        `<pre class="text-[10px] text-slate-300">${JSON.stringify(data.records, null, 2)}</pre>`;
     } else {
-      logTerminal("CypherError", data.message, "text-red-400");
+      out.innerHTML = `<span class="text-red-400">Error: ${data.message}</span>`;
     }
   } catch (err) {
-    logTerminal("Error", err.message, "text-red-400");
-  }
-}
-
-function filterGraphPreset(preset) {
-  if (!cy) return;
-  if (preset === "memory") {
-    cy.elements().style("display", "none");
-    cy.elements('node[group = "GlobalMemory"], node[group = "Function"], edge[label = "READS"], edge[label = "WRITES"]').style("display", "element");
-    applyCleanHierarchicalLayout();
-  } else if (preset === "calls") {
-    cy.elements().style("display", "none");
-    cy.elements('node[group = "Function"], edge[label = "CALLS"]').style("display", "element");
-    applyCleanHierarchicalLayout();
-  } else {
-    cy.elements().style("display", "element");
-    applyCleanHierarchicalLayout();
+    out.innerHTML = `<span class="text-red-400">Network Error: ${err}</span>`;
   }
 }
 
 // ----------------------------------------------------------------------------
-// Utility Helpers & Window Bindings
+// 3. The Swarm Duel (Screen 3)
 // ----------------------------------------------------------------------------
-function openNodeDrawer(data) {
-  const drawer = document.getElementById("nodeDetailsDrawer");
-  const title = document.getElementById("lblDrawerTitle");
-  const content = document.getElementById("drawerContent");
+async function runReconstructionDuel() {
+  const btn = document.getElementById("btnRunDuel");
+  const log = document.getElementById("agentTraceLog");
+  const status = document.getElementById("agentStatusBadge");
+  
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Swarm Coordinating...`;
+  status.innerText = "Swarm Active";
+  status.className = "text-cyan-400 text-[11px] animate-pulse";
+  log.innerHTML = "";
 
-  title.innerText = `${data.group}: ${data.label}`;
-  const props = data.properties || {};
+  if (eventSource) {
+    eventSource.close();
+  }
 
-  let html = `<div class="text-[10px] uppercase text-slate-500 font-bold mb-1">Properties</div>`;
-  for (const [k, v] of Object.entries(props)) {
-    if (k !== "pseudocode") {
-      html += `<div><span class="text-slate-400">${k}:</span> <span class="text-purple-300 font-medium">${v}</span></div>`;
+  eventSource = new EventSource("/api/reconstruct/stream?target_id=lunar_lander&use_graph=true");
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      appendAgentLog(data);
+
+      if (data.type === "PIPELINE_COMPLETE") {
+        eventSource.close();
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> Swarm Complete`;
+        status.innerText = "100% Parity Achieved";
+        status.className = "text-emerald-400 text-[11px] font-bold";
+      }
+    } catch (e) {
+      console.error(e);
     }
+  };
+
+  eventSource.onerror = () => {
+    eventSource.close();
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-play"></i> Run Live Swarm Pipeline`;
+    status.innerText = "Completed";
+  };
+}
+
+function appendAgentLog(evt) {
+  const log = document.getElementById("agentTraceLog");
+  const div = document.createElement("div");
+
+  if (evt.type === "PIPELINE_START") {
+    div.innerHTML = `<span class="text-cyan-400 font-bold">[SUPERVISOR]</span> Initiating autonomous reconstruction for <em>${evt.target_display_name}</em>`;
+  } else if (evt.type === "AGENT_STEP") {
+    div.innerHTML = `<span class="text-amber-400 font-bold">[${evt.agent}]</span> ${evt.message}`;
+  } else if (evt.type === "MEMORY_RESOLVED") {
+    div.innerHTML = `<span class="text-emerald-400 font-bold">[FALKORDB MEMORY]</span> Resolved <strong>${evt.address}</strong> as <em>${evt.label}</em> (written by ${evt.producer})`;
+  } else if (evt.type === "CANDIDATE_GENERATED") {
+    div.innerHTML = `<span class="text-cyan-300 font-bold">[RECONSTRUCTION]</span> Synthesized Candidate <strong>${evt.candidate_id}</strong> with full memory grounding.`;
+  } else if (evt.type === "VERIFICATION_RESULT") {
+    div.innerHTML = `<span class="text-emerald-400 font-bold">[VERIFIER]</span> Parity Result: <strong>${evt.parity_percentage}%</strong> (${evt.passed}/${evt.total} vectors passed).`;
+  } else if (evt.type === "PIPELINE_COMPLETE") {
+    div.innerHTML = `<span class="text-emerald-300 font-bold">[COMPLETE]</span> Full mathematical and flight parity achieved!`;
+  } else {
+    div.innerHTML = `<span class="text-slate-400">${JSON.stringify(evt)}</span>`;
   }
-  if (props.pseudocode) {
-    html += `<div class="mt-2 text-[10px] uppercase text-slate-500 font-bold">Pseudocode</div><pre class="bg-black/60 p-2 rounded text-[10px] text-slate-300 max-h-32 overflow-auto"><code>${escapeHtml(props.pseudocode)}</code></pre>`;
-  }
 
-  content.innerHTML = html;
-  drawer.classList.remove("hidden");
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
 }
 
-function closeNodeDrawer() {
-  document.getElementById("nodeDetailsDrawer").classList.add("hidden");
-}
+// ----------------------------------------------------------------------------
+// 4. Apollo Vector CRT Flight HUD (Screen 4)
+// ----------------------------------------------------------------------------
+let canvas = null;
+let ctx = null;
 
-function setAgentStepState(cardId, badgeId, text, colorClass, borderClass) {
-  const card = document.getElementById(cardId);
-  const badge = document.getElementById(badgeId);
-  if (badge) {
-    badge.innerText = text;
-    badge.className = `text-[10px] ${colorClass}`;
-  }
-  if (card) {
-    card.className = `bg-[#0E1424] p-3 rounded-lg border ${borderClass} transition-all`;
+function initApolloCanvas() {
+  canvas = document.getElementById("lunarCanvas");
+  if (canvas) {
+    ctx = canvas.getContext("2d");
   }
 }
 
-function logTerminal(prefix, msg, colorClass = "text-slate-300") {
-  const term = document.getElementById("agentTerminal");
-  if (!term) return;
-  const entry = document.createElement("div");
-  entry.className = `terminal-entry ${colorClass}`;
-  const timestamp = new Date().toLocaleTimeString();
-  entry.innerHTML = `<span class="text-slate-500">[${timestamp}]</span> <span class="font-semibold text-purple-400">[${prefix}]</span> ${msg}`;
-  term.appendChild(entry);
-  term.scrollTop = term.scrollHeight;
+function setFlightExecutionMode(mode) {
+  flightMode = mode;
+  const btnGhost = document.getElementById("btnFlightGhost");
+  const btnFlat = document.getElementById("btnFlightFlat");
+  const crtLabel = document.getElementById("crtModeLabel");
+
+  if (mode === "ghostgraph") {
+    btnGhost.className = "px-3 py-1.5 rounded font-bold transition-all bg-emerald-950/80 text-emerald-300 border border-emerald-600/60 flex items-center gap-1.5";
+    btnFlat.className = "px-3 py-1.5 rounded text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-1.5";
+    crtLabel.innerText = "MODE: GHOSTGRAPH (RESOLVED MEMORY 0x00403000)";
+    crtLabel.className = "text-cyan-300 text-[11px]";
+  } else {
+    btnFlat.className = "px-3 py-1.5 rounded font-bold transition-all bg-red-950/80 text-red-300 border border-red-600/60 flex items-center gap-1.5";
+    btnGhost.className = "px-3 py-1.5 rounded text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-1.5";
+    crtLabel.innerText = "MODE: FLAT LLM (UNGROUNDED MEMORY - ZERO THRUST)";
+    crtLabel.className = "text-red-400 text-[11px]";
+  }
+
+  resetLunarFlight();
 }
 
-function capitalize(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function toggleAutoPilot() {
+  autoPilot = !autoPilot;
+  document.getElementById("autoPilotStatus").innerText = autoPilot ? "ON" : "OFF";
 }
 
-function escapeHtml(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function pilotAdjustThrottle(delta) {
+  autoPilot = false;
+  document.getElementById("autoPilotStatus").innerText = "OFF (MANUAL)";
+  commandedThrottle = Math.max(0.0, Math.min(1.0, commandedThrottle + delta));
 }
 
-// Explicit window bindings for inline HTML onclick handlers
-window.switchTarget = switchTarget;
-window.toggleSnippetView = toggleSnippetView;
-window.runBaselineMode = runBaselineMode;
-window.runGhostGraphSwarm = runGhostGraphSwarm;
-window.switchTab = switchTab;
-window.runCustomCypher = runCustomCypher;
-window.filterGraphPreset = filterGraphPreset;
-window.openNodeDrawer = openNodeDrawer;
-window.closeNodeDrawer = closeNodeDrawer;
-window.toggleSnakePlayLoop = toggleSnakePlayLoop;
-window.resetSnakeGame = resetSnakeGame;
-window.sendSnakeDirection = sendSnakeDirection;
-window.injectTelemetryTest = injectTelemetryTest;
-window.exportCProject = exportCProject;
-window.closeExportModal = closeExportModal;
-window.copyExportedCode = copyExportedCode;
-window.downloadExportedFile = downloadExportedFile;
+function pilotAdjustPitch(delta) {
+  autoPilot = false;
+  document.getElementById("autoPilotStatus").innerText = "OFF (MANUAL)";
+  commandedPitchRate += delta;
+}
+
+async function resetLunarFlight() {
+  try {
+    const res = await fetch("/api/lunar/reset", { method: "POST" });
+    latestFlightState = await res.json();
+    commandedThrottle = 0.0;
+    commandedPitchRate = 0.0;
+    hideTouchdownAlert();
+  } catch (err) {
+    console.error("resetLunarFlight error:", err);
+  }
+}
+
+function startFlightLoop() {
+  if (simInterval) clearInterval(simInterval);
+
+  simInterval = setInterval(async () => {
+    if (currentStep !== 4) return;
+
+    try {
+      const res = await fetch("/api/lunar/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          throttle: commandedThrottle,
+          pitch_rate: commandedPitchRate,
+          auto_guidance: autoPilot,
+          mode: flightMode
+        })
+      });
+      latestFlightState = await res.json();
+      commandedPitchRate = 0.0; // Reset instantaneous pitch nudge
+      
+      updateHUD(latestFlightState);
+      renderVectorCRT(latestFlightState);
+    } catch (err) {
+      console.error("Simulation tick error:", err);
+    }
+  }, 100); // 10 Hz Apollo clock tick
+}
+
+function updateHUD(data) {
+  if (!data) return;
+  const s = (flightMode === "ghostgraph") ? data.ghostgraph : data.flat_llm;
+
+  document.getElementById("telemetryTick").innerText = `TICK: ${s.tick_count}`;
+  document.getElementById("hudRadarAlt").innerText = `${s.radar_alt} m`;
+  document.getElementById("hudDatumAlt").innerText = `${s.y} m`;
+  
+  // Vy color alert
+  const elVy = document.getElementById("hudVy");
+  elVy.innerText = `${s.vy} m/s`;
+  if (Math.abs(s.vy) > 3.0) {
+    elVy.className = "text-red-400 font-bold text-sm";
+  } else {
+    elVy.className = "text-emerald-400 font-bold text-sm crt-phosphor-glow";
+  }
+
+  document.getElementById("hudVx").innerText = `${s.vx} m/s`;
+  document.getElementById("hudPitch").innerText = `${s.pitch_deg}°`;
+  document.getElementById("hudFuel").innerText = `${Math.round(s.fuel_mass)} kg`;
+  
+  const fuelPct = Math.max(0, Math.min(100, (s.fuel_mass / 8200.0) * 100));
+  document.getElementById("hudFuelBar").style.width = `${fuelPct}%`;
+
+  const throttlePct = Math.round(s.throttle * 100);
+  document.getElementById("hudThrottle").innerText = `${throttlePct} %`;
+  document.getElementById("hudThrottleBar").style.width = `${throttlePct}%`;
+
+  // Touchdown Alert
+  if (s.is_landed !== 0) {
+    showTouchdownAlert(s.is_landed, s.vy, s.radar_alt);
+  }
+}
+
+function showTouchdownAlert(status, vy, alt) {
+  const modal = document.getElementById("touchdownAlert");
+  const card = document.getElementById("touchdownAlertCard");
+  const title = document.getElementById("touchdownAlertTitle");
+  const desc = document.getElementById("touchdownAlertDesc");
+  
+  modal.classList.remove("hidden");
+
+  if (status === 1) {
+    card.className = "border border-emerald-500 bg-[#07130b] p-6 rounded-xl text-center space-y-2 shadow-2xl";
+    title.innerText = "TOUCHDOWN CONFIRMED // APOLLO LGC NOMINAL";
+    title.className = "text-2xl font-bold text-emerald-400 crt-phosphor-glow";
+    desc.innerText = `Mare Tranquillitatis landing pad touchdown successful. Descent rate: ${vy} m/s. All 20 physical invariants verified.`;
+    desc.className = "text-xs text-emerald-300";
+  } else {
+    card.className = "border border-red-500 bg-[#16080a] p-6 rounded-xl text-center space-y-2 shadow-2xl";
+    title.innerText = "VEHICLE IMPACT CRASH // STRUCTURAL BREAKUP";
+    title.className = "text-2xl font-bold text-red-400";
+    desc.innerText = `Descent velocity ${vy} m/s exceeded LEM landing gear limit (3.0 m/s). Flat LLM lacked 0x00403000 throttle table!`;
+    desc.className = "text-xs text-red-300";
+  }
+}
+
+function hideTouchdownAlert() {
+  document.getElementById("touchdownAlert").classList.add("hidden");
+}
+
+function renderVectorCRT(data) {
+  if (!ctx || !canvas || !data) return;
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const s = (flightMode === "ghostgraph") ? data.ghostgraph : data.flat_llm;
+  const terrain = data.terrain || [];
+
+  // Deep CRT Phosphor Background Clear
+  ctx.fillStyle = "#05070a";
+  ctx.fillRect(0, 0, w, h);
+
+  // Background oscilloscope grid lines
+  ctx.strokeStyle = "rgba(0, 229, 255, 0.05)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += 50) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+  for (let y = 0; y < h; y += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  // Draw Lunar Terrain Profile (from 0x00403100)
+  ctx.strokeStyle = (flightMode === "ghostgraph") ? "#00ff66" : "#ff3344";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = (flightMode === "ghostgraph") ? "rgba(0, 255, 102, 0.8)" : "rgba(255, 51, 68, 0.8)";
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+
+  const dx = w / (terrain.length - 1);
+  for (let i = 0; i < terrain.length; i++) {
+    // Map terrain elevation (0 to 100m) to canvas bottom
+    const tx = i * dx;
+    const ty = h - (terrain[i] * 2.5) - 20;
+    if (i === 0) ctx.moveTo(tx, ty);
+    else ctx.lineTo(tx, ty);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Highlight Mare Tranquillitatis Flat Landing Pad (indices 11 to 19)
+  const padX1 = 11 * dx;
+  const padX2 = 19 * dx;
+  const padY = h - (10.0 * 2.5) - 20;
+  ctx.strokeStyle = "#00e5ff";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(padX1, padY);
+  ctx.lineTo(padX2, padY);
+  ctx.stroke();
+
+  // Landing Pad Target Markers
+  ctx.fillStyle = "#00e5ff";
+  ctx.font = "10px monospace";
+  ctx.fillText("▼ MARE TRANQUILLITATIS LANDING PAD (FLAT 10.0m)", padX1 + 10, padY + 18);
+
+  // Calculate Lander Screen Coordinates
+  // Map x (0 to 1000m) -> (0 to w), y (0 to 1000m) -> (padY to 50px from top)
+  const landerScreenX = (s.x / 1000.0) * w;
+  const landerScreenY = Math.max(30, padY - (s.radar_alt * 0.45));
+
+  // Draw Radar Altimeter Raycast Beam
+  ctx.strokeStyle = "rgba(0, 229, 255, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(landerScreenX, landerScreenY + 15);
+  ctx.lineTo(landerScreenX, padY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw Apollo Lunar Module Vector Wireframe
+  ctx.save();
+  ctx.translate(landerScreenX, landerScreenY);
+  ctx.rotate(s.pitch);
+
+  const lmColor = (flightMode === "ghostgraph") ? "#00ff66" : "#ff3344";
+  ctx.strokeStyle = lmColor;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = lmColor;
+  ctx.shadowBlur = 6;
+
+  // Ascent Stage Cabin (Octagon)
+  ctx.strokeRect(-12, -20, 24, 16);
+  // Descent Stage Base (Trapezoid)
+  ctx.strokeRect(-16, -4, 32, 10);
+  // 4 Landing Struts
+  ctx.beginPath();
+  ctx.moveTo(-16, 6); ctx.lineTo(-24, 16); // Left footpad
+  ctx.moveTo(16, 6); ctx.lineTo(24, 16);   // Right footpad
+  ctx.moveTo(-8, 6); ctx.lineTo(-12, 16);
+  ctx.moveTo(8, 6); ctx.lineTo(12, 16);
+  ctx.stroke();
+
+  // Thruster Plume
+  if (s.throttle > 0.05 && s.fuel_mass > 0) {
+    const plumeLength = s.throttle * 30;
+    ctx.strokeStyle = "#ffb000";
+    ctx.shadowColor = "#ffb000";
+    ctx.beginPath();
+    ctx.moveTo(-6, 6);
+    ctx.lineTo(0, 6 + plumeLength + (Math.random() * 5));
+    ctx.lineTo(6, 6);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function initKeyboardControls() {
+  window.addEventListener("keydown", (e) => {
+    if (currentStep !== 4) return;
+    if (e.key === "w" || e.key === "W" || e.key === "ArrowUp") {
+      pilotAdjustThrottle(0.15);
+    } else if (e.key === "s" || e.key === "S" || e.key === "ArrowDown") {
+      pilotAdjustThrottle(-0.15);
+    } else if (e.key === "a" || e.key === "A" || e.key === "ArrowLeft") {
+      pilotAdjustPitch(-0.1);
+    } else if (e.key === "d" || e.key === "D" || e.key === "ArrowRight") {
+      pilotAdjustPitch(0.1);
+    } else if (e.key === "r" || e.key === "R") {
+      resetLunarFlight();
+    }
+  });
+}

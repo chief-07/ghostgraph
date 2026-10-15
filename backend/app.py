@@ -11,6 +11,7 @@ Exposes REST and Server-Sent Event (SSE) endpoints for:
 
 import os
 import json
+import math
 import random
 import asyncio
 from pathlib import Path
@@ -27,7 +28,7 @@ load_dotenv()
 
 from backend.agents.topology_agent import topology_agent
 from backend.agents.supervisor_agent import supervisor_agent, TARGET_CONFIGS
-from backend.harness.differential import differential_tester
+from backend.harness.differential import differential_tester, LunarSimEngine, LUNAR_TERRAIN_PROFILE
 from backend.mcp_tools.falkor_client import falkor_client
 
 app = FastAPI(
@@ -409,6 +410,99 @@ async def upload_custom_binary(file: UploadFile = File(...)):
         "inferred_functions": 8,
         "message": f"Successfully disassembled and indexed {filename} into FalkorDB in 120ms."
     })
+
+# ============================================================================
+# Apollo 11 Lunar Module Continuous Flight Simulation Engine
+# ============================================================================
+
+class ApolloFlightSimulator:
+    def __init__(self):
+        self.sim_ghostgraph = LunarSimEngine(use_ground_truth=True)
+        self.sim_flat_llm = LunarSimEngine(use_ground_truth=False)
+
+    def reset(self):
+        self.sim_ghostgraph.reset()
+        self.sim_flat_llm.reset()
+        return self.get_state()
+
+    def step(self, throttle: float = 0.0, pitch_rate: float = 0.0, auto_guidance: bool = False, mode: str = "ghostgraph"):
+        sim = self.sim_ghostgraph if mode == "ghostgraph" else self.sim_flat_llm
+        if sim.is_landed != 0:
+            return self.get_state()
+
+        if auto_guidance and mode == "ghostgraph":
+            radar = sim.raycast()
+            target_vy = -max(1.0, min(4.0, radar * 0.08))
+            thrust_cmd = 0.65 if sim.vy < target_vy else 0.42
+            if radar < 15.0:
+                pitch_cmd = -sim.pitch * 1.5
+            else:
+                pitch_cmd = -sim.vx * 0.15
+            sim.apply_thrust(thrust_cmd, pitch_cmd)
+        elif auto_guidance and mode != "ghostgraph":
+            # Flat LLM has missing tables, attempts same guidance but fails
+            sim.apply_thrust(0.65, 0.0)
+        else:
+            sim.apply_thrust(throttle, pitch_rate)
+
+        sim.step()
+        return self.get_state()
+
+    def get_state(self):
+        radar_g = self.sim_ghostgraph.raycast()
+        radar_f = self.sim_flat_llm.raycast()
+        return {
+            "terrain": LUNAR_TERRAIN_PROFILE,
+            "ghostgraph": {
+                "x": round(self.sim_ghostgraph.x, 2),
+                "y": round(self.sim_ghostgraph.y, 2),
+                "vx": round(self.sim_ghostgraph.vx, 2),
+                "vy": round(self.sim_ghostgraph.vy, 2),
+                "pitch": round(self.sim_ghostgraph.pitch, 3),
+                "pitch_deg": round(math.degrees(self.sim_ghostgraph.pitch), 1),
+                "fuel_mass": round(self.sim_ghostgraph.fuel_mass, 1),
+                "throttle": round(self.sim_ghostgraph.throttle, 2),
+                "total_mass": round(self.sim_ghostgraph.total_mass, 1),
+                "radar_alt": round(radar_g, 2),
+                "is_landed": self.sim_ghostgraph.is_landed,
+                "status_code": self.sim_ghostgraph.status_code,
+                "tick_count": self.sim_ghostgraph.tick_count
+            },
+            "flat_llm": {
+                "x": round(self.sim_flat_llm.x, 2),
+                "y": round(self.sim_flat_llm.y, 2),
+                "vx": round(self.sim_flat_llm.vx, 2),
+                "vy": round(self.sim_flat_llm.vy, 2),
+                "pitch": round(self.sim_flat_llm.pitch, 3),
+                "pitch_deg": round(math.degrees(self.sim_flat_llm.pitch), 1),
+                "fuel_mass": round(self.sim_flat_llm.fuel_mass, 1),
+                "throttle": round(self.sim_flat_llm.throttle, 2),
+                "total_mass": round(self.sim_flat_llm.total_mass, 1),
+                "radar_alt": round(radar_f, 2),
+                "is_landed": self.sim_flat_llm.is_landed,
+                "status_code": self.sim_flat_llm.status_code,
+                "tick_count": self.sim_flat_llm.tick_count
+            }
+        }
+
+active_lunar = ApolloFlightSimulator()
+
+@app.get("/api/lunar/state")
+async def get_lunar_state():
+    return JSONResponse(active_lunar.get_state())
+
+@app.post("/api/lunar/reset")
+async def reset_lunar_state():
+    return JSONResponse(active_lunar.reset())
+
+@app.post("/api/lunar/step")
+async def step_lunar(request: Request):
+    body = await request.json()
+    throttle = float(body.get("throttle", 0.0))
+    pitch_rate = float(body.get("pitch_rate", 0.0))
+    auto_guidance = bool(body.get("auto_guidance", False))
+    mode = str(body.get("mode", "ghostgraph"))
+    return JSONResponse(active_lunar.step(throttle, pitch_rate, auto_guidance, mode))
 
 if __name__ == "__main__":
     import uvicorn
