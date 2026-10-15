@@ -1,0 +1,163 @@
+[
+  {
+    "id": "TC_01",
+    "name": "State Register Initialization",
+    "category": "Architecture & Registers",
+    "description": "Verifies Apollo flight computer state register initialization (dry mass 4500kg, fuel 8200kg, altitude 1000m).",
+    "action": "INIT",
+    "expected": {
+      "x": 250.0,
+      "y": 1000.0,
+      "vx": 4.0,
+      "vy": -12.0,
+      "fuel_mass": 8200.0,
+      "total_mass": 12700.0
+    }
+  },
+  {
+    "id": "TC_02",
+    "name": "Newtonian Freefall Invariant",
+    "category": "Newtonian Physics",
+    "description": "Executes 10 ticks under zero throttle. Verifies vertical acceleration equals lunar gravity (1.62 m/s^2).",
+    "action": "FREEFALL",
+    "ticks": 10
+  },
+  {
+    "id": "TC_03",
+    "name": "Hover Equilibrium Threshold",
+    "category": "Newtonian Physics",
+    "description": "Applies throttle equal to hover weight (T \u2248 mg). Verifies vertical velocity remains constant.",
+    "action": "HOVER",
+    "ticks": 10
+  },
+  {
+    "id": "TC_04",
+    "name": "Maximum Rate Climb Vector",
+    "category": "Newtonian Physics",
+    "description": "Applies 100% rated thrust (45 kN) vertically. Verifies positive vertical acceleration overcomes lunar gravity.",
+    "action": "MAX_CLIMB",
+    "ticks": 10
+  },
+  {
+    "id": "TC_05",
+    "name": "Tsiolkovsky Propellant Depletion Rate",
+    "category": "Propulsion Dynamics",
+    "description": "Verifies fuel burn rate dm = (T / v_e) * dt over 50 simulation ticks matches mass conservation.",
+    "action": "FUEL_BURN",
+    "ticks": 50
+  },
+  {
+    "id": "TC_06",
+    "name": "Propellant Starvation Flameout",
+    "category": "Propulsion Dynamics",
+    "description": "Drains fuel to 0kg. Verifies automatic engine flameout and alarm status code 999.",
+    "action": "FUEL_STARVE",
+    "ticks": 10
+  },
+  {
+    "id": "TC_07",
+    "name": "Positive Pitch Gimbal Vectoring",
+    "category": "Attitude & Vectoring",
+    "description": "Commands pitch to +30 degrees. Verifies positive horizontal acceleration and reduced vertical lift.",
+    "action": "PITCH_POS",
+    "ticks": 10
+  },
+  {
+    "id": "TC_08",
+    "name": "Negative Pitch Deceleration Vectoring",
+    "category": "Attitude & Vectoring",
+    "description": "Commands pitch to -30 degrees. Verifies negative horizontal acceleration for forward velocity braking.",
+    "action": "PITCH_NEG",
+    "ticks": 10
+  },
+  {
+    "id": "TC_09",
+    "name": "Attitude Gyro Clamping Limit",
+    "category": "Attitude & Vectoring",
+    "description": "Commands excessive pitch rate. Verifies attitude limit clamp at \u00b1PI/2 radians.",
+    "action": "PITCH_CLAMP",
+    "ticks": 20
+  },
+  {
+    "id": "TC_10",
+    "name": "Terrain Raycast: Crater Ridge",
+    "category": "Terrain Raycasting",
+    "description": "Queries radar altitude over elevated western crater ridge (x=50m, terrain elevation ~50m).",
+    "action": "RAYCAST_RIDGE",
+    "pos_x": 50.0,
+    "pos_y": 100.0
+  },
+  {
+    "id": "TC_11",
+    "name": "Terrain Raycast: Landing Pad Flat",
+    "category": "Terrain Raycasting",
+    "description": "Queries radar altitude over Mare Tranquillitatis flat landing zone (x=450m, elevation 10.0m).",
+    "action": "RAYCAST_PAD",
+    "pos_x": 450.0,
+    "pos_y": 100.0
+  },
+  {
+    "id": "TC_12",
+    "name": "Apollo Nominal Soft Touchdown",
+    "category": "Touchdown Dynamics",
+    "description": "Touchdown on flat pad with vy=-1.5 m/s, vx=0.3 m/s, pitch=0.02 rad. Verifies TOUCHDOWN_SUCCESS (status=1).",
+    "action": "TOUCHDOWN_NOMINAL"
+  },
+  {
+    "id": "TC_13",
+    "name": "Structural Failure: Excess Descent Rate",
+    "category": "Touchdown Dynamics",
+    "description": "Impact at vy=-6.0 m/s (exceeding 3.0 m/s limit). Verifies CRASH_EXCESS_DESCENT_RATE (-1).",
+    "action": "TOUCHDOWN_HARD_V"
+  },
+  {
+    "id": "TC_14",
+    "name": "Gear Shear: Excess Lateral Drift",
+    "category": "Touchdown Dynamics",
+    "description": "Impact at vx=3.5 m/s (exceeding 1.5 m/s limit). Verifies CRASH_LATERAL_SHEAR (-2).",
+    "action": "TOUCHDOWN_HARD_H"
+  },
+  {
+    "id": "TC_15",
+    "name": "Roll-Over: Excessive Attitude Tilt",
+    "category": "Touchdown Dynamics",
+    "description": "Impact at pitch=0.25 rad (~14 deg, exceeding 0.10 rad limit). Verifies CRASH_EXCESS_TILT (-3).",
+    "action": "TOUCHDOWN_TILT"
+  },
+  {
+    "id": "TC_16",
+    "name": "Crater Slope Incline Tip-Over",
+    "category": "Touchdown Dynamics",
+    "description": "Touchdown on western crater wall with 9-degree slope. Verifies CRASH_ROUGH_TERRAIN (-4).",
+    "action": "TOUCHDOWN_SLOPE"
+  },
+  {
+    "id": "TC_17",
+    "name": "Mascon Gravitational Anomaly Coupling",
+    "category": "Gravitational Field",
+    "description": "Evaluates acceleration across high-density lunar mascon sector (0x00403080). Verifies localized g increase.",
+    "action": "MASCON_ANOMALY"
+  },
+  {
+    "id": "TC_18",
+    "name": "Throttle Table 0x00403000 Non-Linearity",
+    "category": "Propulsion Dynamics",
+    "description": "Compares 50% vs 70% throttle response to verify discrete non-linear DPS throttle lookup curve.",
+    "action": "THROTTLE_CURVE"
+  },
+  {
+    "id": "TC_19",
+    "name": "Deceleration Burn Trajectory",
+    "category": "Trajectory Integration",
+    "description": "Simulates 50-tick closed-loop descent braking profile. Verifies continuous descent velocity attenuation.",
+    "action": "BRAKING_BURN",
+    "ticks": 50
+  },
+  {
+    "id": "TC_20",
+    "name": "End-to-End Guided Lunar Descent",
+    "category": "Full Mission Profile",
+    "description": "Executes full multi-phase descent trajectory to safe landing at Mare Tranquillitatis.",
+    "action": "FULL_MISSION"
+  }
+]
