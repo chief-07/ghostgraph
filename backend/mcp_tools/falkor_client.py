@@ -22,11 +22,13 @@ class FalkorClient:
         self,
         host: Optional[str] = None,
         port: Optional[int] = None,
+        username: Optional[str] = None,
         password: Optional[str] = None,
         graph_name: str = "ghostgraph"
     ):
         self.host = host or os.getenv("FALKORDB_HOST", "localhost")
         self.port = port or int(os.getenv("FALKORDB_PORT", "6379"))
+        self.username = username or os.getenv("FALKORDB_USERNAME", None)
         self.password = password or os.getenv("FALKORDB_PASSWORD", None)
         self.graph_name = graph_name
         self.client = None
@@ -42,6 +44,8 @@ class FalkorClient:
         try:
             import falkordb
             kwargs = {"host": self.host, "port": self.port}
+            if self.username:
+                kwargs["username"] = self.username
             if self.password:
                 kwargs["password"] = self.password
 
@@ -66,9 +70,18 @@ class FalkorClient:
                 res = self.graph.query(cypher, params or {})
                 records = []
                 if hasattr(res, "result_set") and res.result_set:
-                    headers = res.header if hasattr(res, "header") else [f"col_{i}" for i in range(len(res.result_set[0]))]
+                    raw_headers = res.header if hasattr(res, "header") and res.header else []
+                    headers = []
+                    for h in raw_headers:
+                        if isinstance(h, (list, tuple)) and len(h) > 1:
+                            headers.append(str(h[1]))
+                        else:
+                            headers.append(str(h))
+                    if not headers:
+                        headers = [f"col_{i}" for i in range(len(res.result_set[0]))]
+
                     for row in res.result_set:
-                        records.append({headers[i]: row[i] for i in range(len(headers))})
+                        records.append({headers[i]: row[i] for i in range(min(len(headers), len(row)))})
                 return records
             except Exception as e:
                 logger.error(f"FalkorDB Cypher Error: {e} | Query: {cypher}")
