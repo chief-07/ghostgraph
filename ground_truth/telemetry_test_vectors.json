@@ -1,0 +1,107 @@
+[
+  {
+    "id": "TC_TEL_01",
+    "name": "Sync Word Detection - Nominal",
+    "category": "Header Verification",
+    "description": "Verifies 0x1ACFFC1D sync marker matches satellite frame start.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_02",
+    "name": "Sync Word Detection - Corrupted Byte",
+    "category": "Header Verification",
+    "description": "Rejects packet with 0x1ACF001D invalid sync word.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_03",
+    "name": "CRC-CCITT Verification - Nominal Frame 0x0001",
+    "category": "Checksum Integrity",
+    "description": "Calculates CRC16 using polynomial 0x1021 on 16-byte telemetry frame.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_04",
+    "name": "CRC-CCITT Verification - Altitude Frame 0x0002",
+    "category": "Checksum Integrity",
+    "description": "Validates second frame CRC remainder 0x29B1 against lookup table 0x00402010.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_05",
+    "name": "CRC-CCITT Verification - Bit Flip Detection",
+    "category": "Checksum Integrity",
+    "description": "Detects 1-bit corrupted packet at byte offset 9 and rejects packet.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_06",
+    "name": "Sensor Calibration - Orbital Altitude (Perigee)",
+    "category": "Telemetry Calibration",
+    "description": "Decodes raw altitude integer 0x000662A0 to 418.5 km using polynomial matrix 0x00402090.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_07",
+    "name": "Sensor Calibration - Orbital Altitude (Apogee)",
+    "category": "Telemetry Calibration",
+    "description": "Decodes raw altitude integer 0x00067340 to 423.2 km.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_08",
+    "name": "Sensor Calibration - Battery Bus Voltage (Nominal)",
+    "category": "Power Systems",
+    "description": "Converts 12-bit ADC voltage reading 0x0C30 to 28.4V regulated bus.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_09",
+    "name": "Sensor Calibration - Battery Bus Voltage (Low Warning)",
+    "category": "Power Systems",
+    "description": "Converts 0x0A80 to 24.2V low bus state and verifies flag.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_10",
+    "name": "Sensor Calibration - Solar Array Thermal (Sunlight)",
+    "category": "Thermal Systems",
+    "description": "Decodes thermistor reading to +68.4 C in orbital daylight.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_11",
+    "name": "Sensor Calibration - Solar Array Thermal (Eclipse)",
+    "category": "Thermal Systems",
+    "description": "Decodes thermistor reading to -42.1 C during Earth occultation.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_12",
+    "name": "Downlink Stream Parser - 48-byte Stream Framing",
+    "category": "Frame Desequencing",
+    "description": "Unpacks full CCSDS telemetry packet into TelemetryPacket C struct.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_13",
+    "name": "Downlink Stream Parser - Sub-packet Truncation",
+    "category": "Boundary Condition",
+    "description": "Handles truncated stream (<48 bytes) gracefully with return code -1.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_14",
+    "name": "Downlink Stream Parser - End-to-End Mission Nominal",
+    "category": "Mission Parity",
+    "description": "Decodes complete 5-second orbital telemetry frame burst with 0 errors.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_TEL_15",
+    "name": "Downlink Stream Parser - Multi-Frame Reordering",
+    "category": "Mission Parity",
+    "description": "Validates sequence counter increment from 0x010A to 0x010B.",
+    "expected_parity": true
+  }
+]

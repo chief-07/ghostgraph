@@ -1,0 +1,72 @@
+[
+  {
+    "id": "TC_KEY_01",
+    "name": "Enterprise Tier Validation - Master Key",
+    "category": "Tier Verification",
+    "description": "Verifies valid Enterprise key serial ABCD-EFGH-1234 returns tier 0.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_02",
+    "name": "Enterprise Tier Validation - Invalid Checksum",
+    "category": "Integrity Check",
+    "description": "Rejects serial with 1 flipped character WXYZ-EFGH-1234.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_03",
+    "name": "Professional Tier Validation - Pro Serial",
+    "category": "Tier Verification",
+    "description": "Validates PRO key matching magic constant 0x4A2201C9.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_04",
+    "name": "Standard Tier Validation - Standard Serial",
+    "category": "Tier Verification",
+    "description": "Validates STANDARD key matching magic constant 0x1108FE23.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_05",
+    "name": "Null Pointer Protection",
+    "category": "Safety Check",
+    "description": "Ensures NULL serial string returns code 0 (Invalid) without segmentation fault.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_06",
+    "name": "Cryptographic S-Box Non-Linearity Test",
+    "category": "Cryptanalysis",
+    "description": "Verifies byte substitution lookup across SBOX table 0x00405100.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_07",
+    "name": "Block Hash Transformation - Block 1",
+    "category": "Hashing",
+    "description": "Verifies 4-byte block FNV-style rolling hash matches reference binary.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_08",
+    "name": "Block Hash Transformation - Block 2",
+    "category": "Hashing",
+    "description": "Verifies secondary serial block hash computation.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_09",
+    "name": "Anti-Debugging Timing Consistency",
+    "category": "Execution",
+    "description": "Checks execution latency remains constant regardless of invalid byte position.",
+    "expected_parity": true
+  },
+  {
+    "id": "TC_KEY_10",
+    "name": "Full CrackMe Keygen Synthesis",
+    "category": "End-to-End Parity",
+    "description": "Successfully synthesizes a fresh, valid activation serial with 100% parity.",
+    "expected_parity": true
+  }
+]

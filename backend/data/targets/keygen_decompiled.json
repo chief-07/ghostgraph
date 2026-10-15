@@ -1,0 +1,63 @@
+{
+  "target_name": "Enterprise License Keygen CrackMe",
+  "arch": "x86_64",
+  "sha256": "9a33bb55c110298ea88910029b9cf21e289947aa192809ca9810bba9c878e120",
+  "description": "Obfuscated commercial software licensing verification with rolling substitution S-Box and modular hash checks.",
+  "global_memory": [
+    {
+      "address": "0x00405100",
+      "label": "SBOX_SUBSTITUTION_TABLE",
+      "data_type": "unsigned char[256]",
+      "size": 256,
+      "description": "Non-linear 8-bit cryptographic substitution box for serial byte transformation"
+    },
+    {
+      "address": "0x00405200",
+      "label": "LICENSE_MAGIC_CONSTANTS",
+      "data_type": "unsigned int[4]",
+      "size": 16,
+      "description": "Tier validation masks: ENTERPRISE=0x7E3A99B1, PRO=0x4A2201C9, STANDARD=0x1108FE23"
+    }
+  ],
+  "structs": [
+    {
+      "name": "LicenseContext",
+      "size": 32,
+      "fields": [
+        {"offset": 0, "name": "serial_raw", "type": "char[20]"},
+        {"offset": 20, "name": "tier", "type": "int"},
+        {"offset": 24, "name": "expiry_epoch", "type": "unsigned int"},
+        {"offset": 28, "name": "is_valid", "type": "int"}
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "init_crypto_sbox",
+      "address": "0x00401010",
+      "signature": "void init_crypto_sbox(void)",
+      "pseudocode": "void init_crypto_sbox(void) {\n    unsigned char *sbox = (unsigned char *)0x00405100;\n    for (int i = 0; i < 256; i++) {\n        sbox[i] = (unsigned char)(((i * 31) ^ 0x5A) % 256);\n    }\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405100"]
+    },
+    {
+      "name": "transform_serial_block",
+      "address": "0x00401140",
+      "signature": "unsigned int transform_serial_block(const char *block)",
+      "pseudocode": "unsigned int transform_serial_block(char *param_1) {\n    unsigned char *sbox = (unsigned char *)0x00405100;\n    unsigned int hash = 0x811C9DC5;\n    for (int i = 0; i < 4; i++) {\n        unsigned char b = sbox[(unsigned char)param_1[i]];\n        hash = (hash ^ b) * 0x01000193;\n    }\n    return hash;\n}",
+      "callees": [],
+      "reads_memory": ["0x00405100"],
+      "writes_memory": []
+    },
+    {
+      "name": "validate_license_tier",
+      "address": "0x00401280",
+      "signature": "int validate_license_tier(const char *serial, int requested_tier)",
+      "pseudocode": "int validate_license_tier(char *param_1, int param_2) {\n    if (param_1 == 0) return 0;\n    unsigned int h1 = transform_serial_block(param_1);\n    unsigned int h2 = transform_serial_block(param_1 + 5);\n    unsigned int *magics = (unsigned int *)0x00405200;\n    unsigned int expected = magics[param_2];\n    return ((h1 ^ h2) == expected) ? 1 : 0;\n}",
+      "callees": ["transform_serial_block"],
+      "reads_memory": ["0x00405100", "0x00405200"],
+      "writes_memory": []
+    }
+  ]
+}

@@ -1,42 +1,126 @@
-/* Custom Styles for GhostGraph Dashboard */
+/* GhostGraph Professional Security Engineering Stylesheet */
+:root {
+  --bg-primary: #0B0F19;
+  --bg-secondary: #111827;
+  --bg-card: #161F30;
+  --border-subtle: #1F293D;
+  --border-hover: #334155;
+  --accent-falkor: #7C3AED;
+  --accent-falkor-light: #A78BFA;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --text-dim: #64748B;
+  --success: #10B981;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+}
 
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(11, 15, 25, 0.7);
+}
+::-webkit-scrollbar-thumb {
+  background: #2A364F;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-falkor);
+}
+
+/* Cytoscape Canvas Container */
 #cy {
   width: 100%;
   height: 100%;
-  min-height: 480px;
+  min-height: 540px;
+  background: radial-gradient(circle at center, #111827 0%, #0B0F19 100%);
 }
 
-#agentTerminal::-webkit-scrollbar {
-  width: 6px;
+/* Code Snippet Pre/Code Blocks */
+pre code {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, Menlo, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-#agentTerminal::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.4);
+/* Code Line Highlight */
+.code-highlight-danger {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-left: 3px solid #EF4444;
+  padding-left: 8px;
+  margin: 2px 0;
+  display: block;
 }
 
-#agentTerminal::-webkit-scrollbar-thumb {
-  background: #3B385E;
-  border-radius: 3px;
+.code-highlight-success {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-left: 3px solid #10B981;
+  padding-left: 8px;
+  margin: 2px 0;
+  display: block;
 }
 
-#agentTerminal::-webkit-scrollbar-thumb:hover {
-  background: #8B5CF6;
-}
-
+/* Terminal Log Animations */
 .terminal-entry {
-  line-height: 1.5;
-  animation: fadeIn 0.2s ease-in;
+  animation: logFadeIn 0.15s ease-out;
+  line-height: 1.6;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(2px); }
+@keyframes logFadeIn {
+  from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.glow-purple {
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+/* Agent Flow Pulsing */
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
 }
 
-.glow-red {
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+.agent-active {
+  animation: pulseSubtle 1.8s infinite ease-in-out;
+  border-color: var(--accent-falkor-light) !important;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.35);
+}
+
+/* Tab Navigation */
+.nav-tab.active {
+  background-color: var(--bg-card);
+  color: #FFFFFF;
+  border-bottom: 2px solid var(--accent-falkor-light);
+}
+
+.nav-tab {
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-tab:hover {
+  color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Test Matrix Badge Animations */
+.test-badge {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.test-badge:hover {
+  transform: translateY(-1px);
+}
+
+/* Tooltip & Popover */
+.glass-panel {
+  background: rgba(22, 31, 48, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
 }

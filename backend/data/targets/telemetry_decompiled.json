@@ -1,0 +1,91 @@
+{
+  "target_name": "Aerospace Satellite Telemetry Packet Decoder",
+  "arch": "x86_64",
+  "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+  "description": "Satellite downlink packet unpacker, sensor telemetry calibration, and CRC-CCITT verification.",
+  "global_memory": [
+    {
+      "address": "0x00402010",
+      "label": "CRC16_LOOKUP_TABLE",
+      "data_type": "unsigned short[256]",
+      "size": 512,
+      "description": "Precomputed CCITT-16 polynomial remainder table (poly 0x1021)"
+    },
+    {
+      "address": "0x00402090",
+      "label": "CALIBRATION_COEFFICIENTS",
+      "data_type": "float[8][3]",
+      "size": 96,
+      "description": "Polynomial sensor calibration factors for altitude, thermal sensors, and battery voltage"
+    },
+    {
+      "address": "0x00402100",
+      "label": "PACKET_SYNC_WORD",
+      "data_type": "unsigned char[4]",
+      "size": 4,
+      "description": "Satellite downlink sync header: 0x1A, 0xCF, 0xFC, 0x1D"
+    }
+  ],
+  "structs": [
+    {
+      "name": "TelemetryPacket",
+      "size": 48,
+      "fields": [
+        {"offset": 0, "name": "sync_word", "type": "unsigned int"},
+        {"offset": 4, "name": "packet_id", "type": "unsigned short"},
+        {"offset": 6, "name": "sequence_num", "type": "unsigned short"},
+        {"offset": 8, "name": "raw_altitude", "type": "unsigned int"},
+        {"offset": 12, "name": "raw_voltage", "type": "unsigned short"},
+        {"offset": 14, "name": "raw_temp", "type": "short"},
+        {"offset": 16, "name": "crc16", "type": "unsigned short"}
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "init_crc16_poly",
+      "address": "0x00401020",
+      "signature": "void init_crc16_poly(void)",
+      "pseudocode": "void init_crc16_poly(void) {\n    unsigned short *table = (unsigned short *)0x00402010;\n    for (int i = 0; i < 256; i++) {\n        unsigned short cur = (unsigned short)(i << 8);\n        for (int j = 0; j < 8; j++) {\n            if (cur & 0x8000) cur = (cur << 1) ^ 0x1021;\n            else cur = cur << 1;\n        }\n        table[i] = cur;\n    }\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00402010"]
+    },
+    {
+      "name": "verify_crc16_checksum",
+      "address": "0x00401180",
+      "signature": "int verify_crc16_checksum(const unsigned char *buf, int len, unsigned short expected_crc)",
+      "pseudocode": "int verify_crc16_checksum(unsigned char *param_1, int param_2, unsigned short param_3) {\n    unsigned short crc = 0xFFFF;\n    unsigned short *table = (unsigned short *)0x00402010;\n    for (int i = 0; i < param_2; i++) {\n        unsigned char idx = (unsigned char)((crc >> 8) ^ param_1[i]);\n        crc = (unsigned short)((crc << 8) ^ table[idx]);\n    }\n    return (crc == param_3) ? 1 : 0;\n}",
+      "callees": [],
+      "reads_memory": ["0x00402010"],
+      "writes_memory": []
+    },
+    {
+      "name": "validate_sync_word",
+      "address": "0x00401240",
+      "signature": "int validate_sync_word(const unsigned char *header)",
+      "pseudocode": "int validate_sync_word(unsigned char *param_1) {\n    unsigned char *sync = (unsigned char *)0x00402100;\n    for (int i = 0; i < 4; i++) {\n        if (param_1[i] != sync[i]) return 0;\n    }\n    return 1;\n}",
+      "callees": [],
+      "reads_memory": ["0x00402100"],
+      "writes_memory": []
+    },
+    {
+      "name": "decode_sensor_telemetry",
+      "address": "0x00401300",
+      "signature": "void decode_sensor_telemetry(TelemetryPacket *p, float *calibrated_out)",
+      "pseudocode": "void decode_sensor_telemetry(long param_1, float *param_2) {\n    float *calib = (float *)0x00402090;\n    float raw_alt = (float)*(unsigned int *)(param_1 + 0x08);\n    param_2[0] = (raw_alt * calib[0]) + calib[1]; /* Altitude in km */\n    float raw_v = (float)*(unsigned short *)(param_1 + 0x0C);\n    param_2[1] = (raw_v * calib[3]) + calib[4];   /* Battery volts */\n    float raw_t = (float)*(short *)(param_1 + 0x0E);\n    param_2[2] = (raw_t * calib[6]) + calib[7];   /* Temp Celsius */\n}",
+      "callees": [],
+      "reads_memory": ["0x00402090"],
+      "writes_memory": []
+    },
+    {
+      "name": "process_downlink_stream",
+      "address": "0x00401420",
+      "signature": "int process_downlink_stream(const unsigned char *stream, int len, float *out_sensors)",
+      "pseudocode": "int process_downlink_stream(unsigned char *param_1, int param_2, float *param_3) {\n    if (param_2 < 48) return -1;\n    if (validate_sync_word(param_1) == 0) return -2;\n    unsigned short packet_crc = *(unsigned short *)(param_1 + 16);\n    if (verify_crc16_checksum(param_1, 16, packet_crc) == 0) return -3;\n    decode_sensor_telemetry((long)param_1, param_3);\n    return 0;\n}",
+      "callees": ["validate_sync_word", "verify_crc16_checksum", "decode_sensor_telemetry"],
+      "reads_memory": ["0x00402010", "0x00402100"],
+      "writes_memory": []
+    }
+  ]
+}

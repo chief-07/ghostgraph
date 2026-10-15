@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GhostGraph | Autonomous Graph-Based Reverse Engineering Agent</title>
+  <title>GhostGraph | Autonomous Graph-Based Binary Reverse Engineering Platform</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Cytoscape.js CDN -->
@@ -18,12 +18,12 @@
         extend: {
           colors: {
             falkor: {
-              DEFAULT: '#8B5CF6',
+              DEFAULT: '#7C3AED',
               light: '#A78BFA',
-              dark: '#6D28D9',
-              bg: '#0F0E17',
-              panel: '#1A1829',
-              border: '#2E2B4A'
+              dark: '#5B21B6',
+              bg: '#0B0F19',
+              card: '#161F30',
+              border: '#1F293D'
             }
           }
         }
@@ -31,161 +31,484 @@
     }
   </script>
 </head>
-<body class="bg-falkor-bg text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden">
+<body class="bg-falkor-bg text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden selection:bg-purple-900 selection:text-white">
 
-  <!-- Top Header Navigation -->
-  <header class="border-b border-falkor-border bg-falkor-panel/80 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-falkor-dark to-pink-500 flex items-center justify-center shadow-lg shadow-falkor/20">
-        <i class="fa-solid fa-ghost text-white text-lg"></i>
+  <!-- ==================================================================== -->
+  <!-- Top Global Navigation Bar                                            -->
+  <!-- ==================================================================== -->
+  <header class="border-b border-falkor-border bg-[#0E1424]/90 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-900/30">
+        <i class="fa-solid fa-network-wired text-white text-base"></i>
       </div>
       <div>
-        <div class="flex items-center gap-2">
-          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-purple-200 to-falkor-light bg-clip-text text-transparent">GHOSTGRAPH</h1>
-          <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-falkor/20 text-falkor-light border border-falkor/40">FalkorDB Hackathon</span>
+        <div class="flex items-center gap-2.5">
+          <h1 class="text-base font-bold tracking-tight text-white font-mono">GHOSTGRAPH</h1>
+          <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-700/50">FalkorDB Hackathon 2026</span>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60">Tracks 01 & 02</span>
         </div>
-        <p class="text-xs text-slate-400 font-mono">Autonomous Graph-Based Reverse Engineering & Self-Healing Agent</p>
+        <p class="text-xs text-slate-400 font-mono">Autonomous Graph-Guided Binary Reverse Engineering & Decompilation Swarm</p>
       </div>
     </div>
 
-    <!-- Benchmark Mode Selector (Rule #3 Proof Toggle) -->
-    <div class="flex items-center gap-3 bg-black/40 border border-falkor-border rounded-lg p-1.5">
-      <span class="text-xs font-mono uppercase text-slate-400 px-2 flex items-center gap-1.5">
-        <i class="fa-solid fa-scale-balanced text-falkor-light"></i> Benchmark Mode:
-      </span>
-      <button id="btnModeFlat" class="text-xs font-mono px-3 py-1.5 rounded transition-all text-slate-400 hover:text-white" onclick="setBenchmarkMode(false)">
-        Vanilla LLM (No Graph)
+    <!-- Target Binary Selector -->
+    <div class="flex items-center gap-2 bg-[#121A2C] border border-falkor-border rounded-lg p-1">
+      <span class="text-xs text-slate-400 font-mono uppercase px-2">Target:</span>
+      <button class="target-tab active text-xs font-mono px-3 py-1.5 rounded-md bg-purple-600/30 text-purple-200 border border-purple-500/50 flex items-center gap-1.5 transition-all" data-target="telemetry" onclick="switchTarget('telemetry')">
+        <i class="fa-solid fa-satellite text-purple-300"></i> Satellite Telemetry Decoder
       </button>
-      <button id="btnModeGraph" class="text-xs font-mono px-3 py-1.5 rounded bg-falkor text-white font-medium shadow-md shadow-falkor/30 transition-all" onclick="setBenchmarkMode(true)">
-        <i class="fa-solid fa-diagram-project mr-1"></i> GhostGraph (FalkorDB Context)
+      <button class="target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all" data-target="pacman" onclick="switchTarget('pacman')">
+        <i class="fa-solid fa-gamepad"></i> 1980 Pac-Man Ghost AI
+      </button>
+      <button class="target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all" data-target="keygen" onclick="switchTarget('keygen')">
+        <i class="fa-solid fa-key"></i> License Keygen CrackMe
       </button>
     </div>
 
-    <!-- Quick Status Badges -->
+    <!-- Cloud Status Indicators -->
     <div class="flex items-center gap-4 text-xs font-mono">
-      <div class="flex items-center gap-1.5 text-emerald-400">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> FalkorDB Connected
+      <div class="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/40 px-2.5 py-1 rounded border border-emerald-800/50">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> FalkorDB AWS Cloud
       </div>
-      <div class="flex items-center gap-1.5 text-purple-300">
-        <i class="fa-solid fa-microchip"></i> Gemini Flash API Active
+      <div class="flex items-center gap-1.5 text-purple-300 bg-purple-950/40 px-2.5 py-1 rounded border border-purple-800/50">
+        <i class="fa-solid fa-microchip"></i> Gemini 3.8 Flash
       </div>
     </div>
   </header>
 
-  <!-- Secondary Control & Target Bar -->
-  <div class="bg-falkor-panel/50 border-b border-falkor-border px-6 py-2.5 flex items-center justify-between gap-4">
-    <!-- Target Selector Tabs -->
-    <div class="flex items-center gap-2">
-      <span class="text-xs text-slate-400 font-mono uppercase mr-1">Target Binary:</span>
-      <button class="target-tab active text-xs font-mono px-3 py-1 rounded-md border border-falkor/60 bg-falkor/20 text-falkor-light flex items-center gap-1.5 transition-all" data-target="pacman" onclick="selectTarget('pacman')">
-        <i class="fa-solid fa-gamepad"></i> 1980 Pac-Man Ghost AI
-      </button>
-      <button class="target-tab text-xs font-mono px-3 py-1 rounded-md border border-falkor-border text-slate-400 hover:text-white flex items-center gap-1.5 transition-all" data-target="telemetry" onclick="selectTarget('telemetry')">
-        <i class="fa-solid fa-satellite"></i> Satellite Telemetry Decoder
-      </button>
-      <button class="target-tab text-xs font-mono px-3 py-1 rounded-md border border-falkor-border text-slate-400 hover:text-white flex items-center gap-1.5 transition-all" data-target="keygen" onclick="selectTarget('keygen')">
-        <i class="fa-solid fa-key"></i> License Keygen CrackMe
-      </button>
-      <button class="text-xs font-mono px-3 py-1 rounded-md border border-dashed border-slate-600 text-slate-400 hover:border-falkor hover:text-falkor-light flex items-center gap-1.5 transition-all" onclick="openUploadModal()">
-        <i class="fa-solid fa-upload"></i> Upload Custom Binary
-      </button>
-    </div>
+  <!-- ==================================================================== -->
+  <!-- Main Workflow Container                                              -->
+  <!-- ==================================================================== -->
+  <main class="flex-1 max-w-7xl mx-auto w-full p-6 space-y-6">
 
-    <!-- Action Buttons -->
-    <div class="flex items-center gap-2">
-      <button id="btnIngest" class="text-xs font-mono px-3 py-1.5 rounded bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-200 transition-all flex items-center gap-1.5" onclick="ingestCurrentTarget()">
-        <i class="fa-solid fa-database text-purple-400"></i> Ingest to FalkorDB
-      </button>
-      <button id="btnReconstruct" class="text-xs font-mono px-4 py-1.5 rounded bg-gradient-to-r from-falkor-dark to-purple-600 hover:from-purple-600 hover:to-falkor text-white font-medium shadow-md transition-all flex items-center gap-1.5" onclick="startAutonomousReconstruction()">
-        <i class="fa-solid fa-wand-magic-sparkles"></i> Run Autonomous Agent
-      </button>
-    </div>
-  </div>
-
-  <!-- Main Tri-View Grid Dashboard -->
-  <main class="flex-1 grid grid-cols-12 gap-4 p-4 max-w-[1920px] mx-auto w-full">
-
-    <!-- PANEL A: Interactive Output Runtime (Col 3) -->
-    <section class="col-span-12 lg:col-span-4 flex flex-col rounded-xl border border-falkor-border bg-falkor-panel/70 overflow-hidden shadow-xl">
-      <div class="px-4 py-3 border-b border-falkor-border flex items-center justify-between bg-black/20">
-        <div class="flex items-center gap-2">
-          <i class="fa-solid fa-display text-falkor-light"></i>
-          <h2 class="text-sm font-semibold tracking-wide">Interactive Runtime View</h2>
-        </div>
-        <span id="parityBadge" class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-          Parity: 100% [ 20/20 PASS ]
-        </span>
-      </div>
-
-      <!-- Retro Pac-Man Arcade Canvas Container -->
-      <div class="flex-1 p-4 flex flex-col items-center justify-center bg-black/60 relative">
-        <div class="relative border-4 border-blue-900 rounded-lg p-2 bg-black shadow-inner">
-          <canvas id="pacmanCanvas" width="280" height="360" class="block rounded"></canvas>
-          <!-- Glitch Overlay when in Mode A (Flat LLM) -->
-          <div id="glitchOverlay" class="absolute inset-0 bg-red-900/20 border-2 border-red-500/50 rounded flex items-center justify-center pointer-events-none hidden">
-            <span class="text-xs font-mono bg-red-950/90 text-red-300 border border-red-600 px-3 py-1.5 rounded text-center shadow-lg">
-              <i class="fa-solid fa-triangle-exclamation mr-1"></i> Mode A Error: Wall-Kick Table Mismatch<br>Ghosts Froze in Wall
+    <!-- ================================================================== -->
+    <!-- STAGE 1: THE PROBLEM (Binary Inspection & The Context Gap)         -->
+    <!-- ================================================================== -->
+    <section class="rounded-xl border border-falkor-border bg-falkor-card p-6 shadow-xl relative overflow-hidden">
+      <!-- Background subtle grid accent -->
+      <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+        
+        <!-- Left Column: Problem Narrative -->
+        <div class="flex-1 space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xs uppercase font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              Stage 1 / Problem Diagnosis
             </span>
+            <span id="targetBadge" class="text-xs font-mono text-slate-400">FLAGSHIP BENCHMARK</span>
+          </div>
+
+          <div>
+            <h2 id="targetTitle" class="text-xl font-bold tracking-tight text-white">Aerospace Satellite Telemetry Decoder</h2>
+            <p id="targetDescription" class="mt-1 text-xs text-slate-400 leading-relaxed max-w-2xl font-mono">
+              Analyzing stripped x86_64 binary. Function <span class="text-purple-300 font-bold">verify_crc16_checksum</span> references detached global memory address <span class="text-amber-400 font-bold">0x00402010</span> (CRC16 lookup table). The table is initialized in <span class="text-emerald-400 font-bold">init_crc16_poly</span>, 4 functions away. An isolated LLM cannot infer this polynomial and fails all frame checksums.
+            </p>
+          </div>
+
+          <!-- Metadata Tags -->
+          <div class="grid grid-cols-3 gap-3 max-w-lg pt-1">
+            <div class="bg-[#0E1424] p-2.5 rounded border border-falkor-border">
+              <div class="text-[10px] uppercase font-mono text-slate-500">Binary Architecture</div>
+              <div id="targetArch" class="text-xs font-mono font-medium text-slate-300">x86_64 stripped</div>
+            </div>
+            <div class="bg-[#0E1424] p-2.5 rounded border border-falkor-border">
+              <div class="text-[10px] uppercase font-mono text-slate-500">Missing Cross-Reference</div>
+              <div id="targetSymbol" class="text-xs font-mono font-medium text-amber-400 truncate">0x00402010</div>
+            </div>
+            <div class="bg-[#0E1424] p-2.5 rounded border border-falkor-border">
+              <div class="text-[10px] uppercase font-mono text-slate-500">Differential Vectors</div>
+              <div id="targetVectorsCount" class="text-xs font-mono font-medium text-emerald-400">15 Vectors</div>
+            </div>
+          </div>
+
+          <!-- High-Stakes Action Buttons -->
+          <div class="flex items-center gap-3 pt-2">
+            <button id="btnRunBaseline" class="text-xs font-mono px-4 py-2.5 rounded-lg border border-red-500/40 bg-red-950/20 hover:bg-red-900/30 text-red-300 transition-all flex items-center gap-2" onclick="runBaselineMode()">
+              <i class="fa-solid fa-triangle-exclamation text-red-400"></i>
+              <span>1. Test Baseline (Vanilla LLM - No Graph)</span>
+            </button>
+            <button id="btnRunGraphSwarm" class="text-xs font-mono px-5 py-2.5 rounded-lg bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-600 hover:to-indigo-500 text-white font-medium shadow-lg shadow-purple-900/40 transition-all flex items-center gap-2" onclick="runGhostGraphSwarm()">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>2. Launch GhostGraph Swarm (FalkorDB Context)</span>
+            </button>
           </div>
         </div>
 
-        <!-- Arcade Controls & Telemetry -->
-        <div class="mt-4 w-full flex items-center justify-between text-xs font-mono px-2 text-slate-400">
-          <div>Score: <span id="lblScore" class="text-yellow-400 font-bold">120</span></div>
-          <div>Blinky Mode: <span id="lblGhostMode" class="text-red-400 font-bold">CHASE</span></div>
-          <button id="btnTogglePlay" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" onclick="togglePlayState()">
-            <i class="fa-solid fa-play mr-1"></i> Auto Play
-          </button>
+        <!-- Right Column: Raw Decompiled Pseudocode Viewer -->
+        <div class="w-full lg:w-[480px] bg-[#0E1424] rounded-lg border border-falkor-border overflow-hidden flex flex-col">
+          <div class="px-3.5 py-2 border-b border-falkor-border bg-black/30 flex items-center justify-between text-xs font-mono text-slate-400">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-code text-slate-500"></i> Ghidra AST Decompilation</span>
+            <span class="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-link-slash"></i> 1 Detached Pointer
+            </span>
+          </div>
+          <div class="p-3 font-mono text-xs overflow-x-auto text-slate-300 max-h-56">
+            <pre id="decompiledSnippetCode"><code class="language-c">// Stripped Ghidra Pseudocode
+int verify_crc16_checksum(unsigned char *buf, int len, unsigned short expected_crc) {
+    unsigned short crc = 0xFFFF;
+    <span class="code-highlight-danger">/* UNRESOLVED POINTER: 0x00402010 not defined in local scope */
+    unsigned short *table = (unsigned short *)0x00402010;</span>
+    for (int i = 0; i < len; i++) {
+        unsigned char idx = (unsigned char)((crc >> 8) ^ buf[i]);
+        crc = (unsigned short)((crc << 8) ^ table[idx]);
+    }
+    return (crc == expected_crc) ? 1 : 0;
+}</code></pre>
+          </div>
         </div>
+
       </div>
     </section>
 
-    <!-- PANEL B: Live FalkorDB Topology Graph (Col 5) -->
-    <section class="col-span-12 lg:col-span-4 flex flex-col rounded-xl border border-falkor-border bg-falkor-panel/70 overflow-hidden shadow-xl">
-      <div class="px-4 py-3 border-b border-falkor-border flex items-center justify-between bg-black/20">
+    <!-- ================================================================== -->
+    <!-- STAGE 2: MULTI-AGENT SWARM PIPELINE (Real-Time Coordination)       -->
+    <!-- ================================================================== -->
+    <section id="swarmPipelineSection" class="rounded-xl border border-falkor-border bg-falkor-card p-4 shadow-xl space-y-3 hidden">
+      <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <i class="fa-solid fa-diagram-project text-falkor-light"></i>
-          <h2 class="text-sm font-semibold tracking-wide">FalkorDB Topological Memory</h2>
+          <span class="w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping"></span>
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-purple-300">Multi-Agent Autonomous Execution Pipeline (Track 02)</h3>
         </div>
-        <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
-          <span id="nodeCount">0 Nodes</span> | <span id="edgeCount">0 Edges</span>
-        </div>
-      </div>
-
-      <!-- Cytoscape Container -->
-      <div id="cy" class="flex-1 w-full bg-slate-950/80 relative">
-        <!-- Legend Overlay -->
-        <div class="absolute bottom-3 left-3 bg-falkor-panel/90 border border-falkor-border rounded-lg p-2.5 text-[11px] font-mono space-y-1 shadow-lg z-10 pointer-events-none">
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Function (AST)</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> GlobalMemory (DAT_...)</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> TestCase</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-pink-500"></span> Candidate Code</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PANEL C: Autonomous Agent Reasoning Terminal (Col 4) -->
-    <section class="col-span-12 lg:col-span-4 flex flex-col rounded-xl border border-falkor-border bg-falkor-panel/70 overflow-hidden shadow-xl">
-      <div class="px-4 py-3 border-b border-falkor-border flex items-center justify-between bg-black/20">
-        <div class="flex items-center gap-2">
-          <i class="fa-solid fa-terminal text-falkor-light"></i>
-          <h2 class="text-sm font-semibold tracking-wide">Autonomous Agent Execution</h2>
-        </div>
-        <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-700/50">
-          MCP Stream Active
+        <span id="agentStatusBadge" class="text-xs font-mono px-2.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/60">
+          Swarm Initializing...
         </span>
       </div>
 
-      <!-- Live Terminal Output -->
-      <div id="agentTerminal" class="flex-1 p-3.5 bg-black/90 font-mono text-xs overflow-y-auto space-y-2 text-slate-300">
-        <div class="text-purple-400 font-bold">> [System] GhostGraph Multi-Agent Runtime Initialized.</div>
-        <div class="text-slate-400">> [Topology] FalkorDB graph schema ready. 9 functions indexed.</div>
-        <div class="text-slate-400">> [Supervisor] Ready. Select a target or toggle Benchmark mode to begin.</div>
+      <!-- 4 Agents Representation Pipeline Bar -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
+        <!-- Agent 1: Topology -->
+        <div id="cardAgentTopology" class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border transition-all">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="font-bold text-purple-400 flex items-center gap-1.5"><i class="fa-solid fa-diagram-project"></i> Topology Agent</span>
+            <span id="badgeAgentTopology" class="text-[10px] text-slate-500">WAITING</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1 font-mono">Ingests AST, Call Graph & Memory maps into FalkorDB</p>
+        </div>
+
+        <!-- Agent 2: Reconstruction -->
+        <div id="cardAgentReconstruction" class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border transition-all">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="font-bold text-amber-400 flex items-center gap-1.5"><i class="fa-solid fa-brain"></i> Reconstruction Agent</span>
+            <span id="badgeAgentReconstruction" class="text-[10px] text-slate-500">WAITING</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1 font-mono">Executes OpenCypher MCP tools & prompts Gemini Flash</p>
+        </div>
+
+        <!-- Agent 3: Verification -->
+        <div id="cardAgentVerification" class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border transition-all">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="font-bold text-emerald-400 flex items-center gap-1.5"><i class="fa-solid fa-vial-circle-check"></i> Verification Agent</span>
+            <span id="badgeAgentVerification" class="text-[10px] text-slate-500">WAITING</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1 font-mono">GCC compilation & differential parity execution</p>
+        </div>
+
+        <!-- Agent 4: Supervisor -->
+        <div id="cardAgentSupervisor" class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border transition-all">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="font-bold text-pink-400 flex items-center gap-1.5"><i class="fa-solid fa-shield-halved"></i> Supervisor Agent</span>
+            <span id="badgeAgentSupervisor" class="text-[10px] text-slate-500">WAITING</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1 font-mono">Tracks episodic memory & self-healing convergence</p>
+        </div>
       </div>
+
+      <!-- Live OpenCypher Query HUD -->
+      <div id="cypherHudBox" class="bg-[#0B0F19] rounded border border-purple-900/50 p-2.5 font-mono text-xs flex items-center justify-between text-purple-200">
+        <div class="flex items-center gap-2 truncate">
+          <span class="text-slate-500 uppercase font-semibold text-[10px] tracking-wide bg-purple-950 px-1.5 py-0.5 rounded border border-purple-800">FalkorDB Cypher:</span>
+          <span id="lblActiveCypher" class="truncate text-purple-300">MATCH (init:Function)-[:WRITES]->(m:GlobalMemory {address: '0x00402010'})<-[:READS]-(target:Function) RETURN init.name, m.label, m.data_type</span>
+        </div>
+        <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1 shrink-0 ml-2">
+          <i class="fa-solid fa-bolt"></i> MCP Tool Call
+        </span>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STAGE 3: THE DEEP WORKSPACE (4 Focused Interactive Tabs)          -->
+    <!-- ================================================================== -->
+    <section class="rounded-xl border border-falkor-border bg-falkor-card shadow-2xl overflow-hidden flex flex-col min-h-[640px]">
+      
+      <!-- Tab Headers Bar -->
+      <div class="border-b border-falkor-border bg-[#0E1424] px-4 flex items-center justify-between">
+        <div class="flex items-center">
+          <button class="nav-tab active px-5 py-3 text-xs font-mono flex items-center gap-2" onclick="switchTab('graph')">
+            <i class="fa-solid fa-diagram-project text-purple-400"></i> Topological Knowledge Graph (FalkorDB)
+          </button>
+          <button class="nav-tab px-5 py-3 text-xs font-mono flex items-center gap-2" onclick="switchTab('multiagent')">
+            <i class="fa-solid fa-users-gear text-amber-400"></i> Multi-Agent Coordination & Memory
+          </button>
+          <button class="nav-tab px-5 py-3 text-xs font-mono flex items-center gap-2" onclick="switchTab('diff')">
+            <i class="fa-solid fa-code-compare text-emerald-400"></i> Code Reconstruction Diff
+          </button>
+          <button class="nav-tab px-5 py-3 text-xs font-mono flex items-center gap-2" onclick="switchTab('runtime')">
+            <i class="fa-solid fa-gauge-high text-pink-400"></i> Differential Parity & Runtime Proof
+          </button>
+        </div>
+
+        <!-- Global Parity Badge -->
+        <div class="py-2">
+          <span id="globalParityBadge" class="text-xs font-mono px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+            Parity: Awaiting Execution
+          </span>
+        </div>
+      </div>
+
+      <!-- Tab Content 1: Cytoscape Graph Canvas -->
+      <div id="tabContentGraph" class="tab-pane flex-1 flex flex-col relative">
+        <!-- Interactive Cypher Query & Filter Bar -->
+        <div class="px-4 py-2.5 bg-[#0B0F19]/90 border-b border-falkor-border flex items-center justify-between gap-3 text-xs font-mono z-10">
+          <div class="flex items-center gap-2 flex-1 max-w-2xl">
+            <span class="text-slate-400 uppercase text-[10px]">OpenCypher Console:</span>
+            <input id="inputCypherQuery" type="text" value="MATCH (f:Function)-[:WRITES]->(m:GlobalMemory) RETURN f.name, m.label, m.address" class="flex-1 bg-[#121A2C] border border-falkor-border rounded px-2.5 py-1 text-slate-200 focus:outline-none focus:border-purple-500 font-mono text-xs" />
+            <button class="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-medium transition" onclick="runCustomCypher()">
+              Query
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-500 text-[10px] uppercase">Preset Filters:</span>
+            <button class="px-2 py-0.5 rounded bg-[#121A2C] hover:bg-[#1A253E] border border-falkor-border text-slate-300 text-[11px]" onclick="filterGraphPreset('memory')">Memory XREFs</button>
+            <button class="px-2 py-0.5 rounded bg-[#121A2C] hover:bg-[#1A253E] border border-falkor-border text-slate-300 text-[11px]" onclick="filterGraphPreset('calls')">Call Graph</button>
+            <button class="px-2 py-0.5 rounded bg-[#121A2C] hover:bg-[#1A253E] border border-falkor-border text-slate-300 text-[11px]" onclick="filterGraphPreset('all')">Reset</button>
+          </div>
+        </div>
+
+        <!-- Cytoscape Canvas -->
+        <div id="cy" class="flex-1 w-full min-h-[500px] relative">
+          <!-- Floating Legend -->
+          <div class="absolute bottom-4 left-4 glass-panel rounded-lg p-3 text-[11px] font-mono space-y-1.5 shadow-xl pointer-events-none z-10">
+            <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Graph Legend</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-purple-500"></span> Function (AST)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rotate-45 bg-amber-400"></span> GlobalMemory (0x0040...)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-emerald-500"></span> TestCase</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-md bg-pink-500"></span> Candidate Code</div>
+          </div>
+
+          <!-- Floating Node Details Drawer -->
+          <div id="nodeDetailsDrawer" class="absolute top-4 right-4 w-72 glass-panel rounded-lg p-3.5 text-xs font-mono shadow-2xl space-y-2 hidden z-10">
+            <div class="flex items-center justify-between border-b border-falkor-border pb-1.5">
+              <span id="lblDrawerTitle" class="font-bold text-purple-300 truncate">Node Inspector</span>
+              <button class="text-slate-500 hover:text-white" onclick="closeNodeDrawer()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="drawerContent" class="space-y-1.5 text-slate-300 text-[11px]"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Multi-Agent Collaboration Log & Episodic Memory (Track 02) -->
+      <div id="tabContentMultiagent" class="tab-pane flex-1 flex flex-col hidden p-4 space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1">
+          
+          <!-- Column 1 & 2: Real-Time Multi-Agent Event Stream -->
+          <div class="lg:col-span-2 bg-[#0B0F19] rounded-lg border border-falkor-border p-3.5 flex flex-col">
+            <div class="flex items-center justify-between border-b border-falkor-border pb-2 mb-2">
+              <span class="text-xs font-mono uppercase text-slate-400 flex items-center gap-1.5 font-semibold">
+                <i class="fa-solid fa-list-check text-purple-400"></i> Swarm Event Stream
+              </span>
+              <span class="text-[10px] font-mono text-slate-500">Real-time SSE Active</span>
+            </div>
+            <div id="agentTerminal" class="flex-1 overflow-y-auto space-y-2 font-mono text-xs text-slate-300 p-1 min-h-[400px]">
+              <div class="text-purple-400 font-bold">> [System] GhostGraph Multi-Agent Runtime Initialized.</div>
+              <div class="text-slate-400">> [FalkorDB] Connected to AWS Cloud graph database instance (r-6jissuruar...).</div>
+              <div class="text-slate-400">> [Awaiting] Click 'Run GhostGraph Swarm' to initiate autonomous reverse engineering.</div>
+            </div>
+          </div>
+
+          <!-- Column 3: Episodic Memory & Shared State (Track 02) -->
+          <div class="bg-[#0E1424] rounded-lg border border-falkor-border p-3.5 flex flex-col space-y-3">
+            <div class="border-b border-falkor-border pb-2">
+              <h4 class="text-xs font-mono uppercase font-bold text-amber-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-database"></i> FalkorDB Episodic Memory
+              </h4>
+              <p class="text-[11px] text-slate-400 font-mono mt-0.5">Shared state across agent iterations</p>
+            </div>
+
+            <div class="space-y-2 text-xs font-mono">
+              <div class="bg-[#0B0F19] p-2.5 rounded border border-falkor-border">
+                <div class="text-[10px] text-slate-500 uppercase">Active Target Memory</div>
+                <div id="memTargetLabel" class="text-purple-300 font-medium">Aerospace Telemetry</div>
+              </div>
+              <div class="bg-[#0B0F19] p-2.5 rounded border border-falkor-border">
+                <div class="text-[10px] text-slate-500 uppercase">Resolved Memory Buffers</div>
+                <div id="memResolvedCount" class="text-amber-400 font-medium">0 Buffers Resolved</div>
+              </div>
+              <div class="bg-[#0B0F19] p-2.5 rounded border border-falkor-border">
+                <div class="text-[10px] text-slate-500 uppercase">Self-Healing Iterations</div>
+                <div id="memIterationCount" class="text-emerald-400 font-medium">0 Cycles (Ready)</div>
+              </div>
+              <div class="bg-[#0B0F19] p-2.5 rounded border border-falkor-border">
+                <div class="text-[10px] text-slate-500 uppercase">Failure Memory (FAILED_ON Edges)</div>
+                <div id="memFailureEdges" class="text-red-400 font-medium">0 Logged to FalkorDB</div>
+              </div>
+            </div>
+
+            <div class="mt-auto p-3 rounded bg-purple-950/20 border border-purple-800/40 text-[11px] font-mono text-purple-300">
+              <i class="fa-solid fa-circle-info mr-1"></i> FalkorDB acts as the persistent blackboard for all agents, eliminating hallucination loops.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Tab Content 3: Code Reconstruction Diff -->
+      <div id="tabContentDiff" class="tab-pane flex-1 flex flex-col hidden p-4 space-y-3">
+        <div class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border flex items-center justify-between text-xs font-mono">
+          <span class="text-slate-300 flex items-center gap-2">
+            <i class="fa-solid fa-code-compare text-emerald-400"></i>
+            <span>Reverse Engineering Diff: <strong>Ghidra Stripped Pseudocode</strong> vs <strong>GhostGraph Healed C</strong></span>
+          </span>
+          <span id="diffResolutionNotice" class="text-emerald-400 font-semibold text-[11px]">
+            Resolved via FalkorDB Cross-Reference
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
+          <!-- Left: Before (Stripped) -->
+          <div class="bg-[#0B0F19] rounded-lg border border-falkor-border flex flex-col overflow-hidden">
+            <div class="px-3.5 py-2 border-b border-falkor-border bg-black/40 text-xs font-mono text-red-400 flex items-center justify-between">
+              <span>BEFORE: Stripped Binary Pseudocode</span>
+              <span class="text-[10px] bg-red-950 px-2 py-0.5 rounded text-red-300 border border-red-800/50">Ungrounded Memory</span>
+            </div>
+            <pre class="p-4 font-mono text-xs overflow-auto flex-1 text-slate-300"><code id="codeDiffBefore">/* Loading decompiled target snippet... */</code></pre>
+          </div>
+
+          <!-- Right: After (GhostGraph Healed) -->
+          <div class="bg-[#0B0F19] rounded-lg border border-falkor-border flex flex-col overflow-hidden">
+            <div class="px-3.5 py-2 border-b border-falkor-border bg-black/40 text-xs font-mono text-emerald-400 flex items-center justify-between">
+              <span>AFTER: GhostGraph Reconstructed C99</span>
+              <span class="text-[10px] bg-emerald-950 px-2 py-0.5 rounded text-emerald-300 border border-emerald-800/50">100% Verified Parity</span>
+            </div>
+            <pre class="p-4 font-mono text-xs overflow-auto flex-1 text-slate-300"><code id="codeDiffAfter">/* Awaiting GhostGraph agent synthesis... */</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 4: Differential Parity & Runtime Proof -->
+      <div id="tabContentRuntime" class="tab-pane flex-1 flex flex-col hidden p-4 space-y-4">
+        
+        <!-- Top Parity Metric Strip -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-[#0E1424] p-4 rounded-lg border border-falkor-border flex items-center justify-between">
+            <div>
+              <div class="text-[10px] font-mono uppercase text-slate-400">Differential Parity</div>
+              <div id="lblParityPercentage" class="text-2xl font-bold font-mono text-slate-200 mt-0.5">--%</div>
+            </div>
+            <div id="parityIcon" class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 text-lg">
+              <i class="fa-solid fa-scale-balanced"></i>
+            </div>
+          </div>
+
+          <div class="bg-[#0E1424] p-4 rounded-lg border border-falkor-border flex items-center justify-between">
+            <div>
+              <div class="text-[10px] font-mono uppercase text-slate-400">Passed Vectors</div>
+              <div id="lblPassedCount" class="text-2xl font-bold font-mono text-emerald-400 mt-0.5">0 / 0</div>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-emerald-950/60 flex items-center justify-center text-emerald-400 text-lg">
+              <i class="fa-solid fa-check"></i>
+            </div>
+          </div>
+
+          <div class="bg-[#0E1424] p-4 rounded-lg border border-falkor-border flex items-center justify-between">
+            <div>
+              <div class="text-[10px] font-mono uppercase text-slate-400">Failed / Divergent</div>
+              <div id="lblFailedCount" class="text-2xl font-bold font-mono text-red-400 mt-0.5">0</div>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-red-950/60 flex items-center justify-center text-red-400 text-lg">
+              <i class="fa-solid fa-xmark"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Differential Test Matrix Grid (The 15 or 20 Test Vectors) -->
+        <div class="bg-[#0E1424] p-4 rounded-lg border border-falkor-border space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono uppercase text-slate-300 font-bold flex items-center gap-2">
+              <i class="fa-solid fa-list-ol text-purple-400"></i> Deterministic Test Vector Matrix
+            </span>
+            <span class="text-[11px] font-mono text-slate-500">Simultaneous dual-binary execution</span>
+          </div>
+
+          <div id="testVectorGrid" class="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Target Runtime Visual Proof (Telemetry / Pacman / Keygen) -->
+        <div class="bg-[#0B0F19] p-4 rounded-lg border border-falkor-border flex flex-col space-y-3">
+          <div class="flex items-center justify-between border-b border-falkor-border pb-2">
+            <span class="text-xs font-mono uppercase text-purple-300 font-bold flex items-center gap-2">
+              <i class="fa-solid fa-display"></i> Interactive Target Execution Proof
+            </span>
+            <span id="runtimeModeNotice" class="text-xs font-mono text-slate-400">Telemetry Downlink Stream</span>
+          </div>
+
+          <!-- SUB-VIEW A: Aerospace Satellite Telemetry Console -->
+          <div id="runtimeViewTelemetry" class="space-y-3">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="bg-[#121A2C] p-3 rounded border border-falkor-border">
+                <div class="text-[10px] font-mono uppercase text-slate-500">Orbital Altitude</div>
+                <div id="lblTelemetryAlt" class="text-lg font-mono font-bold text-slate-200">418.2 km</div>
+              </div>
+              <div class="bg-[#121A2C] p-3 rounded border border-falkor-border">
+                <div class="text-[10px] font-mono uppercase text-slate-500">Bus Voltage</div>
+                <div id="lblTelemetryVolt" class="text-lg font-mono font-bold text-slate-200">28.4 V</div>
+              </div>
+              <div class="bg-[#121A2C] p-3 rounded border border-falkor-border">
+                <div class="text-[10px] font-mono uppercase text-slate-500">Solar Array Temp</div>
+                <div id="lblTelemetryTemp" class="text-lg font-mono font-bold text-slate-200">24.5 °C</div>
+              </div>
+              <div class="bg-[#121A2C] p-3 rounded border border-falkor-border">
+                <div class="text-[10px] font-mono uppercase text-slate-500">CRC-16 Status</div>
+                <div id="lblTelemetryCrc" class="text-lg font-mono font-bold text-emerald-400">VALID [0x29B1]</div>
+              </div>
+            </div>
+
+            <div class="bg-[#070B12] p-3 rounded border border-falkor-border font-mono text-xs">
+              <div class="text-[10px] text-slate-500 uppercase mb-1">Downlink Frame Hex Stream</div>
+              <div id="lblTelemetryHex" class="text-purple-300 break-all">1ACFFC1D 0001 010A 000662A0 0C30 00F5 29B1</div>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW B: Pac-Man Arcade Canvas (for pacman target) -->
+          <div id="runtimeViewPacman" class="hidden flex-col items-center justify-center p-4">
+            <div class="relative border-4 border-blue-900 rounded-lg p-2 bg-black shadow-inner">
+              <canvas id="pacmanCanvas" width="280" height="360" class="block rounded"></canvas>
+              <div id="glitchOverlay" class="absolute inset-0 bg-red-900/30 border-2 border-red-500/50 rounded flex items-center justify-center pointer-events-none hidden">
+                <span class="text-xs font-mono bg-red-950/95 text-red-200 border border-red-600 px-3 py-1.5 rounded text-center shadow-lg">
+                  <i class="fa-solid fa-triangle-exclamation mr-1"></i> Baseline Mode Glitch: Direction Offset 0x00406080 unmapped.<br>Ghosts frozen in maze wall!
+                </span>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center gap-6 text-xs font-mono text-slate-400">
+              <div>Score: <span id="lblScore" class="text-yellow-400 font-bold">120</span></div>
+              <button id="btnTogglePlay" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" onclick="togglePlayState()">
+                <i class="fa-solid fa-play mr-1"></i> Run Canvas Frame
+              </button>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW C: Keygen Serial Validator (for keygen target) -->
+          <div id="runtimeViewKeygen" class="hidden space-y-3 font-mono text-xs">
+            <div class="bg-[#121A2C] p-3 rounded border border-falkor-border flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-slate-500 uppercase">Generated Enterprise Serial</div>
+                <div id="lblKeygenSerial" class="text-base text-purple-300 font-bold">ABCD-EFGH-1234-99B1</div>
+              </div>
+              <div id="lblKeygenStatus" class="px-3 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">
+                ENTERPRISE ACTIVATED
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
     </section>
 
   </main>
 
+  <!-- Cytoscape & Frontend Logic Scripts -->
   <script src="/static/app.js"></script>
 </body>
 </html>
