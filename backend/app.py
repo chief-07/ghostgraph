@@ -46,6 +46,19 @@ app.add_middleware(
 
 # Benchmark Targets Registry
 TARGETS = {
+    "billing": {
+        "id": "billing",
+        "name": "Legacy Commercial Billing & Tariff Engine",
+        "badge": "FLAGSHIP ENTERPRISE ACCOUNTING BENCHMARK",
+        "category": "Commercial Billing & Progressive Tariffs",
+        "arch": "x86_64 stripped binary",
+        "path": "backend/data/targets/billing_decompiled.json",
+        "vectors_path": "ground_truth/billing_test_vectors.json",
+        "critical_symbol": "0x00405000 (TAX_BRACKET_TABLE) & 0x00405080 (CUSTOMER_TIER_TABLE)",
+        "producer_fn": "init_tariff_tables",
+        "consumer_fn": "compute_progressive_tax",
+        "description": "Complete 6-function enterprise invoicing and progressive tariff settlement engine. Decompiled binary decouples marginal tax bracket tables (0x00405000) and customer loyalty tier rebate matrices (0x00405080) from line-item settlement loops. FalkorDB multi-agent swarm maps memory provenance and resolves call topology into compilable, audit-grade modern C."
+    },
     "lunar_lander": {
         "id": "lunar_lander",
         "name": "1979 Apollo Lunar Lander Guidance Computer",

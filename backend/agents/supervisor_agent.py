@@ -16,6 +16,80 @@ from backend.harness.differential import differential_tester
 logger = logging.getLogger("ghostgraph.supervisor_agent")
 
 TARGET_CONFIGS = {
+    "billing": {
+        "name": "Legacy Commercial Billing & Tariff Engine",
+        "primary_fn": "compute_progressive_tax",
+        "critical_mem": "0x00405000 & 0x00405080",
+        "mem_label": "TAX_BRACKET_TABLE & CUSTOMER_TIER_TABLE",
+        "producer_fn": "init_tariff_tables",
+        "ref_binary": "ground_truth/billing_engine.c",
+        "raw_disassembly": """; Target: billing_engine.exe (x86_64 stripped binary)
+; Symbol: sub_401180 (compute_progressive_tax)
+00401180:  55                      push   rbp
+00401181:  48 89 e5                mov    rbp, rsp
+00401184:  66 0f 57 c9             xorpd  xmm1, xmm1
+00401188:  f2 0f 2e c1             ucomisd xmm0, xmm1
+0040118c:  76 40                   jbe    004011ce
+; [CRITICAL UNGROUNDED MEMORY ACCESS: 0x00405000 TAX_BRACKETS]
+0040118e:  48 8d 15 6b 3e 00 00    lea    rdx, [rip+0x3e6b] ; [0x00405000] TAX_BRACKETS
+00401195:  31 c0                   xor    eax, eax
+00401197:  f2 0f 10 14 02          movsd  xmm2, QWORD PTR [rdx+rax]
+0040119c:  f2 0f 10 5c 02 08       movsd  xmm3, QWORD PTR [rdx+rax+0x8]
+004011a2:  5d                      pop    rbp
+004011a3:  c3                      ret""",
+        "decompiled_snippet": """double compute_progressive_tax(double taxable_amount) {
+    if (taxable_amount <= 0.0) return 0.0;
+    /* UNRESOLVED GLOBAL POINTER: 0x00405000 not defined in scope */
+    double *brackets = (double *)0x00405000;
+    double total_tax = 0.0;
+    double prev_threshold = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        double current_threshold = brackets[i * 2];
+        double current_rate = brackets[i * 2 + 1];
+        if (taxable_amount > prev_threshold) {
+            double in_bracket = (taxable_amount < current_threshold ? taxable_amount : current_threshold) - prev_threshold;
+            total_tax += in_bracket * current_rate;
+        } else {
+            break;
+        }
+        prev_threshold = current_threshold;
+    }
+    return total_tax;
+}""",
+        "reconstructed_c": """#include <stdio.h>
+#include <math.h>
+
+typedef struct {
+    double threshold;
+    double rate;
+} TaxBracket;
+
+/* Resolved via FalkorDB Cypher: (init_tariff_tables)-[:WRITES]->(0x00405000) */
+static const TaxBracket TAX_BRACKETS[4] = {
+    {  100.00, 0.00 },
+    {  500.00, 0.05 },
+    { 2000.00, 0.12 },
+    { 1e12,    0.20 }
+};
+
+double compute_progressive_tax(double taxable_amount) {
+    if (taxable_amount <= 0.0) return 0.0;
+    double total_tax = 0.0;
+    double prev_threshold = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        double thresh = TAX_BRACKETS[i].threshold;
+        double rate = TAX_BRACKETS[i].rate;
+        if (taxable_amount > prev_threshold) {
+            double in_bracket = (taxable_amount < thresh ? taxable_amount : thresh) - prev_threshold;
+            total_tax += in_bracket * rate;
+        } else {
+            break;
+        }
+        prev_threshold = thresh;
+    }
+    return total_tax;
+}"""
+    },
     "lunar_lander": {
         "name": "1979 Apollo Lunar Lander Guidance Computer",
         "primary_fn": "update_newtonian_physics",
