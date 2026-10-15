@@ -146,7 +146,7 @@ class TopologyAgent:
             tc_payload = []
             for v in vectors:
                 cat = v.get("category", "")
-                target_fn = "tick_engine"
+                target_fn = "update_newtonian_physics"
                 if "blinky" in cat:
                     target_fn = "update_blinky_ai"
                 elif "pinky" in cat:
@@ -155,6 +155,16 @@ class TopologyAgent:
                     target_fn = "update_inky_ai"
                 elif "clyde" in cat:
                     target_fn = "update_clyde_ai"
+                elif "Architecture" in cat:
+                    target_fn = "init_flight_computer"
+                elif "Propulsion" in cat or "Attitude" in cat:
+                    target_fn = "apply_thrust_vector"
+                elif "Terrain" in cat:
+                    target_fn = "check_altitude_raycast"
+                elif "Touchdown" in cat:
+                    target_fn = "evaluate_touchdown_dynamics"
+                elif "Snake" in cat or "General" in cat:
+                    target_fn = "step_snake_tick"
 
                 tc_payload.append({
                     "id": v["id"],
@@ -164,16 +174,18 @@ class TopologyAgent:
                 })
 
             cypher_tc = """
+            MATCH (p:Program {name: $pname})
             UNWIND $tests AS t
             MERGE (tc:TestCase {id: t.id})
             SET tc.category = t.cat,
                 tc.description = t.desc
+            MERGE (p)-[:HAS_TEST]->(tc)
             WITH tc, t
             MATCH (f:Function {name: t.target_fn})
             MERGE (tc)-[:EXERCISES]->(f)
             RETURN count(tc)
             """
-            self.client.query(cypher_tc, {"tests": tc_payload})
+            self.client.query(cypher_tc, {"pname": target_name, "tests": tc_payload})
 
         summary = {
             "target": target_name,

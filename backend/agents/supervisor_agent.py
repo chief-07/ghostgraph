@@ -16,6 +16,76 @@ from backend.harness.differential import differential_tester
 logger = logging.getLogger("ghostgraph.supervisor_agent")
 
 TARGET_CONFIGS = {
+    "lunar_lander": {
+        "name": "1979 Apollo Lunar Lander Guidance Computer",
+        "primary_fn": "update_newtonian_physics",
+        "critical_mem": "0x00403000 & 0x00403100",
+        "mem_label": "THRUST_THROTTLE_CURVE & TERRAIN_SURFACE_PROFILE",
+        "producer_fn": "init_flight_computer",
+        "ref_binary": "ground_truth/lunar_lander.c",
+        "raw_disassembly": """; Target: lunar_lander.bin (x86_64 stripped binary)
+; Symbol: sub_401200 (update_newtonian_physics)
+00401200:  55                      push   rbp
+00401201:  48 89 e5                mov    rbp, rsp
+00401204:  8b 05 36 1f 00 00       mov    eax, DWORD PTR [rip+0x1f36] ; [0x00403240] is_landed
+0040120a:  85 c0                   test   eax, eax
+0040120c:  75 7e                   jne    0040128c
+; [CRITICAL UNGROUNDED MEMORY ACCESS: 0x00403080 MASCON & 0x00403000 THROTTLE CURVE]
+0040120e:  f2 0f 10 05 ea 1f 00 00 movsd  xmm0, QWORD PTR [rip+0x1fea] ; [0x00403200] x coordinate
+00401216:  f2 0f 59 05 e2 1e 00 00 mulsd  xmm0, QWORD PTR [rip+0x1ee2] ; sector calculation
+0040121e:  f2 0f 2c c0             cvttsd2si eax, xmm0
+00401222:  48 8d 15 57 1e 00 00    lea    rdx, [rip+0x1e57]        ; [0x00403080] LUNAR_GRAVITY_ANOMALY
+00401229:  f2 0f 10 0c c2          movsd  xmm1, QWORD PTR [rdx+rax*8]  ; local anomaly
+0040122e:  f2 0f 58 0d d2 1c 00 00 addsd  xmm1, QWORD PTR [rip+0x1cd2] ; + 1.62 lunar gravity
+00401236:  f2 0f 10 15 c2 1f 00 00 movsd  xmm2, QWORD PTR [rip+0x1fc2] ; [0x00403230] throttle
+0040123e:  48 8d 1d ba 1d 00 00    lea    rbx, [rip+0x1dba]        ; [0x00403000] THRUST_THROTTLE_CURVE
+00401245:  f2 0f 10 04 cb          movsd  xmm0, QWORD PTR [rbx+rcx*8]  ; thrust coeff
+0040124a:  e8 31 00 00 00          call   00401280                 ; check_altitude_raycast()
+0040124f:  5d                      pop    rbp
+00401250:  c3                      ret""",
+        "decompiled_snippet": """void update_newtonian_physics(void) {
+    if (*(int *)(0x00403200 + 0x40) != 0) return;
+    double x = *(double *)(0x00403200 + 0x00);
+    /* UNRESOLVED GLOBAL POINTER: 0x00403080 not defined in scope */
+    double *anomaly_table = (double *)0x00403080;
+    int sector = (int)(x / 62.5);
+    double local_g = 1.62 + anomaly_table[sector];
+    /* UNRESOLVED GLOBAL POINTER: 0x00403000 not defined in scope */
+    double *thrust_table = (double *)0x00403000;
+    double throttle = *(double *)(0x00403200 + 0x30);
+    int step = (int)(throttle * 10.0);
+    double thrust = thrust_table[step] * 45000.0;
+    // Integration logic...
+    if (check_altitude_raycast() <= 0.0) evaluate_touchdown_dynamics();
+}""",
+        "reconstructed_c": """/**
+ * Reconstructed by GhostGraph Autonomous Multi-Agent Swarm
+ * Grounded via FalkorDB Knowledge Graph:
+ * - 0x00403000 resolved to THRUST_THROTTLE_CURVE[11] (Apollo DPS non-linear steps)
+ * - 0x00403080 resolved to LUNAR_GRAVITY_ANOMALY[16] (mascon gravity gradients)
+ * - 0x00403100 resolved to TERRAIN_SURFACE_PROFILE[32] (crater + Mare Tranquillitatis pad)
+ * - 0x00403200 resolved to FlightTelemetry state register struct
+ */
+#include "lunar_lander.h"
+#include <math.h>
+
+void update_newtonian_physics(void) {
+    if (flight_telemetry.is_landed != FLIGHT_IN_PROGRESS) return;
+    double clamped_x = fmax(0.0, fmin(999.0, flight_telemetry.x));
+    int sector = (int)(clamped_x / 62.5);
+    double local_g = LUNAR_GRAVITY + LUNAR_GRAVITY_ANOMALY[sector];
+    int step = (int)(flight_telemetry.throttle * 10.0);
+    double thrust = THRUST_THROTTLE_CURVE[step] * MAX_THRUST;
+    double Fx = thrust * sin(flight_telemetry.pitch);
+    double Fy = (thrust * cos(flight_telemetry.pitch)) - (flight_telemetry.total_mass * local_g);
+    flight_telemetry.vx += (Fx / flight_telemetry.total_mass) * DT;
+    flight_telemetry.vy += (Fy / flight_telemetry.total_mass) * DT;
+    flight_telemetry.x += flight_telemetry.vx * DT;
+    flight_telemetry.y += flight_telemetry.vy * DT;
+    flight_telemetry.tick_count++;
+    if (check_altitude_raycast() <= 0.0) evaluate_touchdown_dynamics();
+}"""
+    },
     "snake": {
         "name": "1980 Retro Snake Engine (Nibbles Core)",
         "primary_fn": "step_snake_tick",

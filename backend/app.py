@@ -46,6 +46,19 @@ app.add_middleware(
 
 # Benchmark Targets Registry
 TARGETS = {
+    "lunar_lander": {
+        "id": "lunar_lander",
+        "name": "1979 Apollo Lunar Lander Guidance Computer",
+        "badge": "FLAGSHIP APOLLO EMBEDDED FLIGHT REVERSE-ENGINEERING",
+        "category": "Embedded Aerospace Guidance System",
+        "arch": "x86_64 stripped binary",
+        "path": "backend/data/targets/lunar_lander_decompiled.json",
+        "vectors_path": "ground_truth/lunar_test_vectors.json",
+        "critical_symbol": "0x00403000 (THRUST_CURVE) & 0x00403100 (TERRAIN_PROFILE)",
+        "producer_fn": "init_flight_computer",
+        "consumer_fn": "update_newtonian_physics",
+        "description": "Complete 6-function Apollo Lunar Module guidance and descent flight computer. Decompiled binary decouples thrust throttle tables (0x00403000), gravity anomalies (0x00403080), and crater topography (0x00403100) from the Newtonian integration step loop. Reconstructs into a live, physically authentic lunar flight simulator."
+    },
     "snake": {
         "id": "snake",
         "name": "1980 Retro Snake Engine",
