@@ -1,0 +1,188 @@
+[
+  {
+    "id": "TC_SNAKE_01",
+    "name": "Game Boot Initialization State",
+    "action": "INIT",
+    "expected_head": [10, 10],
+    "expected_length": 3,
+    "expected_score": 0,
+    "expected_alive": 1,
+    "expected_food": [15, 10],
+    "description": "Validates init_snake_game correctly zeroes state and sets head at (10, 10)."
+  },
+  {
+    "id": "TC_SNAKE_02",
+    "name": "Forward Propagation (RIGHT)",
+    "action": "STEP",
+    "expected_head": [11, 10],
+    "expected_length": 3,
+    "expected_score": 0,
+    "expected_alive": 1,
+    "description": "Steps snake right using DIR_DELTAS[DIR_RIGHT]."
+  },
+  {
+    "id": "TC_SNAKE_03",
+    "name": "Secondary Step (RIGHT)",
+    "action": "STEP",
+    "expected_head": [12, 10],
+    "expected_length": 3,
+    "expected_score": 0,
+    "expected_alive": 1,
+    "description": "Ring buffer shifts body coordinates correctly."
+  },
+  {
+    "id": "TC_SNAKE_04",
+    "name": "Orthogonal Turn (DOWN)",
+    "action": "TURN_DOWN",
+    "expected_dir": 2,
+    "expected_head": [12, 10],
+    "expected_alive": 1,
+    "description": "Validates set_snake_direction(DIR_DOWN) succeeds."
+  },
+  {
+    "id": "TC_SNAKE_05",
+    "name": "Vertical Movement Step (DOWN)",
+    "action": "STEP",
+    "expected_head": [12, 11],
+    "expected_length": 3,
+    "expected_alive": 1,
+    "description": "Head advances to (12, 11) using DOWN vector [0, 1]."
+  },
+  {
+    "id": "TC_SNAKE_06",
+    "name": "180-Degree Reverse Lock Prevention",
+    "action": "TURN_UP_BLOCKED",
+    "expected_dir": 2,
+    "expected_head": [12, 11],
+    "expected_alive": 1,
+    "description": "Rejects 180-degree turn UP while heading DOWN."
+  },
+  {
+    "id": "TC_SNAKE_07",
+    "name": "Orthogonal Turn (RIGHT)",
+    "action": "TURN_RIGHT",
+    "expected_dir": 1,
+    "expected_head": [12, 11],
+    "expected_alive": 1,
+    "description": "Valid turn RIGHT to setup food approach."
+  },
+  {
+    "id": "TC_SNAKE_08",
+    "name": "Advance Step (13, 11)",
+    "action": "STEP",
+    "expected_head": [13, 11],
+    "expected_length": 3,
+    "expected_alive": 1,
+    "description": "Advances along row 11."
+  },
+  {
+    "id": "TC_SNAKE_09",
+    "name": "Advance Step (14, 11)",
+    "action": "STEP",
+    "expected_head": [14, 11],
+    "expected_length": 3,
+    "expected_alive": 1,
+    "description": "Advances under food position."
+  },
+  {
+    "id": "TC_SNAKE_10",
+    "name": "Advance Step (15, 11)",
+    "action": "STEP",
+    "expected_head": [15, 11],
+    "expected_length": 3,
+    "expected_alive": 1,
+    "description": "Directly beneath food coordinate (15, 10)."
+  },
+  {
+    "id": "TC_SNAKE_11",
+    "name": "Turn UP Toward Food",
+    "action": "TURN_UP",
+    "expected_dir": 0,
+    "expected_head": [15, 11],
+    "expected_alive": 1,
+    "description": "Sets direction UP to intercept food."
+  },
+  {
+    "id": "TC_SNAKE_12",
+    "name": "Food Interception & Elongation",
+    "action": "STEP",
+    "expected_head": [15, 10],
+    "expected_length": 4,
+    "expected_score": 10,
+    "expected_alive": 1,
+    "description": "Head intersects food: length increments to 4, score increases by 10."
+  },
+  {
+    "id": "TC_SNAKE_13",
+    "name": "Dynamic Tail Growth Verification",
+    "action": "STEP",
+    "expected_head": [15, 9],
+    "expected_length": 4,
+    "expected_score": 10,
+    "expected_alive": 1,
+    "description": "Ensures all 4 segments follow without detached gaps."
+  },
+  {
+    "id": "TC_SNAKE_14",
+    "name": "Turn RIGHT to East Wall",
+    "action": "TURN_RIGHT",
+    "expected_dir": 1,
+    "expected_head": [15, 9],
+    "expected_alive": 1,
+    "description": "Sets direction RIGHT toward grid boundary x=19."
+  },
+  {
+    "id": "TC_SNAKE_15",
+    "name": "Wall Edge Transit (16, 9)",
+    "action": "STEP",
+    "expected_head": [16, 9],
+    "expected_length": 4,
+    "expected_alive": 1,
+    "description": "Approaches wall safely."
+  },
+  {
+    "id": "TC_SNAKE_16",
+    "name": "Wall Edge Transit (17, 9)",
+    "action": "STEP",
+    "expected_head": [17, 9],
+    "expected_length": 4,
+    "expected_alive": 1,
+    "description": "Approaches wall safely."
+  },
+  {
+    "id": "TC_SNAKE_17",
+    "name": "Wall Edge Transit (18, 9)",
+    "action": "STEP",
+    "expected_head": [18, 9],
+    "expected_length": 4,
+    "expected_alive": 1,
+    "description": "Approaches wall safely."
+  },
+  {
+    "id": "TC_SNAKE_18",
+    "name": "Boundary Proximity (19, 9)",
+    "action": "STEP",
+    "expected_head": [19, 9],
+    "expected_length": 4,
+    "expected_alive": 1,
+    "description": "Reaches extreme perimeter cell (19, 9)."
+  },
+  {
+    "id": "TC_SNAKE_19",
+    "name": "Wall Boundary Collision Impact",
+    "action": "STEP_COLLISION",
+    "expected_head": [19, 9],
+    "expected_length": 4,
+    "expected_alive": 0,
+    "description": "Crossing perimeter x >= 20 triggers fatal wall collision."
+  },
+  {
+    "id": "TC_SNAKE_20",
+    "name": "Dead State Game Loop Lockout",
+    "action": "STEP_AFTER_DEATH",
+    "expected_head": [19, 9],
+    "expected_length": 4,
+    "expected_alive": 0,
+    "description": "Subsequent ticks do not mutate coordinate buffers after is_alive = 0."
+  }
+]

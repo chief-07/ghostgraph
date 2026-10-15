@@ -1,26 +1,16 @@
 // GhostGraph Autonomous Reverse Engineering Platform Frontend Engine
 let cy = null;
-let currentTarget = "telemetry";
+let currentTarget = "snake";
 let currentTargetData = null;
 let currentSnippetMode = "disasm"; // Default to authentic raw machine code!
 let eventSource = null;
-let isPlaying = false;
-let pacmanInterval = null;
-
-// Pac-Man Game State for arcade benchmark
-let gameState = {
-  px: 14, py: 26, pdir: 1,
-  bx: 14, by: 11, bdir: 1,
-  score: 120,
-  mode: "CHASE",
-  is_broken_mode: false
-};
+let currentExecutionMode = "grounded"; // "grounded" vs "baseline"
 
 // Initialize on DOM Load
 document.addEventListener("DOMContentLoaded", async () => {
   initCytoscape();
-  initPacmanCanvas();
-  await switchTarget("telemetry");
+  initSnakeCanvas();
+  await switchTarget("snake");
 });
 
 // ----------------------------------------------------------------------------
@@ -102,26 +92,26 @@ function toggleSnippetView(mode) {
 }
 
 function updateRuntimeSubView(targetId) {
+  const viewSnake = document.getElementById("runtimeViewSnake");
   const viewTel = document.getElementById("runtimeViewTelemetry");
-  const viewPac = document.getElementById("runtimeViewPacman");
   const viewKey = document.getElementById("runtimeViewKeygen");
   const lblMode = document.getElementById("runtimeModeNotice");
 
-  viewTel.classList.add("hidden");
-  viewPac.classList.add("hidden");
-  viewKey.classList.add("hidden");
+  if (viewSnake) viewSnake.classList.add("hidden");
+  if (viewTel) viewTel.classList.add("hidden");
+  if (viewKey) viewKey.classList.add("hidden");
 
-  if (targetId === "telemetry") {
-    viewTel.classList.remove("hidden");
-    lblMode.innerText = "Satellite Downlink Stream Telemetry";
+  if (targetId === "snake") {
+    if (viewSnake) viewSnake.classList.remove("hidden");
+    if (lblMode) lblMode.innerText = "Playable Retro Snake Simulation";
+    renderSnakeCanvas();
+  } else if (targetId === "telemetry") {
+    if (viewTel) viewTel.classList.remove("hidden");
+    if (lblMode) lblMode.innerText = "Satellite Downlink Stream Telemetry";
     fetchTelemetryDownlink(true);
-  } else if (targetId === "pacman") {
-    viewPac.classList.remove("hidden");
-    lblMode.innerText = "Deterministic State Machine & Maze Engine";
-    renderPacmanCanvas();
   } else if (targetId === "keygen") {
-    viewKey.classList.remove("hidden");
-    lblMode.innerText = "License Checksum & S-Box Validator";
+    if (viewKey) viewKey.classList.remove("hidden");
+    if (lblMode) lblMode.innerText = "License Checksum & S-Box Validator";
   }
 }
 
@@ -699,69 +689,303 @@ async function fetchTelemetryDownlink(isReconstructed) {
   }
 }
 
-// Pac-Man Retro Arcade Canvas
-let pacmanCanvas, pacmanCtx;
-function initPacmanCanvas() {
-  pacmanCanvas = document.getElementById("pacmanCanvas");
-  if (pacmanCanvas) pacmanCtx = pacmanCanvas.getContext("2d");
-}
+// ============================================================================
+// Retro Snake Arcade Canvas State & Complete Game Engine
+// ============================================================================
+let snakeCanvas, snakeCtx;
+let snakeLoopInterval = null;
+let isSnakePlaying = false;
+let snakeHighScore = 140;
 
-function renderPacmanCanvas() {
-  if (!pacmanCtx) return;
-  const w = pacmanCanvas.width;
-  const h = pacmanCanvas.height;
-  const cell = 10;
+let snakeState = {
+  score: 0,
+  length: 3,
+  alive: true,
+  food: { x: 15, y: 10 },
+  currentDir: 1, // 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
+  body: [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }]
+};
 
-  pacmanCtx.fillStyle = "#000000";
-  pacmanCtx.fillRect(0, 0, w, h);
-
-  pacmanCtx.strokeStyle = "#1E3A8A";
-  pacmanCtx.lineWidth = 3;
-  pacmanCtx.strokeRect(5, 5, w - 10, h - 10);
-
-  pacmanCtx.fillStyle = "#FEF08A";
-  for (let x = 3; x < 25; x += 3) {
-    for (let y = 3; y < 33; y += 4) {
-      pacmanCtx.beginPath();
-      pacmanCtx.arc(x * cell, y * cell, 2, 0, Math.PI * 2);
-      pacmanCtx.fill();
-    }
+function initSnakeCanvas() {
+  snakeCanvas = document.getElementById("snakeCanvas");
+  if (snakeCanvas) {
+    snakeCtx = snakeCanvas.getContext("2d");
   }
 
-  pacmanCtx.fillStyle = "#FACC15";
-  pacmanCtx.beginPath();
-  pacmanCtx.arc(gameState.px * cell, gameState.py * cell, 6, 0.2 * Math.PI, 1.8 * Math.PI);
-  pacmanCtx.lineTo(gameState.px * cell, gameState.py * cell);
-  pacmanCtx.fill();
+  // Real keyboard arrow key controls for authentic gameplay!
+  window.addEventListener("keydown", (e) => {
+    if (currentTarget !== "snake") return;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      sendSnakeDirection(0);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      sendSnakeDirection(1);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      sendSnakeDirection(2);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      sendSnakeDirection(3);
+    } else if (e.key === " ") {
+      e.preventDefault();
+      toggleSnakePlayLoop();
+    }
+  });
 
-  pacmanCtx.fillStyle = "#EF4444";
-  pacmanCtx.beginPath();
-  pacmanCtx.arc(gameState.bx * cell, gameState.by * cell - 2, 6, Math.PI, 0);
-  pacmanCtx.lineTo(gameState.bx * cell + 6, gameState.by * cell + 4);
-  pacmanCtx.lineTo(gameState.bx * cell - 6, gameState.by * cell + 4);
-  pacmanCtx.fill();
+  renderSnakeCanvas();
 }
 
-function togglePlayState() {
-  stepPacmanFrame();
+function renderSnakeCanvas() {
+  if (!snakeCtx || !snakeCanvas) return;
+  const w = snakeCanvas.width;
+  const h = snakeCanvas.height;
+  const gridSize = 20;
+  const cell = w / gridSize; // 20px per cell
+
+  // 1. Dark CRT Phosphor Background
+  snakeCtx.fillStyle = "#050811";
+  snakeCtx.fillRect(0, 0, w, h);
+
+  // 2. Subtle CRT grid lines
+  snakeCtx.strokeStyle = "#0E182E";
+  snakeCtx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    snakeCtx.beginPath();
+    snakeCtx.moveTo(i * cell, 0);
+    snakeCtx.lineTo(i * cell, h);
+    snakeCtx.stroke();
+
+    snakeCtx.beginPath();
+    snakeCtx.moveTo(0, i * cell);
+    snakeCtx.lineTo(w, i * cell);
+    snakeCtx.stroke();
+  }
+
+  // 3. Render Food (Glowing Red Apple)
+  if (snakeState.food) {
+    const fx = snakeState.food.x * cell;
+    const fy = snakeState.food.y * cell;
+
+    snakeCtx.shadowColor = "#EF4444";
+    snakeCtx.shadowBlur = 10;
+    snakeCtx.fillStyle = "#EF4444";
+    snakeCtx.beginPath();
+    snakeCtx.arc(fx + cell / 2, fy + cell / 2, cell / 2 - 2, 0, Math.PI * 2);
+    snakeCtx.fill();
+
+    // Food highlight dot
+    snakeCtx.fillStyle = "#FCA5A5";
+    snakeCtx.beginPath();
+    snakeCtx.arc(fx + cell / 2 - 2, fy + cell / 2 - 2, 2, 0, Math.PI * 2);
+    snakeCtx.fill();
+    snakeCtx.shadowBlur = 0;
+  }
+
+  // 4. Render Snake Body Segments
+  const body = snakeState.body || [];
+  body.forEach((seg, idx) => {
+    const sx = seg.x * cell;
+    const sy = seg.y * cell;
+
+    if (idx === 0) {
+      // Snake Head (Bright glowing Lime Green)
+      snakeCtx.shadowColor = "#10B981";
+      snakeCtx.shadowBlur = 8;
+      snakeCtx.fillStyle = "#34D399";
+      snakeCtx.fillRect(sx + 1, sy + 1, cell - 2, cell - 2);
+
+      // Two eyes pointing in movement direction
+      snakeCtx.fillStyle = "#000000";
+      const dir = snakeState.currentDir;
+      let eye1 = [sx + 5, sy + 5], eye2 = [sx + 15, sy + 5];
+      if (dir === 1) { eye1 = [sx + 14, sy + 5]; eye2 = [sx + 14, sy + 15]; } // Right
+      else if (dir === 2) { eye1 = [sx + 5, sy + 14]; eye2 = [sx + 15, sy + 14]; } // Down
+      else if (dir === 3) { eye1 = [sx + 5, sy + 5]; eye2 = [sx + 5, sy + 15]; } // Left
+
+      snakeCtx.fillRect(eye1[0] - 1, eye1[1] - 1, 3, 3);
+      snakeCtx.fillRect(eye2[0] - 1, eye2[1] - 1, 3, 3);
+      snakeCtx.shadowBlur = 0;
+    } else {
+      // Snake Body Segment
+      const alpha = Math.max(0.4, 1.0 - (idx / body.length) * 0.5);
+      snakeCtx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
+      snakeCtx.fillRect(sx + 2, sy + 2, cell - 4, cell - 4);
+      snakeCtx.strokeStyle = "#047857";
+      snakeCtx.lineWidth = 1;
+      snakeCtx.strokeRect(sx + 2, sy + 2, cell - 4, cell - 4);
+    }
+  });
+
+  // Update HUD values
+  if (document.getElementById("lblSnakeScore")) document.getElementById("lblSnakeScore").innerText = snakeState.score;
+  if (document.getElementById("lblSnakeLength")) document.getElementById("lblSnakeLength").innerText = snakeState.length;
+  if (document.getElementById("lblSnakeHighScore")) document.getElementById("lblSnakeHighScore").innerText = Math.max(snakeHighScore, snakeState.score);
 }
 
-async function stepPacmanFrame() {
+async function sendSnakeDirection(dir) {
+  snakeState.currentDir = dir;
+  await stepSnake();
+}
+
+async function stepSnake() {
   try {
-    const res = await fetch("/api/tick", {
+    const isBroken = (currentExecutionMode === "baseline");
+    const res = await fetch("/api/snake/step", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(gameState)
+      body: JSON.stringify({ dir: snakeState.currentDir, is_broken_mode: isBroken })
     });
     const data = await res.json();
-    gameState.px = data.pacman.x;
-    gameState.py = data.pacman.y;
-    gameState.bx = data.blinky.x;
-    gameState.by = data.blinky.y;
-    gameState.score = data.score;
-    document.getElementById("lblScore").innerText = gameState.score;
-    renderPacmanCanvas();
-  } catch (e) {}
+    snakeState.score = data.score;
+    snakeState.length = data.length;
+    snakeState.alive = data.alive;
+    snakeState.food = data.food;
+    snakeState.body = data.body;
+    snakeState.currentDir = data.dir;
+
+    const overlay = document.getElementById("snakeGlitchOverlay");
+    const statusEl = document.getElementById("lblSnakeStatus");
+
+    if (!data.alive) {
+      if (isBroken && overlay) overlay.classList.remove("hidden");
+      if (statusEl) {
+        statusEl.innerText = isBroken ? "MEMORY FAULT (CRASHED)" : "GAME OVER (WALL IMPACT)";
+        statusEl.className = "px-2.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[11px] font-bold";
+      }
+      stopSnakeLoop();
+    } else {
+      if (overlay) overlay.classList.add("hidden");
+      if (statusEl) {
+        statusEl.innerText = "AUTONOMOUS RECONSTRUCTED (60 FPS)";
+        statusEl.className = "px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-bold";
+      }
+    }
+
+    renderSnakeCanvas();
+  } catch (err) {
+    console.warn("Snake step tick failed:", err);
+  }
+}
+
+function toggleSnakePlayLoop() {
+  if (isSnakePlaying) {
+    stopSnakeLoop();
+  } else {
+    startSnakeLoop();
+  }
+}
+
+function startSnakeLoop() {
+  isSnakePlaying = true;
+  const btn = document.getElementById("lblSnakePlayBtn");
+  const icon = document.getElementById("iconSnakePlay");
+  if (btn) btn.innerText = "Pause Simulation";
+  if (icon) icon.className = "fa-solid fa-pause";
+
+  if (snakeLoopInterval) clearInterval(snakeLoopInterval);
+  snakeLoopInterval = setInterval(() => {
+    stepSnake();
+  }, 130);
+}
+
+function stopSnakeLoop() {
+  isSnakePlaying = false;
+  const btn = document.getElementById("lblSnakePlayBtn");
+  const icon = document.getElementById("iconSnakePlay");
+  if (btn) btn.innerText = "Run Arcade Loop";
+  if (icon) icon.className = "fa-solid fa-play";
+
+  if (snakeLoopInterval) {
+    clearInterval(snakeLoopInterval);
+    snakeLoopInterval = null;
+  }
+}
+
+async function resetSnakeGame() {
+  stopSnakeLoop();
+  try {
+    const res = await fetch("/api/snake/reset", { method: "POST" });
+    const data = await res.json();
+    snakeState.score = data.score;
+    snakeState.length = data.length;
+    snakeState.alive = data.alive;
+    snakeState.food = data.food;
+    snakeState.body = data.body;
+    snakeState.currentDir = data.dir;
+
+    const overlay = document.getElementById("snakeGlitchOverlay");
+    if (overlay) overlay.classList.add("hidden");
+
+    const statusEl = document.getElementById("lblSnakeStatus");
+    if (statusEl) {
+      statusEl.innerText = "AUTONOMOUS RECONSTRUCTED (60 FPS)";
+      statusEl.className = "px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-bold";
+    }
+
+    renderSnakeCanvas();
+  } catch (err) {
+    console.warn("Reset snake error:", err);
+  }
+}
+
+// Standalone C Project Export Modal Handlers
+let exportedCodeText = "";
+async function exportCProject() {
+  try {
+    const res = await fetch(`/api/export?target_id=${currentTarget}`);
+    const data = await res.json();
+    exportedCodeText = data.source_code;
+    document.getElementById("exportFilename").innerText = data.filename;
+    document.getElementById("exportCompileCmd").innerText = data.compile_cmd;
+    document.getElementById("exportCodeContent").innerText = data.source_code;
+    document.getElementById("exportModal").classList.remove("hidden");
+  } catch (err) {
+    console.warn("Export failed:", err);
+  }
+}
+
+function closeExportModal() {
+  document.getElementById("exportModal").classList.add("hidden");
+}
+
+function copyExportedCode() {
+  if (navigator.clipboard && exportedCodeText) {
+    navigator.clipboard.writeText(exportedCodeText);
+    logTerminal("Export", "Compilable C code copied to clipboard!", "text-emerald-400 font-bold");
+  }
+}
+
+function downloadExportedFile() {
+  if (!exportedCodeText) return;
+  const filename = document.getElementById("exportFilename").innerText || "reconstructed.c";
+  const blob = new Blob([exportedCodeText], { type: "text/x-csrc" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+async function injectTelemetryTest(isNominal) {
+  try {
+    const res = await fetch(`/api/telemetry/downlink?is_reconstructed=${isNominal}`);
+    const data = await res.json();
+    document.getElementById("lblTelemetryAlt").innerText = `${data.altitude_km} km`;
+    document.getElementById("lblTelemetryVolt").innerText = `${data.bus_voltage_v} V`;
+    document.getElementById("lblTelemetryTemp").innerText = `${data.solar_temp_c} °C`;
+    document.getElementById("lblTelemetryHex").innerText = data.raw_frame_hex;
+
+    const crcEl = document.getElementById("lblTelemetryCrc");
+    if (data.crc_status === "VALID") {
+      crcEl.innerText = `VALID [${data.computed_crc}]`;
+      crcEl.className = "text-lg font-mono font-bold text-emerald-400";
+    } else {
+      crcEl.innerText = `CORRUPTED [${data.computed_crc}]`;
+      crcEl.className = "text-lg font-mono font-bold text-red-400";
+    }
+  } catch (err) {
+    console.warn("Inject telemetry test failed:", err);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -878,4 +1102,11 @@ window.runCustomCypher = runCustomCypher;
 window.filterGraphPreset = filterGraphPreset;
 window.openNodeDrawer = openNodeDrawer;
 window.closeNodeDrawer = closeNodeDrawer;
-window.togglePlayState = togglePlayState;
+window.toggleSnakePlayLoop = toggleSnakePlayLoop;
+window.resetSnakeGame = resetSnakeGame;
+window.sendSnakeDirection = sendSnakeDirection;
+window.injectTelemetryTest = injectTelemetryTest;
+window.exportCProject = exportCProject;
+window.closeExportModal = closeExportModal;
+window.copyExportedCode = copyExportedCode;
+window.downloadExportedFile = downloadExportedFile;

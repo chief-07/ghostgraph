@@ -54,14 +54,14 @@
     <!-- Target Binary Selector -->
     <div class="flex items-center gap-2 bg-[#121A2C] border border-falkor-border rounded-lg p-1">
       <span class="text-xs text-slate-400 font-mono uppercase px-2">Target:</span>
-      <button class="target-tab active text-xs font-mono px-3 py-1.5 rounded-md bg-purple-600/30 text-purple-200 border border-purple-500/50 flex items-center gap-1.5 transition-all" data-target="telemetry" onclick="switchTarget('telemetry')">
-        <i class="fa-solid fa-satellite text-purple-300"></i> Satellite Telemetry Decoder
+      <button class="target-tab active text-xs font-mono px-3 py-1.5 rounded-md bg-purple-600/30 text-purple-200 border border-purple-500/50 flex items-center gap-1.5 transition-all" data-target="snake" onclick="switchTarget('snake')">
+        <i class="fa-solid fa-gamepad text-emerald-400"></i> 1980 Retro Snake (Playable)
       </button>
-      <button class="target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all" data-target="pacman" onclick="switchTarget('pacman')">
-        <i class="fa-solid fa-gamepad"></i> 1980 Pac-Man Ghost AI
+      <button class="target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all" data-target="telemetry" onclick="switchTarget('telemetry')">
+        <i class="fa-solid fa-satellite text-purple-300"></i> Satellite Telemetry
       </button>
       <button class="target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all" data-target="keygen" onclick="switchTarget('keygen')">
-        <i class="fa-solid fa-key"></i> License Keygen CrackMe
+        <i class="fa-solid fa-key text-amber-400"></i> License Keygen
       </button>
     </div>
 
@@ -349,14 +349,17 @@
 
       <!-- Tab Content 3: Code Reconstruction Diff -->
       <div id="tabContentDiff" class="tab-pane flex-1 flex flex-col hidden p-4 space-y-3">
-        <div class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border flex items-center justify-between text-xs font-mono">
-          <span class="text-slate-300 flex items-center gap-2">
+        <div class="bg-[#0E1424] p-3 rounded-lg border border-falkor-border flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div class="flex items-center gap-2 text-slate-300">
             <i class="fa-solid fa-code-compare text-emerald-400"></i>
             <span>Reverse Engineering Diff: <strong>Ghidra Stripped Pseudocode</strong> vs <strong>GhostGraph Healed C</strong></span>
-          </span>
-          <span id="diffResolutionNotice" class="text-emerald-400 font-semibold text-[11px]">
-            Resolved via FalkorDB Cross-Reference
-          </span>
+            <span id="diffResolutionNotice" class="text-emerald-400 font-semibold text-[11px] ml-2">
+              Resolved via FalkorDB Cross-Reference
+            </span>
+          </div>
+          <button class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow-lg shadow-purple-900/30" onclick="exportCProject()">
+            <i class="fa-solid fa-file-code"></i> Export Compilable C Project (.c / Makefile)
+          </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
@@ -436,11 +439,76 @@
             <span class="text-xs font-mono uppercase text-purple-300 font-bold flex items-center gap-2">
               <i class="fa-solid fa-display"></i> Interactive Target Execution Proof
             </span>
-            <span id="runtimeModeNotice" class="text-xs font-mono text-slate-400">Telemetry Downlink Stream</span>
+            <span id="runtimeModeNotice" class="text-xs font-mono text-slate-400">Playable Retro Snake Simulation</span>
           </div>
 
-          <!-- SUB-VIEW A: Aerospace Satellite Telemetry Console -->
-          <div id="runtimeViewTelemetry" class="space-y-3">
+          <!-- SUB-VIEW A: Retro Snake Arcade Engine (Flagship Target) -->
+          <div id="runtimeViewSnake" class="flex flex-col items-center justify-center p-2 space-y-4">
+            <!-- Retro Arcade HUD Strip -->
+            <div class="w-full max-w-xl bg-[#0E1424] p-3 rounded-lg border border-falkor-border flex items-center justify-between text-xs font-mono">
+              <div class="flex items-center gap-4">
+                <div>
+                  <span class="text-slate-500 uppercase text-[10px]">Score:</span>
+                  <span id="lblSnakeScore" class="text-emerald-400 font-bold text-base ml-1">0</span>
+                </div>
+                <div>
+                  <span class="text-slate-500 uppercase text-[10px]">Length:</span>
+                  <span id="lblSnakeLength" class="text-slate-200 font-bold text-base ml-1">3</span>
+                </div>
+                <div>
+                  <span class="text-slate-500 uppercase text-[10px]">High:</span>
+                  <span id="lblSnakeHighScore" class="text-purple-300 font-bold text-base ml-1">140</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="lblSnakeStatus" class="px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-bold">
+                  AUTONOMOUS RECONSTRUCTED
+                </span>
+              </div>
+            </div>
+
+            <!-- Canvas Viewport with CRT Frame -->
+            <div class="relative border-4 border-emerald-900/60 rounded-xl p-2 bg-[#050811] shadow-2xl">
+              <canvas id="snakeCanvas" width="400" height="400" class="block rounded bg-black/90"></canvas>
+              
+              <!-- Glitch / Crash Overlay for Baseline Mode -->
+              <div id="snakeGlitchOverlay" class="absolute inset-0 bg-red-950/70 border-2 border-red-500 rounded-lg flex flex-col items-center justify-center p-6 text-center pointer-events-none hidden">
+                <i class="fa-solid fa-triangle-exclamation text-red-400 text-3xl mb-2 animate-bounce"></i>
+                <div class="text-sm font-mono font-bold text-red-200 mb-1">FATAL MEMORY DESYNC IN BASELINE MODE</div>
+                <p class="text-xs font-mono text-red-300 max-w-xs leading-relaxed">
+                  Memory address <strong>0x00404100</strong> (DIR_DELTAS) was ungrounded in flat prompt. 
+                  Vector evaluated to [0, 0]. Coordinate ring buffer <strong>0x00404000</strong> desynced and crashed.
+                </p>
+              </div>
+            </div>
+
+            <!-- Interactive Gameplay Controls Strip -->
+            <div class="w-full max-w-xl flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div class="flex items-center gap-2">
+                <button id="btnToggleSnakeLoop" class="px-3.5 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-medium flex items-center gap-1.5 transition shadow" onclick="toggleSnakePlayLoop()">
+                  <i id="iconSnakePlay" class="fa-solid fa-play"></i> <span id="lblSnakePlayBtn">Run Arcade Loop</span>
+                </button>
+                <button class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" onclick="resetSnakeGame()">
+                  <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+                </button>
+              </div>
+
+              <!-- Directional On-Screen D-Pad (for mouse/touch) -->
+              <div class="flex items-center gap-1 bg-[#121A2C] p-1 rounded-lg border border-falkor-border">
+                <button class="w-8 h-8 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center" onclick="sendSnakeDirection(0)" title="UP (ArrowUp)"><i class="fa-solid fa-arrow-up text-xs"></i></button>
+                <button class="w-8 h-8 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center" onclick="sendSnakeDirection(3)" title="LEFT (ArrowLeft)"><i class="fa-solid fa-arrow-left text-xs"></i></button>
+                <button class="w-8 h-8 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center" onclick="sendSnakeDirection(2)" title="DOWN (ArrowDown)"><i class="fa-solid fa-arrow-down text-xs"></i></button>
+                <button class="w-8 h-8 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center" onclick="sendSnakeDirection(1)" title="RIGHT (ArrowRight)"><i class="fa-solid fa-arrow-right text-xs"></i></button>
+              </div>
+
+              <span class="text-[11px] text-slate-400 flex items-center gap-1">
+                <i class="fa-regular fa-keyboard text-purple-400"></i> Use Keyboard Arrow Keys
+              </span>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW B: Aerospace Satellite Telemetry Console -->
+          <div id="runtimeViewTelemetry" class="hidden space-y-3">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div class="bg-[#121A2C] p-3 rounded border border-falkor-border">
                 <div class="text-[10px] font-mono uppercase text-slate-500">Orbital Altitude</div>
@@ -460,27 +528,25 @@
               </div>
             </div>
 
+            <!-- Interactive Packet Injector Strip -->
+            <div class="bg-[#0E1424] p-3 rounded border border-falkor-border flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400 uppercase text-[10px]">Test Injection:</span>
+                <button class="px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 hover:bg-emerald-900 transition flex items-center gap-1" onclick="injectTelemetryTest(true)">
+                  <i class="fa-solid fa-check"></i> Send Nominal Frame
+                </button>
+                <button class="px-2.5 py-1 rounded bg-red-950 text-red-300 border border-red-800 hover:bg-red-900 transition flex items-center gap-1" onclick="injectTelemetryTest(false)">
+                  <i class="fa-solid fa-bug"></i> Inject Bit-Flip (CRC Error)
+                </button>
+              </div>
+              <div class="text-[11px] text-purple-300">
+                Evaluating via recovered CCITT-16 table: <code class="text-amber-400">0x00402010</code>
+              </div>
+            </div>
+
             <div class="bg-[#070B12] p-3 rounded border border-falkor-border font-mono text-xs">
               <div class="text-[10px] text-slate-500 uppercase mb-1">Downlink Frame Hex Stream</div>
               <div id="lblTelemetryHex" class="text-purple-300 break-all">1ACFFC1D 0001 010A 000662A0 0C30 00F5 29B1</div>
-            </div>
-          </div>
-
-          <!-- SUB-VIEW B: Pac-Man Arcade Canvas (for pacman target) -->
-          <div id="runtimeViewPacman" class="hidden flex-col items-center justify-center p-4">
-            <div class="relative border-4 border-blue-900 rounded-lg p-2 bg-black shadow-inner">
-              <canvas id="pacmanCanvas" width="280" height="360" class="block rounded"></canvas>
-              <div id="glitchOverlay" class="absolute inset-0 bg-red-900/30 border-2 border-red-500/50 rounded flex items-center justify-center pointer-events-none hidden">
-                <span class="text-xs font-mono bg-red-950/95 text-red-200 border border-red-600 px-3 py-1.5 rounded text-center shadow-lg">
-                  <i class="fa-solid fa-triangle-exclamation mr-1"></i> Baseline Mode Glitch: Direction Offset 0x00406080 unmapped.<br>Ghosts frozen in maze wall!
-                </span>
-              </div>
-            </div>
-            <div class="mt-3 flex items-center gap-6 text-xs font-mono text-slate-400">
-              <div>Score: <span id="lblScore" class="text-yellow-400 font-bold">120</span></div>
-              <button id="btnTogglePlay" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" onclick="togglePlayState()">
-                <i class="fa-solid fa-play mr-1"></i> Run Canvas Frame
-              </button>
             </div>
           </div>
 
@@ -502,6 +568,37 @@
       </div>
 
     </section>
+
+    <!-- Standalone C Project Export Modal -->
+    <div id="exportModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+      <div class="bg-[#0E1424] border border-falkor-border rounded-xl max-w-3xl w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-falkor-border pb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-file-code text-purple-400 text-lg"></i>
+            <h3 id="exportModalTitle" class="text-base font-bold text-white font-mono">Export Compilable C Project</h3>
+          </div>
+          <button class="text-slate-400 hover:text-white" onclick="closeExportModal()"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="space-y-2">
+          <div class="text-xs font-mono text-slate-400 flex items-center justify-between">
+            <span id="exportFilename" class="text-emerald-400 font-bold">snake_core.c</span>
+            <span id="exportCompileCmd" class="bg-black/60 px-2 py-0.5 rounded text-purple-300 border border-purple-900/50">gcc -O2 -DSTANDALONE_MAIN -o snake snake_core.c</span>
+          </div>
+          <pre class="bg-[#070B12] p-3 rounded-lg border border-falkor-border font-mono text-xs text-slate-300 max-h-72 overflow-auto"><code id="exportCodeContent">// Loading source code...</code></pre>
+        </div>
+        <div class="flex items-center justify-between pt-2">
+          <span class="text-[11px] font-mono text-slate-500">Compiles directly with GCC/Clang on any Linux, macOS, or Windows terminal.</span>
+          <div class="flex items-center gap-2">
+            <button class="px-3.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono border border-slate-700 transition" onclick="copyExportedCode()">
+              <i class="fa-solid fa-copy mr-1"></i> Copy Code
+            </button>
+            <button class="px-3.5 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-medium transition shadow-lg shadow-purple-900/30" onclick="downloadExportedFile()">
+              <i class="fa-solid fa-download mr-1"></i> Download .C File
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
   </main>
 

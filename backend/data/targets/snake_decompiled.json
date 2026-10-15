@@ -1,0 +1,117 @@
+{
+  "target_name": "1980 Retro Snake Engine",
+  "badge": "FLAGSHIP PLAYABLE REVERSE-ENGINEERING",
+  "category": "Complete Playable Game Engine",
+  "arch": "x86_64 stripped binary",
+  "primary_fn": "step_snake_tick",
+  "critical_symbol": "0x00404000 (SNAKE_BODY_X) & 0x00404100 (DIR_DELTAS)",
+  "producer_fn": "init_snake_game",
+  "consumer_fn": "step_snake_tick",
+  "description": "Complete 7-function retro arcade snake engine. Decompiled binary separates snake body coordinate ring buffers (0x00404000, 0x00404080) and direction vector tables (0x00404100) from the physics step loop. Multi-agent swarm reconstructs the entire game engine into playable C.",
+  "functions": [
+    {
+      "name": "init_snake_game",
+      "address": "0x00401050",
+      "pseudocode": "void init_snake_game(void) {\n    *(int *)(0x00404120 + 0x00) = 0;   // score = 0\n    *(int *)(0x00404120 + 0x04) = 3;   // length = 3\n    *(int *)(0x00404120 + 0x10) = 1;   // is_alive = 1\n    *(int *)(0x00404120 + 0x14) = 0;   // tick_count = 0\n    *(int *)(0x00404120 + 0x18) = 1;   // current_dir = DIR_RIGHT (1)\n    *(int *)(0x00404000 + 0) = 10; *(int *)(0x00404080 + 0) = 10;\n    *(int *)(0x00404000 + 4) = 9;  *(int *)(0x00404080 + 4) = 10;\n    *(int *)(0x00404000 + 8) = 8;  *(int *)(0x00404080 + 8) = 10;\n    *(int *)(0x00404120 + 0x08) = 15; // food_x\n    *(int *)(0x00404120 + 0x0c) = 10; // food_y\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00404000", "0x00404080", "0x00404120"]
+    },
+    {
+      "name": "set_snake_direction",
+      "address": "0x00401200",
+      "pseudocode": "int set_snake_direction(int new_dir) {\n    if (new_dir < 0 || new_dir > 3) return 0;\n    int cur = *(int *)(0x00404120 + 0x18);\n    if ((new_dir == 0 && cur == 2) || (new_dir == 2 && cur == 0) ||\n        (new_dir == 3 && cur == 1) || (new_dir == 1 && cur == 3)) return 0;\n    *(int *)(0x00404120 + 0x18) = new_dir;\n    return 1;\n}",
+      "callees": [],
+      "reads_memory": ["0x00404120"],
+      "writes_memory": ["0x00404120"]
+    },
+    {
+      "name": "check_snake_collision",
+      "address": "0x004012A0",
+      "pseudocode": "int check_snake_collision(int next_x, int next_y) {\n    if (next_x < 0 || next_x >= 20 || next_y < 0 || next_y >= 20) return 1;\n    int len = *(int *)(0x00404120 + 0x04);\n    for (int i = 0; i < len - 1; i++) {\n        if (*(int *)(0x00404000 + i * 4) == next_x && *(int *)(0x00404080 + i * 4) == next_y) return 2;\n    }\n    return 0;\n}",
+      "callees": [],
+      "reads_memory": ["0x00404000", "0x00404080", "0x00404120"],
+      "writes_memory": []
+    },
+    {
+      "name": "spawn_snake_food",
+      "address": "0x00401120",
+      "pseudocode": "void spawn_snake_food(void) {\n    int ticks = *(int *)(0x00404120 + 0x14);\n    int fx = (ticks * 7 + 13) % 20;\n    int fy = (ticks * 11 + 5) % 20;\n    *(int *)(0x00404120 + 0x08) = fx;\n    *(int *)(0x00404120 + 0x0c) = fy;\n}",
+      "callees": [],
+      "reads_memory": ["0x00404120"],
+      "writes_memory": ["0x00404120"]
+    },
+    {
+      "name": "check_snake_food",
+      "address": "0x00401340",
+      "pseudocode": "int check_snake_food(void) {\n    int head_x = *(int *)(0x00404000);\n    int head_y = *(int *)(0x00404080);\n    int food_x = *(int *)(0x00404120 + 0x08);\n    int food_y = *(int *)(0x00404120 + 0x0c);\n    if (head_x == food_x && head_y == food_y) {\n        *(int *)(0x00404120 + 0x00) += 10; // score += 10\n        int len = *(int *)(0x00404120 + 0x04);\n        if (len < 64) {\n            *(int *)(0x00404000 + len * 4) = *(int *)(0x00404000 + (len - 1) * 4);\n            *(int *)(0x00404080 + len * 4) = *(int *)(0x00404080 + (len - 1) * 4);\n            *(int *)(0x00404120 + 0x04) = len + 1;\n        }\n        spawn_snake_food();\n        return 1;\n    }\n    return 0;\n}",
+      "callees": ["spawn_snake_food"],
+      "reads_memory": ["0x00404000", "0x00404080", "0x00404120"],
+      "writes_memory": ["0x00404000", "0x00404080", "0x00404120"]
+    },
+    {
+      "name": "step_snake_tick",
+      "address": "0x00401400",
+      "pseudocode": "int step_snake_tick(void) {\n    if (*(int *)(0x00404120 + 0x10) == 0) return 0;\n    *(int *)(0x00404120 + 0x14) += 1; // tick_count++\n    int cur_dir = *(int *)(0x00404120 + 0x18);\n    /* DETACHED MEMORY: 0x00404100 DIR_DELTAS 2D vector table */\n    int dx = *(int *)(0x00404100 + cur_dir * 8);\n    int dy = *(int *)(0x00404100 + cur_dir * 8 + 4);\n    int next_x = *(int *)(0x00404000) + dx;\n    int next_y = *(int *)(0x00404080) + dy;\n    if (check_snake_collision(next_x, next_y) != 0) {\n        *(int *)(0x00404120 + 0x10) = 0; // is_alive = 0\n        return 0;\n    }\n    int len = *(int *)(0x00404120 + 0x04);\n    for (int i = len - 1; i > 0; i--) {\n        *(int *)(0x00404000 + i * 4) = *(int *)(0x00404000 + (i - 1) * 4);\n        *(int *)(0x00404080 + i * 4) = *(int *)(0x00404080 + (i - 1) * 4);\n    }\n    *(int *)(0x00404000) = next_x;\n    *(int *)(0x00404080) = next_y;\n    check_snake_food();\n    return 1;\n}",
+      "callees": ["check_snake_collision", "check_snake_food"],
+      "reads_memory": ["0x00404000", "0x00404080", "0x00404100", "0x00404120"],
+      "writes_memory": ["0x00404000", "0x00404080", "0x00404120"]
+    },
+    {
+      "name": "get_snake_render_frame",
+      "address": "0x00401520",
+      "pseudocode": "void get_snake_render_frame(char *buffer, int buf_size) {\n    // Serializes 0x00404120 state and body buffers 0x00404000/0x00404080\n}",
+      "callees": [],
+      "reads_memory": ["0x00404000", "0x00404080", "0x00404120"],
+      "writes_memory": []
+    }
+  ],
+  "global_memory": [
+    {
+      "address": "0x00404000",
+      "label": "SNAKE_BODY_X_BUFFER",
+      "size": 256,
+      "data_type": "int[64]"
+    },
+    {
+      "address": "0x00404080",
+      "label": "SNAKE_BODY_Y_BUFFER",
+      "size": 256,
+      "data_type": "int[64]"
+    },
+    {
+      "address": "0x00404100",
+      "label": "DIR_DELTAS",
+      "size": 32,
+      "data_type": "const int[4][2]"
+    },
+    {
+      "address": "0x00404120",
+      "label": "SNAKE_GAME_STATE",
+      "size": 28,
+      "data_type": "struct SnakeGameState"
+    }
+  ],
+  "test_cases": [
+    {"id": "TC_SNAKE_01", "name": "Game Boot Initialization State", "action": "INIT"},
+    {"id": "TC_SNAKE_02", "name": "Forward Propagation (RIGHT)", "action": "STEP"},
+    {"id": "TC_SNAKE_03", "name": "Secondary Step (RIGHT)", "action": "STEP"},
+    {"id": "TC_SNAKE_04", "name": "Orthogonal Turn (DOWN)", "action": "TURN_DOWN"},
+    {"id": "TC_SNAKE_05", "name": "Vertical Movement Step (DOWN)", "action": "STEP"},
+    {"id": "TC_SNAKE_06", "name": "180-Degree Reverse Lock Prevention", "action": "TURN_UP_BLOCKED"},
+    {"id": "TC_SNAKE_07", "name": "Orthogonal Turn (RIGHT)", "action": "TURN_RIGHT"},
+    {"id": "TC_SNAKE_08", "name": "Advance Step (13, 11)", "action": "STEP"},
+    {"id": "TC_SNAKE_09", "name": "Advance Step (14, 11)", "action": "STEP"},
+    {"id": "TC_SNAKE_10", "name": "Advance Step (15, 11)", "action": "STEP"},
+    {"id": "TC_SNAKE_11", "name": "Turn UP Toward Food", "action": "TURN_UP"},
+    {"id": "TC_SNAKE_12", "name": "Food Interception & Elongation", "action": "STEP"},
+    {"id": "TC_SNAKE_13", "name": "Dynamic Tail Growth Verification", "action": "STEP"},
+    {"id": "TC_SNAKE_14", "name": "Turn RIGHT to East Wall", "action": "TURN_RIGHT"},
+    {"id": "TC_SNAKE_15", "name": "Wall Edge Transit (16, 9)", "action": "STEP"},
+    {"id": "TC_SNAKE_16", "name": "Wall Edge Transit (17, 9)", "action": "STEP"},
+    {"id": "TC_SNAKE_17", "name": "Wall Edge Transit (18, 9)", "action": "STEP"},
+    {"id": "TC_SNAKE_18", "name": "Boundary Proximity (19, 9)", "action": "STEP"},
+    {"id": "TC_SNAKE_19", "name": "Wall Boundary Collision Impact", "action": "STEP_COLLISION"},
+    {"id": "TC_SNAKE_20", "name": "Dead State Game Loop Lockout", "action": "STEP_AFTER_DEATH"}
+  ]
+}

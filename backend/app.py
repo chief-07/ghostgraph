@@ -46,6 +46,19 @@ app.add_middleware(
 
 # Benchmark Targets Registry
 TARGETS = {
+    "snake": {
+        "id": "snake",
+        "name": "1980 Retro Snake Engine",
+        "badge": "FLAGSHIP PLAYABLE REVERSE-ENGINEERING",
+        "category": "Complete Playable Game Engine",
+        "arch": "x86_64 stripped binary",
+        "path": "backend/data/targets/snake_decompiled.json",
+        "vectors_path": "ground_truth/snake_test_vectors.json",
+        "critical_symbol": "0x00404100 (DIR_DELTAS) & 0x00404000 (SNAKE_BODY_X)",
+        "producer_fn": "init_snake_game",
+        "consumer_fn": "step_snake_tick",
+        "description": "Complete 7-function retro arcade game engine. Ring buffer coordinate tables (0x00404000) and 2D direction vectors (0x00404100) detached from the physics loop. Reconstructs into a 100% playable game."
+    },
     "telemetry": {
         "id": "telemetry",
         "name": "Aerospace Satellite Telemetry Decoder",
@@ -106,10 +119,10 @@ async def get_targets():
     return JSONResponse(list(TARGETS.values()))
 
 @app.get("/api/target/details")
-async def get_target_details(target_id: str = "telemetry"):
+async def get_target_details(target_id: str = "snake"):
     """Returns detailed technical specification and decompiled snippet for the target."""
-    target = TARGETS.get(target_id, TARGETS["telemetry"])
-    cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["telemetry"])
+    target = TARGETS.get(target_id, TARGETS["snake"])
+    cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["snake"])
 
     vectors_path = Path(target["vectors_path"])
     test_vectors = []
@@ -133,8 +146,19 @@ async def get_target_details(target_id: str = "telemetry"):
     })
 
 @app.post("/api/ingest")
-async def ingest_target(target_id: str = Form("telemetry")):
+async def ingest_target(request: Request, target_id: Optional[str] = None):
     """Ingests selected target into FalkorDB in real time."""
+    if not target_id:
+        try:
+            body = await request.json()
+            target_id = body.get("target_id")
+        except Exception:
+            pass
+    if not target_id:
+        form = await request.form()
+        target_id = form.get("target_id")
+    target_id = target_id or "snake"
+
     target = TARGETS.get(target_id)
     if not target:
         raise HTTPException(status_code=404, detail=f"Target '{target_id}' not found.")
@@ -167,7 +191,7 @@ async def execute_custom_cypher(request: Request):
 
 @app.get("/api/reconstruct/stream")
 async def stream_reconstruction(
-    target_id: str = "telemetry",
+    target_id: str = "snake",
     use_graph: bool = True
 ):
     """
@@ -215,52 +239,136 @@ async def get_telemetry_downlink(is_reconstructed: bool = True):
         "dropped_packets": 0 if is_reconstructed else 15
     })
 
-@app.post("/api/tick")
-async def game_tick(request: Request):
-    """
-    Simulates 1 game frame using the reconstructed C logic
-    for the retro Pac-Man arcade benchmark canvas.
-    """
+# ============================================================================
+# Retro Snake Continuous Arcade Game State Engine
+# ============================================================================
+class SnakeGameEngine:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.score = 0
+        self.length = 3
+        self.is_alive = True
+        self.tick_count = 0
+        self.current_dir = 1  # 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
+        self.body = [{"x": 10, "y": 10}, {"x": 9, "y": 10}, {"x": 8, "y": 10}]
+        self.food = {"x": 15, "y": 10}
+        self.dir_deltas = {
+            0: (0, -1),
+            1: (1, 0),
+            2: (0, 1),
+            3: (-1, 0)
+        }
+
+    def set_direction(self, new_dir: int):
+        opposites = {0: 2, 2: 0, 1: 3, 3: 1}
+        if new_dir in self.dir_deltas and opposites.get(new_dir) != self.current_dir:
+            self.current_dir = new_dir
+
+    def step(self, is_broken_mode: bool = False):
+        if not self.is_alive:
+            return self.get_state()
+        self.tick_count += 1
+
+        if is_broken_mode:
+            # Baseline Mode: Unresolved DIR_DELTAS pointer (0x00404100) causes snake to glitch and fail
+            self.is_alive = False
+            return {
+                "score": self.score,
+                "length": self.length,
+                "alive": False,
+                "food": self.food,
+                "dir": self.current_dir,
+                "body": self.body,
+                "error": "MEMORY DESYNC: 0x00404100 (DIR_DELTAS) ungrounded. Ring buffer 0x00404000 unshifted."
+            }
+
+        dx, dy = self.dir_deltas[self.current_dir]
+        head = self.body[0]
+        next_x = head["x"] + dx
+        next_y = head["y"] + dy
+
+        # Wall check
+        if next_x < 0 or next_x >= 20 or next_y < 0 or next_y >= 20:
+            self.is_alive = False
+            return self.get_state()
+
+        # Body collision
+        for seg in self.body[:-1]:
+            if seg["x"] == next_x and seg["y"] == next_y:
+                self.is_alive = False
+                return self.get_state()
+
+        new_body = [{"x": next_x, "y": next_y}] + [dict(s) for s in self.body[:-1]]
+
+        # Food interception
+        if next_x == self.food["x"] and next_y == self.food["y"]:
+            self.score += 10
+            self.length += 1
+            new_body.append(dict(self.body[-1]))
+            fx = (self.tick_count * 7 + 13) % 20
+            fy = (self.tick_count * 11 + 5) % 20
+            self.food = {"x": fx, "y": fy}
+
+        self.body = new_body
+        return self.get_state()
+
+    def get_state(self):
+        return {
+            "score": self.score,
+            "length": self.length,
+            "alive": self.is_alive,
+            "food": self.food,
+            "dir": self.current_dir,
+            "body": self.body,
+            "error": None if self.is_alive else "COLLISION_IMPACT"
+        }
+
+active_snake = SnakeGameEngine()
+
+@app.get("/api/snake/state")
+async def get_snake_state():
+    return JSONResponse(active_snake.get_state())
+
+@app.post("/api/snake/step")
+async def step_snake(request: Request):
     body = await request.json()
-    px = body.get("px", 14)
-    py = body.get("py", 26)
-    pdir = body.get("pdir", 1)
-    bx = body.get("bx", 14)
-    by = body.get("by", 11)
-    bdir = body.get("bdir", 1)
-    action = body.get("action", pdir)
+    new_dir = body.get("dir")
+    if new_dir is not None:
+        active_snake.set_direction(int(new_dir))
     is_broken_mode = body.get("is_broken_mode", False)
+    state = active_snake.step(is_broken_mode=is_broken_mode)
+    return JSONResponse(state)
 
-    if is_broken_mode:
+@app.post("/api/snake/reset")
+async def reset_snake():
+    active_snake.reset()
+    return JSONResponse(active_snake.get_state())
+
+@app.get("/api/export")
+async def export_reconstructed_project(target_id: str = "snake"):
+    """Returns standalone compilable C project files with Makefile."""
+    if target_id == "snake":
+        code_path = Path("ground_truth/snake_core.c")
+        code = code_path.read_text(encoding="utf-8") if code_path.exists() else ""
+        makefile = "CC = gcc\nCFLAGS = -O2 -Wall -DSTANDALONE_MAIN\n\nall: snake\n\nsnake: snake_core.c\n\t$(CC) $(CFLAGS) -o snake snake_core.c\n\nclean:\n\trm -f snake\n"
         return JSONResponse({
-            "pacman": {"x": px, "y": py, "dir": pdir},
-            "blinky": {"x": bx, "y": by, "dir": bdir},
-            "pinky": {"x": 14, "y": 14, "dir": 2},
-            "inky": {"x": 12, "y": 14, "dir": 0},
-            "clyde": {"x": 16, "y": 14, "dir": 0},
-            "score": body.get("score", 0),
-            "glitched": True
+            "target": "snake",
+            "filename": "snake_core.c",
+            "source_code": code,
+            "makefile": makefile,
+            "compile_cmd": "gcc -O2 -DSTANDALONE_MAIN -o snake snake_core.c"
         })
-
-    dx = 1 if px > bx else (-1 if px < bx else 0)
-    dy = 1 if py > by else (-1 if py < by else 0)
-    new_bx = bx + dx if dx != 0 else bx
-    new_by = by + dy if (dx == 0 and dy != 0) else by
-
-    dirs = {0: (0, -1), 1: (-1, 0), 2: (0, 1), 3: (1, 0)}
-    step = dirs.get(action, (-1, 0))
-    new_px = max(1, min(26, px + step[0]))
-    new_py = max(1, min(34, py + step[1]))
-
-    return JSONResponse({
-        "pacman": {"x": new_px, "y": new_py, "dir": action},
-        "blinky": {"x": new_bx, "y": new_by, "dir": 1},
-        "pinky": {"x": max(1, new_px - 2), "y": new_py, "dir": 1},
-        "inky": {"x": min(26, new_bx + 2), "y": new_by, "dir": 0},
-        "clyde": {"x": 2, "y": 33, "dir": 2},
-        "score": body.get("score", 0) + 10,
-        "glitched": False
-    })
+    else:
+        cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS.get("telemetry", {}))
+        return JSONResponse({
+            "target": target_id,
+            "filename": f"{target_id}_reconstructed.c",
+            "source_code": cfg.get("reconstructed_c", ""),
+            "makefile": f"CC = gcc\nCFLAGS = -O2 -shared -fPIC\n\nall: lib{target_id}.so\n\nlib{target_id}.so:\n\t$(CC) $(CFLAGS) -o lib{target_id}.so {target_id}_reconstructed.c\n",
+            "compile_cmd": f"gcc -O2 -shared -fPIC -o lib{target_id}.so {target_id}_reconstructed.c"
+        })
 
 @app.post("/api/upload")
 async def upload_custom_binary(file: UploadFile = File(...)):

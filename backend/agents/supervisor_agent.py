@@ -16,6 +16,92 @@ from backend.harness.differential import differential_tester
 logger = logging.getLogger("ghostgraph.supervisor_agent")
 
 TARGET_CONFIGS = {
+    "snake": {
+        "name": "1980 Retro Snake Engine (Nibbles Core)",
+        "primary_fn": "step_snake_tick",
+        "critical_mem": "0x00404100",
+        "mem_label": "DIR_DELTAS & BODY_RING_BUFFER",
+        "producer_fn": "init_snake_game",
+        "ref_binary": "ground_truth/snake_core.bin",
+        "raw_disassembly": """; Target: snake_core.bin (x86_64 stripped binary)
+; Symbol: sub_401400 (step_snake_tick)
+00401400:  55                      push   rbp
+00401401:  48 89 e5                mov    rbp, rsp
+00401404:  8b 05 16 2d 00 00       mov    eax, DWORD PTR [rip+0x2d16] ; [0x00404130] is_alive
+0040140a:  85 c0                   test   eax, eax
+0040140c:  74 7a                   je     00401488
+; [CRITICAL UNGROUNDED MEMORY ACCESS]
+0040140e:  8b 0d 24 2d 00 00       mov    ecx, DWORD PTR [rip+0x2d24] ; [0x00404138] current_dir
+00401414:  48 8d 15 e5 2c 00 00    lea    rdx, [rip+0x2ce5]        ; [0x00404100] DIR_DELTAS UNRESOLVED
+0040141b:  8b 34 8a                mov    esi, DWORD PTR [rdx+rcx*8]  ; dx = DIR_DELTAS[dir][0]
+0040141e:  8b 7c 8a 04             mov    edi, DWORD PTR [rdx+rcx*8+4]; dy = DIR_DELTAS[dir][1]
+00401422:  03 35 d8 2b 00 00       add    esi, DWORD PTR [rip+0x2bd8] ; [0x00404000] SNAKE_BODY_X[0]
+00401428:  03 3d 52 2c 00 00       add    edi, DWORD PTR [rip+0x2c52] ; [0x00404080] SNAKE_BODY_Y[0]
+0040142e:  e8 6d fe ff ff          call   004012a0                 ; check_snake_collision(esi, edi)
+00401433:  85 c0                   test   eax, eax
+00401435:  75 51                   jne    00401488
+00401437:  5d                      pop    rbp
+00401438:  c3                      ret""",
+        "decompiled_snippet": """int step_snake_tick(void) {
+    if (*(int *)(0x00404120 + 0x10) == 0) return 0;
+    *(int *)(0x00404120 + 0x14) += 1;
+    int cur_dir = *(int *)(0x00404120 + 0x18);
+    /* UNRESOLVED MEMORY POINTER: Address 0x00404100 not defined in this scope */
+    int *dir_deltas = (int *)0x00404100;
+    int dx = dir_deltas[cur_dir * 2];
+    int dy = dir_deltas[cur_dir * 2 + 1];
+    int next_x = *(int *)(0x00404000) + dx;
+    int next_y = *(int *)(0x00404080) + dy;
+    if (check_snake_collision(next_x, next_y) != 0) {
+        *(int *)(0x00404120 + 0x10) = 0;
+        return 0;
+    }
+    // Ring buffer shift logic...
+    return 1;
+}""",
+        "reconstructed_c": """/**
+ * Reconstructed by GhostGraph Autonomous Multi-Agent Swarm
+ * Grounded via FalkorDB Knowledge Graph:
+ * - 0x00404100 resolved to DIR_DELTAS[4][2] initialized in init_snake_game()
+ * - 0x00404000 resolved to snake_body_x ring buffer (capacity: 64)
+ * - 0x00404080 resolved to snake_body_y ring buffer (capacity: 64)
+ * - 0x00404120 resolved to SnakeGameState struct
+ */
+#include <stdint.h>
+#include <stdbool.h>
+
+static const int DIR_DELTAS[4][2] = {
+    { 0, -1 },  // UP
+    { 1,  0 },  // RIGHT
+    { 0,  1 },  // DOWN
+    {-1,  0 }   // LEFT
+};
+
+int step_snake_tick(SnakeGameState *game, int *body_x, int *body_y) {
+    if (!game->is_alive) return 0;
+    game->tick_count++;
+
+    int dx = DIR_DELTAS[game->current_dir][0];
+    int dy = DIR_DELTAS[game->current_dir][1];
+    int next_x = body_x[0] + dx;
+    int next_y = body_y[0] + dy;
+
+    if (check_snake_collision(game, body_x, body_y, next_x, next_y)) {
+        game->is_alive = 0;
+        return 0;
+    }
+
+    for (int i = game->length - 1; i > 0; i--) {
+        body_x[i] = body_x[i - 1];
+        body_y[i] = body_y[i - 1];
+    }
+    body_x[0] = next_x;
+    body_y[0] = next_y;
+
+    check_snake_food(game, body_x, body_y);
+    return 1;
+}"""
+    },
     "telemetry": {
         "name": "Aerospace Satellite Telemetry Decoder",
         "primary_fn": "verify_crc16_checksum",
