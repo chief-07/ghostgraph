@@ -26,33 +26,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Target Switching & Loading
 // ----------------------------------------------------------------------------
 async function switchTarget(targetId) {
-  currentTarget = targetId;
-
-  // Update target selector button states
-  document.querySelectorAll(".target-tab").forEach(tab => {
-    if (tab.dataset.target === targetId) {
-      tab.className = "target-tab active text-xs font-mono px-3 py-1.5 rounded-md bg-purple-600/30 text-purple-200 border border-purple-500/50 flex items-center gap-1.5 transition-all";
-    } else {
-      tab.className = "target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all";
-    }
-  });
-
-  // Fetch target specification & test vectors
   try {
+    currentTarget = targetId;
+
+    // Update target selector button states
+    document.querySelectorAll(".target-tab").forEach(tab => {
+      if (tab.dataset.target === targetId) {
+        tab.className = "target-tab active text-xs font-mono px-3 py-1.5 rounded-md bg-purple-600/30 text-purple-200 border border-purple-500/50 flex items-center gap-1.5 transition-all";
+      } else {
+        tab.className = "target-tab text-xs font-mono px-3 py-1.5 rounded-md text-slate-400 hover:text-white border border-transparent transition-all";
+      }
+    });
+
+    // Reset parity state to clean standby & update runtime immediately
+    resetParityUI();
+    updateRuntimeSubView(targetId);
+
+    // Fetch target specification & test vectors
     const res = await fetch(`/api/target/details?target_id=${targetId}`);
     currentTargetData = await res.json();
     renderTargetDetails(currentTargetData);
+
+    // Load graph topology & ingest
+    ingestCurrentTarget().then(() => loadGraphData()).catch(e => console.warn("Background ingest:", e));
   } catch (err) {
-    console.warn("Failed to load target details:", err);
+    console.error("Error in switchTarget:", err);
   }
-
-  // Ingest to FalkorDB & load graph topology
-  await ingestCurrentTarget();
-  await loadGraphData();
-
-  // Reset parity state to clean standby
-  resetParityUI();
-  updateRuntimeSubView(targetId);
 }
 
 function renderTargetDetails(data) {
@@ -207,6 +206,16 @@ function initCytoscape() {
         }
       },
       {
+        selector: 'node[group = "Program"]',
+        style: {
+          "background-color": "#2563EB",
+          "border-color": "#1E40AF",
+          "shape": "barrel",
+          "width": "30px",
+          "height": "24px"
+        }
+      },
+      {
         selector: "edge",
         style: {
           "width": 1.5,
@@ -286,11 +295,14 @@ async function loadGraphData() {
   try {
     const res = await fetch("/api/graph");
     const data = await res.json();
-    if (data.nodes && data.nodes.length > 0) {
+    if (data.nodes && data.nodes.length > 0 && cy) {
       cy.elements().remove();
+      // Ensure strict edge source/target existence to prevent Cytoscape crashes
+      const nodeSet = new Set(data.nodes.map(n => String(n.data.id)));
+      const safeEdges = (data.edges || []).filter(e => nodeSet.has(String(e.data.source)) && nodeSet.has(String(e.data.target)));
       cy.add(data.nodes);
-      cy.add(data.edges);
-      cy.layout({ name: "cose", padding: 35, animate: true, animationDuration: 600 }).run();
+      cy.add(safeEdges);
+      cy.layout({ name: "cose", padding: 35, animate: false }).run();
     }
   } catch (err) {
     console.warn("Could not load graph topology:", err);
@@ -715,3 +727,15 @@ function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// Explicit window bindings for inline HTML onclick handlers
+window.switchTarget = switchTarget;
+window.runBaselineMode = runBaselineMode;
+window.runGhostGraphSwarm = runGhostGraphSwarm;
+window.switchTab = switchTab;
+window.runCustomCypher = runCustomCypher;
+window.filterGraphPreset = filterGraphPreset;
+window.openNodeDrawer = openNodeDrawer;
+window.closeNodeDrawer = closeNodeDrawer;
+window.togglePlayState = togglePlayState;
+

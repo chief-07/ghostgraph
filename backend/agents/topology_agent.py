@@ -189,26 +189,32 @@ class TopologyAgent:
     def get_topology_graph(self) -> Dict[str, Any]:
         """
         Exports the current graph as Cytoscape.js compatible nodes and edges.
+        Ensures strict relational integrity so no edge points to a missing node.
         """
         cypher_nodes = """
         MATCH (n)
-        WHERE n:Function OR n:GlobalMemory OR n:TestCase OR n:Candidate
+        WHERE n:Program OR n:Function OR n:GlobalMemory OR n:TestCase OR n:Candidate
         RETURN id(n) AS id, labels(n)[0] AS label,
                coalesce(n.name, n.address, n.id, 'Node') AS name,
                properties(n) AS props
         """
         cypher_edges = """
         MATCH (source)-[r]->(target)
+        WHERE (source:Program OR source:Function OR source:GlobalMemory OR source:TestCase OR source:Candidate)
+          AND (target:Program OR target:Function OR target:GlobalMemory OR target:TestCase OR target:Candidate)
         RETURN id(source) AS source, id(target) AS target, type(r) AS type, properties(r) AS props
         """
         raw_nodes = self.client.query(cypher_nodes)
         raw_edges = self.client.query(cypher_edges)
 
+        valid_node_ids = set()
         nodes = []
         for n in raw_nodes:
+            nid = str(n["id"])
+            valid_node_ids.add(nid)
             nodes.append({
                 "data": {
-                    "id": str(n["id"]),
+                    "id": nid,
                     "label": n["name"],
                     "group": n["label"],
                     "properties": n.get("props", {})
@@ -217,14 +223,18 @@ class TopologyAgent:
 
         edges = []
         for e in raw_edges:
-            edges.append({
-                "data": {
-                    "source": str(e["source"]),
-                    "target": str(e["target"]),
-                    "label": e["type"],
-                    "properties": e.get("props", {})
-                }
-            })
+            src = str(e["source"])
+            tgt = str(e["target"])
+            # Strictly verify both endpoints exist in nodes
+            if src in valid_node_ids and tgt in valid_node_ids:
+                edges.append({
+                    "data": {
+                        "source": src,
+                        "target": tgt,
+                        "label": e["type"],
+                        "properties": e.get("props", {})
+                    }
+                })
 
         return {"nodes": nodes, "edges": edges}
 
