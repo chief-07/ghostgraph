@@ -1,26 +1,26 @@
-/* GhostGraph: Clean White Slate & Outfit Sans Theme */
+/* ==========================================================================
+   GhostGraph — Studio White & Tactile 3D Minimalist Design System
+   Font: Outfit (Primary Sans) + JetBrains Mono (Disassembly & Hex Only)
+   ========================================================================== */
+
 :root {
-  --bg-main: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-surface-elevated: #ffffff;
-  --bg-surface-active: #f1f5f9;
-  
-  --border-subtle: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --border-focus: #94a3b8;
-  
-  --text-cream: #0f172a;
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-dim: #94a3b8;
-  
-  --accent-sage: #16a34a;
-  --accent-coral: #dc2626;
-  --accent-amber: #d97706;
-  --accent-cyan: #0284c7;
-  
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  --bg-outer: #efefef;
+  --bg-canvas: #ffffff;
+  --bg-subtle: #f8f9fa;
+  --bg-pill: #f3f4f6;
+  --bg-pill-hover: #e6e8ec;
+
+  --border-hairline: #eaeaea;
+  --border-pill: #e4e5e9;
+  --border-strong: #d1d5db;
+
+  --text-ink: #0b0b0e;
+  --text-primary: #141417;
+  --text-secondary: #5e626a;
+  --text-muted: #8a8f99;
+
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 }
 
 * {
@@ -28,7 +28,7 @@
 }
 
 html, body {
-  background-color: var(--bg-main);
+  background-color: var(--bg-outer);
   color: var(--text-primary);
   font-family: var(--font-sans);
   margin: 0;
@@ -38,56 +38,148 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Studio Sheet Outer Frame */
+.studio-sheet {
+  background-color: var(--bg-canvas);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.045), 0 1px 3px rgba(0, 0, 0, 0.03);
+  border: 1px solid #e6e6e8;
+}
+
+/* Subtle Micro-Dot Matrix Background (Exact Match to Reference Hero) */
+.dot-matrix-bg {
+  background-color: #ffffff;
+}
+
+/* Floating Top Navbar Pill */
+.nav-pill-bar {
+  background: #ffffff;
+  border: 1px solid #ececef;
+  border-radius: 9999px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.025);
+}
+
+/* Tactile 3D Matte Black Primary CTA Button (Exact Match to Reference) */
+.btn-tactile-black {
+  background: linear-gradient(180deg, #2b2b2f 0%, #151518 48%, #0b0b0d 100%);
+  color: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #09090b;
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.28),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.65),
+    0 16px 26px -5px rgba(11, 11, 14, 0.34),
+    0 6px 12px -3px rgba(11, 11, 14, 0.2);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease;
+}
+
+.btn-tactile-black:hover {
+  transform: translateY(-1.5px);
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.34),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.65),
+    0 20px 30px -5px rgba(11, 11, 14, 0.38),
+    0 8px 14px -3px rgba(11, 11, 14, 0.22);
+}
+
+.btn-tactile-black:active {
+  transform: translateY(0.5px);
+}
+
+/* Clean Unboxed 3D Hero Icons (No Box, No Shadow) */
+.hero-3d-left {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  transform: rotate(-8deg);
+  transition: transform 0.25s ease;
+}
+
+.hero-3d-left:hover {
+  transform: rotate(-4deg) scale(1.04);
+}
+
+.hero-3d-right {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  transform: rotate(8deg);
+  transition: transform 0.25s ease;
+}
+
+.hero-3d-right:hover {
+  transform: rotate(4deg) scale(1.04);
+}
+
+/* Bottom Feature Outlined Pill Icon Container */
+.feature-icon-pill {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid #e4e5e9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.feature-col:hover .feature-icon-pill {
+  border-color: #0b0b0e;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
 /* Minimalist Scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-main);
+  background: #f4f5f7;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d1d5db;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ca3af;
 }
 
-/* Typography */
-.font-cream {
-  color: var(--text-cream);
+/* Typography Helpers */
+.font-sans {
+  font-family: var(--font-sans);
 }
 .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Code & Pre Blocks */
 pre, code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 11.5px;
 }
 
-/* Screen Transitions (Discrete Views, Zero Stacked Page Scroll) */
+/* Screen Transitions (Discrete Views) */
 .screen-view {
   display: none;
   opacity: 0;
-  transition: opacity 0.15s ease-in-out;
+  transition: opacity 0.18s ease-in-out;
 }
 .screen-view.active {
   display: flex;
   opacity: 1;
 }
 
-/* Graph Canvas Container */
+/* Graph Canvas Container (Daylight Blueprint Theme) */
 .graph-container {
   width: 100%;
   height: 480px;
-  background-color: #ffffff;
+  background-color: #fafbfc;
   position: relative;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border-hairline);
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
 }
 #customGraphCanvas {
   width: 100%;
@@ -101,7 +193,7 @@ pre, code {
 
 /* Simulation Canvas Viewport */
 .sim-canvas {
-  background-color: #f8fafc;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  background-color: #0b0c0e;
+  border: 1px solid #e2e4e8;
+  border-radius: 12px;
 }

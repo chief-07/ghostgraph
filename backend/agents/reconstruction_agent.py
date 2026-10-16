@@ -8,6 +8,7 @@ Zero hardcoded fallback templates: all synthesis is performed live via real LLM 
 """
 
 import os
+import time
 import json
 import logging
 import urllib.request
@@ -280,23 +281,32 @@ Output ONLY the complete code inside a ```{target_language} ``` block."""
             method="POST"
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                candidates = result.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    if parts:
-                        text = parts[0].get("text", "")
-                        return self._clean_markdown_code(text)
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="ignore")
-            logger.error(f"Gemini API HTTP {e.code}: {err_body}")
-            raise RuntimeError(f"Google Generative Language API error ({e.code}): {err_body}")
-        except Exception as e:
-            logger.error(f"Gemini API request error: {e}")
-            raise RuntimeError(f"Network error communicating with Google Generative AI: {e}")
+        last_error = None
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(req, timeout=35) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    candidates = result.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            text = parts[0].get("text", "")
+                            return self._clean_markdown_code(text)
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode("utf-8", errors="ignore")
+                logger.error(f"Gemini API HTTP {e.code}: {err_body}")
+                last_error = RuntimeError(f"Google Generative Language API error ({e.code}): {err_body}")
+                if e.code in [429, 500, 503]:
+                    time.sleep(2)
+                    continue
+                raise last_error
+            except Exception as e:
+                logger.warning(f"Gemini API request attempt {attempt + 1} error: {e}")
+                last_error = RuntimeError(f"Network error communicating with Google Generative AI: {e}")
+                time.sleep(2)
 
+        if last_error:
+            raise last_error
         return None
 
     def _clean_markdown_code(self, text: str) -> str:

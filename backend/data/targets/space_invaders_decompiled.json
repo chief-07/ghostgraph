@@ -1,0 +1,332 @@
+{
+  "target_name": "space_invaders",
+  "display_name": "1978 Space Invaders Arcade Subsystem (nInvaders)",
+  "badge": "FLAGSHIP CLASSIC ARCADE REVERSE-ENGINEERING",
+  "category": "Classic Embedded Arcade Architecture",
+  "arch": "x86_64 stripped binary",
+  "primary_fn": "aliensMissileMove",
+  "critical_symbol": "0x00405100 (ALIEN_BLOCK_GRID) & 0x00405240 (BUNKER_EROSION_GRID)",
+  "producer_fn": "aliensReset",
+  "consumer_fn": "aliensMissileMove",
+  "description": "Authentic nInvaders classic arcade architecture. The binary decouples alien swarm formation tables (0x00405100), four-bunker defensive erosion bitmasks (0x00405240), missile trajectory tables (0x00405400), player registers (0x00405600), and game session status (0x00405700) across 25 interacting subroutines. GhostGraph traverses FalkorDB graph topology to resolve multi-hop provenance and reconstruct working software.",
+  "global_memory": [
+    {
+      "address": "0x00405100",
+      "label": "ALIEN_BLOCK_GRID",
+      "data_type": "int[5][10]",
+      "size": 200,
+      "description": "5x10 matrix of alien ships (Row 0: type 1 squid 30pts, Rows 1-2: type 2 crab 20pts, Rows 3-4: type 3 octopus 10pts). Initialized by aliensReset."
+    },
+    {
+      "address": "0x00405240",
+      "label": "BUNKER_EROSION_GRID",
+      "data_type": "int[4][81]",
+      "size": 1296,
+      "description": "Four defensive bunkers erosion bitmask array (4 rows x 81 columns). 1 indicates solid shield wall, 0 indicates eroded cavity. Initialized by bunkersReset."
+    },
+    {
+      "address": "0x00405380",
+      "label": "LOWEST_SHIP_TABLE",
+      "data_type": "int[10]",
+      "size": 40,
+      "description": "Lowest active alien row index per column (0-9) used for missile launch targeting. Calculated by render."
+    },
+    {
+      "address": "0x00405400",
+      "label": "ALIEN_MISSILE_STATE",
+      "data_type": "int[10]",
+      "size": 40,
+      "description": "Active alien missile coordinates [x0, y0, x1, y1, ...]. Initialized by aliensReset, advanced by aliensMissileMove."
+    },
+    {
+      "address": "0x00405480",
+      "label": "PLAYER_MISSILE_STATE",
+      "data_type": "int[4]",
+      "size": 16,
+      "description": "Active player laser projectile coordinates [px0, py0, ...]. Managed by playerFireMissile & playerMissileMove."
+    },
+    {
+      "address": "0x00405520",
+      "label": "ALIENS_SWARM_STATE",
+      "data_type": "Aliens",
+      "size": 32,
+      "description": "Alien fleet dynamic bounding box and velocity state (posX, posY, right, bottom, left, speed, shipnum)."
+    },
+    {
+      "address": "0x00405600",
+      "label": "PLAYER_SHIP_STATE",
+      "data_type": "Player",
+      "size": 24,
+      "description": "Player defense cannon state (posX, posY, lives, is_exploding)."
+    },
+    {
+      "address": "0x00405700",
+      "label": "GAME_SESSION_STATE",
+      "data_type": "GameState",
+      "size": 24,
+      "description": "Global arcade session status (score, highscore, level, is_game_over)."
+    }
+  ],
+  "structs": [
+    {
+      "name": "Aliens",
+      "size": 32,
+      "fields": [
+        {"offset": 0, "name": "posX", "type": "int"},
+        {"offset": 4, "name": "posY", "type": "int"},
+        {"offset": 8, "name": "right", "type": "int"},
+        {"offset": 12, "name": "bottom", "type": "int"},
+        {"offset": 16, "name": "left", "type": "int"},
+        {"offset": 20, "name": "speed", "type": "int"},
+        {"offset": 24, "name": "shipnum", "type": "int"}
+      ]
+    },
+    {
+      "name": "Player",
+      "size": 24,
+      "fields": [
+        {"offset": 0, "name": "posX", "type": "int"},
+        {"offset": 4, "name": "posY", "type": "int"},
+        {"offset": 8, "name": "lives", "type": "int"},
+        {"offset": 12, "name": "status", "type": "int"}
+      ]
+    },
+    {
+      "name": "GameState",
+      "size": 24,
+      "fields": [
+        {"offset": 0, "name": "score", "type": "int"},
+        {"offset": 4, "name": "highscore", "type": "int"},
+        {"offset": 8, "name": "level", "type": "int"},
+        {"offset": 12, "name": "is_game_over", "type": "int"}
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "mainGameLoop",
+      "address": "0x00401000",
+      "signature": "void mainGameLoop(void)",
+      "pseudocode": "void mainGameLoop(void) {\n    while (*(int *)(0x00405700 + 12) == 0) {\n        aliensMove();\n        aliensMissileMove();\n        playerMissileMove();\n        bunkersDisplay();\n        checkWaveClear();\n    }\n}",
+      "callees": ["aliensMove", "aliensMissileMove", "playerMissileMove", "bunkersDisplay", "checkWaveClear"],
+      "reads_memory": ["0x00405700"],
+      "writes_memory": []
+    },
+    {
+      "name": "aliensReset",
+      "address": "0x00401020",
+      "signature": "void aliensReset(void)",
+      "pseudocode": "void aliensReset(void) {\n    int *alienBlock = (int *)0x00405100;\n    int default_level[5][10] = {\n        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},\n        {2, 2, 2, 2, 2, 2, 2, 2, 2, 2},\n        {2, 2, 2, 2, 2, 2, 2, 2, 2, 2},\n        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3},\n        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3}\n    };\n    for (int r = 0; r < 5; r++) {\n        for (int c = 0; c < 10; c++) {\n            alienBlock[r * 10 + c] = default_level[r][c];\n        }\n    }\n    *(int *)(0x00405520 + 0) = 5;  // posX\n    *(int *)(0x00405520 + 4) = 2;  // posY\n    *(int *)(0x00405520 + 20) = 1; // speed\n    *(int *)(0x00405520 + 24) = 50; // shipnum\n    int *missiles = (int *)0x00405400;\n    for (int i = 0; i < 10; i++) missiles[i] = 0;\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405100", "0x00405400", "0x00405520"]
+    },
+    {
+      "name": "aliensMove",
+      "address": "0x00401080",
+      "signature": "int aliensMove(void)",
+      "pseudocode": "int aliensMove(void) {\n    render();\n    aliensClear();\n    *(int *)(0x00405520 + 0) += *(int *)(0x00405520 + 20); // posX += speed\n    if (*(int *)(0x00405520 + 0) >= 34 || *(int *)(0x00405520 + 0) <= 4) {\n        *(int *)(0x00405520 + 20) *= -1; // reverse speed\n        *(int *)(0x00405520 + 4) += 1;  // posY++\n    }\n    aliensDisplay();\n    return (*(int *)(0x00405520 + 4) >= 18);\n}",
+      "callees": ["render", "aliensClear", "aliensDisplay"],
+      "reads_memory": ["0x00405520"],
+      "writes_memory": ["0x00405520"]
+    },
+    {
+      "name": "render",
+      "address": "0x00401100",
+      "signature": "void render(void)",
+      "pseudocode": "void render(void) {\n    int *alienBlock = (int *)0x00405100;\n    int *lowest_ship = (int *)0x00405380;\n    for (int k = 0; k < 10; k++) lowest_ship[k] = -1;\n    int count = 0;\n    for (int r = 0; r < 5; r++) {\n        for (int c = 0; c < 10; c++) {\n            if (alienBlock[r * 10 + c] != 0) {\n                lowest_ship[c] = r;\n                count++;\n            }\n        }\n    }\n    *(int *)(0x00405520 + 24) = count;\n    aliensRefresh();\n}",
+      "callees": ["aliensRefresh"],
+      "reads_memory": ["0x00405100"],
+      "writes_memory": ["0x00405380", "0x00405520"]
+    },
+    {
+      "name": "aliensClear",
+      "address": "0x00401140",
+      "signature": "void aliensClear(void)",
+      "pseudocode": "void aliensClear(void) {\n    /* Clears previous framebuffer boundary for swarm sprite */\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": []
+    },
+    {
+      "name": "aliensDisplay",
+      "address": "0x00401180",
+      "signature": "void aliensDisplay(void)",
+      "pseudocode": "void aliensDisplay(void) {\n    /* Renders alien swarm bounding box to hardware framebuffer */\n}",
+      "callees": [],
+      "reads_memory": ["0x00405520"],
+      "writes_memory": []
+    },
+    {
+      "name": "aliensRefresh",
+      "address": "0x004011C0",
+      "signature": "void aliensRefresh(void)",
+      "pseudocode": "void aliensRefresh(void) {\n    /* Blits animated alien frames (squid, crab, octopus) */\n}",
+      "callees": [],
+      "reads_memory": ["0x00405100"],
+      "writes_memory": []
+    },
+    {
+      "name": "bunkersReset",
+      "address": "0x00401200",
+      "signature": "void bunkersReset(void)",
+      "pseudocode": "void bunkersReset(void) {\n    int *bunker = (int *)0x00405240;\n    const char *bunkerd[4] = {\n        \"        ###                 ###                 ###                 ###         \",\n        \"       #####               #####               #####               #####        \",\n        \"      #######             #######             #######             #######       \",\n        \"      ##   ##             ##   ##             ##   ##             ##   ##       \"\n    };\n    for (int row = 0; row < 4; row++) {\n        for (int col = 0; col < 80; col++) {\n            bunker[row * 81 + col] = (bunkerd[row][col] == '#') ? 1 : 0;\n        }\n    }\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405240"]
+    },
+    {
+      "name": "bunkersClear",
+      "address": "0x00401240",
+      "signature": "void bunkersClear(void)",
+      "pseudocode": "void bunkersClear(void) {\n    /* Redraws eroded bunker masks */\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": []
+    },
+    {
+      "name": "bunkersDisplay",
+      "address": "0x00401280",
+      "signature": "void bunkersDisplay(void)",
+      "pseudocode": "void bunkersDisplay(void) {\n    /* Writes 4x81 bitmask to video display buffer */\n}",
+      "callees": [],
+      "reads_memory": ["0x00405240"],
+      "writes_memory": []
+    },
+    {
+      "name": "bunkersHitCheck",
+      "address": "0x00401300",
+      "signature": "int bunkersHitCheck(int shotx, int shoty)",
+      "pseudocode": "int bunkersHitCheck(int shotx, int shoty) {\n    if (shoty < 18 || shoty >= 22) return 0;\n    if (shotx < 0 || shotx >= 80) return 0;\n    int *bunker = (int *)0x00405240;\n    int row = shoty - 18;\n    int col = shotx;\n    if (bunker[row * 81 + col] == 1) {\n        bunkersErodeBlock(row, col);\n        return 1;\n    }\n    return 0;\n}",
+      "callees": ["bunkersErodeBlock"],
+      "reads_memory": ["0x00405240"],
+      "writes_memory": []
+    },
+    {
+      "name": "bunkersErodeBlock",
+      "address": "0x00401340",
+      "signature": "void bunkersErodeBlock(int row, int col)",
+      "pseudocode": "void bunkersErodeBlock(int row, int col) {\n    int *bunker = (int *)0x00405240;\n    bunker[row * 81 + col] = 0;\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405240"]
+    },
+    {
+      "name": "playerReset",
+      "address": "0x00401400",
+      "signature": "void playerReset(void)",
+      "pseudocode": "void playerReset(void) {\n    *(int *)(0x00405600 + 0) = 38; // posX\n    *(int *)(0x00405600 + 4) = 22; // posY\n    *(int *)(0x00405600 + 8) = 3;  // lives = 3\n    *(int *)(0x00405600 + 12) = 0; // status = 0 (ALIVE)\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405600"]
+    },
+    {
+      "name": "playerMoveLeft",
+      "address": "0x00401440",
+      "signature": "void playerMoveLeft(void)",
+      "pseudocode": "void playerMoveLeft(void) {\n    if (*(int *)(0x00405600 + 0) > 4) {\n        *(int *)(0x00405600 + 0) -= 2;\n    }\n}",
+      "callees": [],
+      "reads_memory": ["0x00405600"],
+      "writes_memory": ["0x00405600"]
+    },
+    {
+      "name": "playerMoveRight",
+      "address": "0x00401480",
+      "signature": "void playerMoveRight(void)",
+      "pseudocode": "void playerMoveRight(void) {\n    if (*(int *)(0x00405600 + 0) < 72) {\n        *(int *)(0x00405600 + 0) += 2;\n    }\n}",
+      "callees": [],
+      "reads_memory": ["0x00405600"],
+      "writes_memory": ["0x00405600"]
+    },
+    {
+      "name": "playerFireMissile",
+      "address": "0x004014C0",
+      "signature": "void playerFireMissile(void)",
+      "pseudocode": "void playerFireMissile(void) {\n    int px = *(int *)(0x00405600 + 0);\n    playerMissileSpawn(px + 1, 21);\n}",
+      "callees": ["playerMissileSpawn"],
+      "reads_memory": ["0x00405600"],
+      "writes_memory": []
+    },
+    {
+      "name": "playerMissileSpawn",
+      "address": "0x00401500",
+      "signature": "void playerMissileSpawn(int x, int y)",
+      "pseudocode": "void playerMissileSpawn(int x, int y) {\n    int *pm = (int *)0x00405480;\n    if (pm[0] == 0) {\n        pm[0] = x;\n        pm[1] = y;\n    }\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405480"]
+    },
+    {
+      "name": "playerMissileMove",
+      "address": "0x00401540",
+      "signature": "void playerMissileMove(void)",
+      "pseudocode": "void playerMissileMove(void) {\n    int *pm = (int *)0x00405480;\n    if (pm[0] != 0) {\n        pm[1] -= 1;\n        if (bunkersHitCheck(pm[0], pm[1])) {\n            pm[0] = 0;\n        } else if (alienHitCheck(pm[0], pm[1])) {\n            pm[0] = 0;\n        } else if (pm[1] <= 1) {\n            pm[0] = 0;\n        }\n    }\n}",
+      "callees": ["bunkersHitCheck", "alienHitCheck"],
+      "reads_memory": ["0x00405480"],
+      "writes_memory": ["0x00405480"]
+    },
+    {
+      "name": "alienHitCheck",
+      "address": "0x00401580",
+      "signature": "int alienHitCheck(int px, int py)",
+      "pseudocode": "int alienHitCheck(int px, int py) {\n    int ax = *(int *)(0x00405520 + 0);\n    int ay = *(int *)(0x00405520 + 4);\n    int *alienBlock = (int *)0x00405100;\n    if (py >= ay && py < ay + 10) {\n        int r = (py - ay) / 2;\n        int c = (px - ax) / 4;\n        if (r >= 0 && r < 5 && c >= 0 && c < 10 && alienBlock[r * 10 + c] != 0) {\n            int type = alienBlock[r * 10 + c];\n            alienBlock[r * 10 + c] = 0;\n            doScoring(type);\n            return 1;\n        }\n    }\n    return 0;\n}",
+      "callees": ["doScoring"],
+      "reads_memory": ["0x00405100", "0x00405520"],
+      "writes_memory": ["0x00405100"]
+    },
+    {
+      "name": "aliensMissileMove",
+      "address": "0x00401600",
+      "signature": "int aliensMissileMove(void)",
+      "pseudocode": "int aliensMissileMove(void) {\n    int *missiles = (int *)0x00405400;\n    int fPlayerHit = 0;\n    for (int i = 0; i < 5; i++) {\n        int sx = missiles[i * 2];\n        int sy = missiles[i * 2 + 1];\n        if (sx != 0) {\n            if (bunkersHitCheck(sx, sy) == 1) {\n                missiles[i * 2] = 0;\n                continue;\n            }\n            sy++;\n            missiles[i * 2 + 1] = sy;\n            if (playerHitCheck(sx, sy) == 1) {\n                missiles[i * 2] = 0;\n                fPlayerHit = 1;\n            } else if (sy >= 24) {\n                missiles[i * 2] = 0;\n            }\n        }\n    }\n    return fPlayerHit;\n}",
+      "callees": ["bunkersHitCheck", "playerHitCheck"],
+      "reads_memory": ["0x00405400", "0x00405240", "0x00405600"],
+      "writes_memory": ["0x00405400"]
+    },
+    {
+      "name": "playerHitCheck",
+      "address": "0x00401640",
+      "signature": "int playerHitCheck(int shotx, int shoty)",
+      "pseudocode": "int playerHitCheck(int shotx, int shoty) {\n    int px = *(int *)(0x00405600 + 0);\n    int py = *(int *)(0x00405600 + 4);\n    if (shoty == py && shotx >= px && shotx <= px + 3) {\n        playerExplosion();\n        return 1;\n    }\n    return 0;\n}",
+      "callees": ["playerExplosion"],
+      "reads_memory": ["0x00405600"],
+      "writes_memory": []
+    },
+    {
+      "name": "playerExplosion",
+      "address": "0x00401680",
+      "signature": "void playerExplosion(void)",
+      "pseudocode": "void playerExplosion(void) {\n    *(int *)(0x00405600 + 8) -= 1; // lives--\n    *(int *)(0x00405600 + 12) = 1; // status = EXPLODING\n    if (*(int *)(0x00405600 + 8) <= 0) {\n        *(int *)(0x00405700 + 12) = 1; // is_game_over = 1\n    }\n}",
+      "callees": [],
+      "reads_memory": ["0x00405600"],
+      "writes_memory": ["0x00405600", "0x00405700"]
+    },
+    {
+      "name": "doScoring",
+      "address": "0x00401700",
+      "signature": "void doScoring(int alien_type)",
+      "pseudocode": "void doScoring(int alien_type) {\n    int points = (alien_type == 1) ? 30 : ((alien_type == 2) ? 20 : 10);\n    *(int *)(0x00405700 + 0) += points;\n    updateHighScore();\n}",
+      "callees": ["updateHighScore"],
+      "reads_memory": ["0x00405700"],
+      "writes_memory": ["0x00405700"]
+    },
+    {
+      "name": "updateHighScore",
+      "address": "0x00401740",
+      "signature": "void updateHighScore(void)",
+      "pseudocode": "void updateHighScore(void) {\n    if (*(int *)(0x00405700 + 0) > *(int *)(0x00405700 + 4)) {\n        *(int *)(0x00405700 + 4) = *(int *)(0x00405700 + 0);\n    }\n}",
+      "callees": [],
+      "reads_memory": ["0x00405700"],
+      "writes_memory": ["0x00405700"]
+    },
+    {
+      "name": "checkWaveClear",
+      "address": "0x00401780",
+      "signature": "void checkWaveClear(void)",
+      "pseudocode": "void checkWaveClear(void) {\n    if (*(int *)(0x00405520 + 24) == 0) {\n        *(int *)(0x00405700 + 8) += 1; // level++\n        aliensReset();\n        bunkersReset();\n    }\n}",
+      "callees": ["aliensReset", "bunkersReset"],
+      "reads_memory": ["0x00405520", "0x00405700"],
+      "writes_memory": ["0x00405700"]
+    }
+  ]
+}

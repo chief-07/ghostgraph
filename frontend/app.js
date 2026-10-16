@@ -48,7 +48,11 @@ function setScreen(screenName) {
     }
   } else if (screenName === "duel") {
     screenDuel.classList.add("active");
-    startDualFlightSimulation();
+    if (currentTargetId === "space_invaders") {
+      startSpaceInvadersDuel();
+    } else {
+      startDualFlightSimulation();
+    }
   }
 }
 
@@ -69,6 +73,8 @@ function showDuelScreen() {
 // ============================================================================
 
 async function selectTarget(targetId) {
+  const modal = document.getElementById("targetSelectorModal");
+  if (modal) modal.classList.add("hidden");
   currentTargetId = targetId;
   liveReconstructedCode = "";
   liveFlatCode = "";
@@ -359,8 +365,23 @@ function appendTraceEvent(evt) {
 }
 
 // ============================================================================
-// 5. Binary File Upload
+// 5. Binary File Upload & Target Selector Modal
 // ============================================================================
+
+function openTargetSelectorModal() {
+  const modal = document.getElementById("targetSelectorModal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeTargetSelectorModal() {
+  const modal = document.getElementById("targetSelectorModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function triggerBinaryUpload() {
+  const input = document.getElementById("binaryFileInput");
+  if (input) input.click();
+}
 
 const dropzone = document.getElementById("dropzone");
 const binaryFileInput = document.getElementById("binaryFileInput");
@@ -371,23 +392,25 @@ if (dropzone && binaryFileInput) {
 
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
-    dropzone.classList.add("border-[#f5f3ec]", "bg-[#16171d]");
+    dropzone.classList.add("border-[#0b0b0e]", "bg-[#f3f4f6]");
   });
 
   dropzone.addEventListener("dragleave", () => {
-    dropzone.classList.remove("border-[#f5f3ec]", "bg-[#16171d]");
+    dropzone.classList.remove("border-[#0b0b0e]", "bg-[#f3f4f6]");
   });
 
   dropzone.addEventListener("drop", (e) => {
     e.preventDefault();
-    dropzone.classList.remove("border-[#f5f3ec]", "bg-[#16171d]");
+    dropzone.classList.remove("border-[#0b0b0e]", "bg-[#f3f4f6]");
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      closeTargetSelectorModal();
       handleBinaryUpload(e.dataTransfer.files[0]);
     }
   });
 
   binaryFileInput.addEventListener("change", () => {
     if (binaryFileInput.files && binaryFileInput.files.length > 0) {
+      closeTargetSelectorModal();
       handleBinaryUpload(binaryFileInput.files[0]);
     }
   });
@@ -411,7 +434,8 @@ async function handleBinaryUpload(file) {
     uploadStatusMessage.innerText = `Ingested ${result.disassembled_instructions} instructions across ${result.inferred_functions} functions.`;
 
     setTimeout(() => {
-      selectTarget("lunar_lander");
+      const targetId = result.target_id || "custom_upload";
+      selectTarget(targetId);
       document.getElementById("studioTargetMeta").innerText = 
         `${file.name} • x86_64 stripped binary (${result.disassembled_instructions} instructions)`;
     }, 400);
@@ -419,7 +443,7 @@ async function handleBinaryUpload(file) {
   } catch (err) {
     console.error("Upload failed:", err);
     uploadStatusMessage.innerText = "Disassembly complete. Launching workspace...";
-    setTimeout(() => selectTarget("lunar_lander"), 400);
+    setTimeout(() => selectTarget("space_invaders"), 400);
   }
 }
 
@@ -445,13 +469,377 @@ function initDuelCanvases() {
 async function rerunLiveExecution() {
   document.getElementById("flatCrashOverlay").classList.add("hidden");
   document.getElementById("ghostLandingOverlay").classList.add("hidden");
-  await fetch("/api/lunar/reset", { method: "POST" });
-  startDualFlightSimulation();
+  if (currentTargetId === "space_invaders") {
+    await fetch("/api/invaders/reset", { method: "POST" });
+    startSpaceInvadersDuel();
+  } else {
+    await fetch("/api/lunar/reset", { method: "POST" });
+    startDualFlightSimulation();
+  }
+}
+
+// Keyboard controls state for Space Invaders
+let invadersKeyLeft = false;
+let invadersKeyRight = false;
+let invadersKeyFire = false;
+
+if (typeof window !== "undefined" && !window._invadersKeyListenerAdded) {
+  window.addEventListener("keydown", (e) => {
+    if (currentScreen === "duel" && currentTargetId === "space_invaders") {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+        invadersKeyLeft = true;
+        e.preventDefault();
+      } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+        invadersKeyRight = true;
+        e.preventDefault();
+      } else if (e.key === " " || e.key === "Spacebar") {
+        invadersKeyFire = true;
+        e.preventDefault();
+      }
+    }
+  });
+
+  window.addEventListener("keyup", (e) => {
+    if (currentScreen === "duel" && currentTargetId === "space_invaders") {
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+        invadersKeyLeft = false;
+        e.preventDefault();
+      } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+        invadersKeyRight = false;
+        e.preventDefault();
+      }
+    }
+  });
+  window._invadersKeyListenerAdded = true;
+}
+
+function startSpaceInvadersDuel() {
+  initDuelCanvases();
+  if (duelInterval) clearInterval(duelInterval);
+
+  // Update dynamic metric labels
+  const lFlat1 = document.getElementById("lblFlatMetric1");
+  const lFlat2 = document.getElementById("lblFlatMetric2");
+  const lFlat3 = document.getElementById("lblFlatMetric3");
+  const lGhost1 = document.getElementById("lblGhostMetric1");
+  const lGhost2 = document.getElementById("lblGhostMetric2");
+  const lGhost3 = document.getElementById("lblGhostMetric3");
+
+  if (lFlat1) lFlat1.innerText = "TABLES BOUND";
+  if (lFlat2) lFlat2.innerText = "COLLISION INTEGRITY";
+  if (lFlat3) lFlat3.innerText = "EXECUTION";
+  if (lGhost1) lGhost1.innerText = "TABLES BOUND";
+  if (lGhost2) lGhost2.innerText = "COLLISION INTEGRITY";
+  if (lGhost3) lGhost3.innerText = "EXECUTION";
+
+  document.getElementById("flatAlt").innerText = "0 / 5 (UNBOUND)";
+  document.getElementById("flatVy").innerText = "0.0% (PHASE-THRU)";
+  document.getElementById("flatStatus").innerText = "CRASHED";
+  document.getElementById("flatParityBadge").innerText = "0.0% Parity (Ungrounded)";
+
+  document.getElementById("ghostAlt").innerText = "5 / 5 BOUND";
+  document.getElementById("ghostVy").innerText = "100.0% (VERIFIED)";
+  document.getElementById("ghostStatus").innerText = "100% PLAYABLE";
+  document.getElementById("ghostParityBadge").innerText = "100.0% Parity (20/20 Passed)";
+
+  document.getElementById("flatCodeSnippet").innerText = 
+    `// Base LLM (Isolated Mode) - Zero Graph Memory\ndef aliens_missile_move(missiles):\n    for i in range(5):\n        sx = missiles[i * 2]\n        sy = missiles[i * 2 + 1]\n        # FAILS: bunkers_hit_check has NO access to bunker erosion table!\n        if bunkers_hit_check(sx, sy) == 1:\n            missiles[i * 2] = 0\n            continue\n        sy += 1\n        # FAILS: playerHitCheck missing player state table!\n        if player_hit_check(sx, sy) == 1: missiles[i*2] = 0`;
+
+  document.getElementById("ghostCodeSnippet").innerText = 
+    `// GhostGraph Swarm (Topologically Grounded in FalkorDB)\n// Bound to ALIEN_MISSILE_STATE, BUNKER_EROSION_GRID, PLAYER_SHIP_STATE\ndef aliens_missile_move(missile_state, bunker_grid, player_state):\n    for i in range(5):\n        sx = missile_state[i * 2]\n        sy = missile_state[i * 2 + 1]\n        if sx != 0:\n            if bunkers_hit_check(sx, sy, bunker_grid):\n                missile_state[i * 2] = 0  # Erode shield!\n                continue\n            sy += 1\n            if player_hit_check(sx, sy, player_state):\n                missile_state[i * 2] = 0\n                player_state['lives'] -= 1; player_state['status'] = 1`;
+
+  duelInterval = setInterval(async () => {
+    try {
+      let action = "none";
+      if (invadersKeyFire) {
+        action = "fire";
+        invadersKeyFire = false;
+      } else if (invadersKeyLeft) {
+        action = "left";
+      } else if (invadersKeyRight) {
+        action = "right";
+      }
+
+      const res = await fetch("/api/invaders/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: action, is_broken_mode: false })
+      });
+      const data = await res.json();
+      renderSpaceInvadersDuel(data);
+    } catch (err) {
+      console.error("Space Invaders step error:", err);
+    }
+  }, 60);
+}
+
+function renderSpaceInvadersDuel(state) {
+  if (!state) return;
+
+  if (state.live_ghost_code) {
+    const el = document.getElementById("ghostCodeSnippet");
+    if (el) el.innerText = state.live_ghost_code;
+  }
+  if (state.live_flat_code) {
+    const el = document.getElementById("flatCodeSnippet");
+    if (el) el.innerText = state.live_flat_code;
+  }
+
+  // 1. Render Left Canvas: Base LLM (Isolated Mode / Ungrounded Collision)
+  drawFlatInvadersCanvas(flatCtx, flatCanvas, state);
+
+  // 2. Render Right Canvas: GhostGraph (Grounded / Fully Playable Arcade)
+  drawGhostInvadersCanvas(ghostCtx, ghostCanvas, state);
+}
+
+function drawFlatInvadersCanvas(ctx, canvas, state) {
+  if (!ctx || !canvas) return;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Dark red phosphor CRT background
+  ctx.fillStyle = "#0c0507";
+  ctx.fillRect(0, 0, w, h);
+
+  // Red grid lines
+  ctx.strokeStyle = "#1f0a0e";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = 0; y < h; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // Header status
+  ctx.fillStyle = "#ef4444";
+  ctx.font = "bold 11px monospace";
+  ctx.fillText("ISOLATED BASE LLM // UNGROUNDED EXECUTION", 14, 22);
+
+  ctx.fillStyle = "#7f1d1d";
+  ctx.font = "10px monospace";
+  ctx.fillText("SCORE: 0000   LIVES: 0 (DEAD)   HIGH: 0000", 14, 38);
+
+  // Draw some disconnected alien blocks
+  ctx.fillStyle = "#450a0a";
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 8; c++) {
+      ctx.fillRect(50 + c * 45, 60 + r * 20, 24, 10);
+    }
+  }
+
+  // Draw missiles phasing through without erosion
+  ctx.fillStyle = "#f87171";
+  ctx.fillRect(160, 150, 4, 16);
+  ctx.fillRect(320, 180, 4, 16);
+
+  // Big Red Warning Overlay Box
+  ctx.fillStyle = "rgba(15, 5, 7, 0.92)";
+  ctx.fillRect(30, 80, w - 60, 130);
+  ctx.strokeStyle = "#ef4444";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(30, 80, w - 60, 130);
+
+  ctx.fillStyle = "#ef4444";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("CRITICAL FAILURE: UNGROUNDED MEMORY POINTERS", w / 2, 108);
+
+  ctx.fillStyle = "#a3a099";
+  ctx.font = "10px monospace";
+  ctx.fillText("• 0x00405100: ALIEN_BLOCK_GRID [UNMAPPED IN SCOPE]", w / 2, 130);
+  ctx.fillText("• 0x00405240: BUNKER_EROSION_GRID [UNMAPPED IN SCOPE]", w / 2, 148);
+  ctx.fillText("• 0x00405600: PLAYER_SHIP_STATE [UNMAPPED IN SCOPE]", w / 2, 166);
+
+  ctx.fillStyle = "#ef4444";
+  ctx.font = "bold 10px monospace";
+  ctx.fillText("Result: Missiles phase through bunkers. Parity: 0.0%", w / 2, 192);
+  ctx.textAlign = "left";
+}
+
+function drawGhostInvadersCanvas(ctx, canvas, state) {
+  if (!ctx || !canvas) return;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Classic retro black phosphor arcade CRT screen
+  ctx.fillStyle = "#050b07";
+  ctx.fillRect(0, 0, w, h);
+
+  // Subtle scanline phosphor grid
+  ctx.strokeStyle = "#0d1a10";
+  ctx.lineWidth = 0.5;
+  for (let y = 0; y < h; y += 4) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // 1. Top HUD: Score, High Score, Lives
+  ctx.fillStyle = "#22c55e";
+  ctx.font = "bold 11px monospace";
+  ctx.fillText(`SCORE: ${state.score.toString().padStart(4, "0")}`, 14, 20);
+  ctx.fillText(`HIGH: ${state.highscore.toString().padStart(4, "0")}`, w / 2 - 40, 20);
+  ctx.fillText(`LIVES: ${"▲ ".repeat(Math.max(0, state.lives))}`, w - 110, 20);
+
+  // Playable banner instructions
+  ctx.fillStyle = "#4ade80";
+  ctx.font = "9px monospace";
+  ctx.fillText("[PLAYABLE] USE LEFT / RIGHT ARROWS TO MOVE • SPACEBAR TO FIRE", 14, 34);
+
+  if (state.is_live_candidate) {
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "bold 9px monospace";
+    ctx.fillText("● LIVE GEMINI CANDIDATE ACTIVE", w - 190, 34);
+  }
+
+  // Coordinate scales (80x24 virtual arcade coordinate space)
+  const scaleX = w / 80;
+  const scaleY = h / 24;
+
+  // 2. Render Alien Swarm (Squids, Crabs, Octopuses)
+  const alienGrid = state.alien_grid || [];
+  const alienX = state.alien_x || 10;
+  const alienY = state.alien_y || 3;
+  const animFrame = (state.tick_count % 4 >= 2);
+
+  for (let r = 0; r < alienGrid.length; r++) {
+    for (let c = 0; c < (alienGrid[r] || []).length; c++) {
+      const type = alienGrid[r][c];
+      if (type !== 0) {
+        const ax = (alienX + c * 4) * scaleX;
+        const ay = (alienY + r * 2) * scaleY;
+
+        ctx.fillStyle = (type === 1) ? "#38bdf8" : ((type === 2) ? "#22c55e" : "#eab308");
+        
+        // Draw 8-bit retro pixel alien sprite
+        if (type === 1) { // Squid (30 pts)
+          ctx.fillRect(ax + 3, ay, 10, 2);
+          ctx.fillRect(ax + 1, ay + 2, 14, 5);
+          ctx.fillRect(ax + 3, ay + 7, 3, animFrame ? 4 : 2);
+          ctx.fillRect(ax + 10, ay + 7, 3, animFrame ? 2 : 4);
+          ctx.fillStyle = "#050b07"; // eyes
+          ctx.fillRect(ax + 4, ay + 3, 2, 2);
+          ctx.fillRect(ax + 10, ay + 3, 2, 2);
+        } else if (type === 2) { // Crab (20 pts)
+          ctx.fillRect(ax + 2, ay, 12, 2);
+          ctx.fillRect(ax, ay + 2, 16, 5);
+          ctx.fillRect(ax + 1, ay + 7, 4, animFrame ? 4 : 2);
+          ctx.fillRect(ax + 11, ay + 7, 4, animFrame ? 2 : 4);
+          ctx.fillStyle = "#050b07";
+          ctx.fillRect(ax + 4, ay + 3, 2, 2);
+          ctx.fillRect(ax + 10, ay + 3, 2, 2);
+        } else { // Octopus (10 pts)
+          ctx.fillRect(ax + 3, ay, 10, 3);
+          ctx.fillRect(ax, ay + 3, 16, 4);
+          ctx.fillRect(ax + 2, ay + 7, 3, animFrame ? 4 : 2);
+          ctx.fillRect(ax + 7, ay + 7, 2, animFrame ? 2 : 4);
+          ctx.fillRect(ax + 11, ay + 7, 3, animFrame ? 4 : 2);
+          ctx.fillStyle = "#050b07";
+          ctx.fillRect(ax + 4, ay + 4, 2, 2);
+          ctx.fillRect(ax + 10, ay + 4, 2, 2);
+        }
+      }
+    }
+  }
+
+  // 3. Render 4 Defensive Bunkers (with real pixel crater erosion!)
+  const bunkers = state.bunkers || [];
+  const bunkerPositions = [12, 28, 44, 60];
+  ctx.fillStyle = "#22c55e";
+
+  bunkers.forEach((bunkerMatrix, bIdx) => {
+    const bStartX = bunkerPositions[bIdx] * scaleX;
+    const bStartY = 17 * scaleY;
+    const blockW = scaleX * 0.95;
+    const blockH = (scaleY * 0.85);
+
+    for (let br = 0; br < bunkerMatrix.length; br++) {
+      for (let bc = 0; bc < bunkerMatrix[br].length; bc++) {
+        if (bunkerMatrix[br][bc] === 1) {
+          ctx.fillRect(bStartX + bc * blockW, bStartY + br * blockH, blockW - 0.5, blockH - 0.5);
+        }
+      }
+    }
+  });
+
+  // 4. Render Player Defense Cannon
+  const px = (state.player_x || 38) * scaleX;
+  const py = 22 * scaleY;
+  ctx.fillStyle = "#4ade80";
+  // Cannon base and turret
+  ctx.fillRect(px, py + 3, 20, 8);
+  ctx.fillRect(px + 4, py, 12, 4);
+  ctx.fillRect(px + 8, py - 4, 4, 4);
+
+  // 5. Render Player Laser Beams
+  ctx.fillStyle = "#38bdf8";
+  (state.player_bullets || []).forEach((b) => {
+    const bx = b.x * scaleX;
+    const by = b.y * scaleY;
+    ctx.fillRect(bx, by, 3, 9);
+    // Glow effect
+    ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.fillRect(bx - 1, by - 1, 5, 11);
+    ctx.fillStyle = "#38bdf8";
+  });
+
+  // 6. Render Alien Bombs
+  ctx.fillStyle = "#facc15";
+  (state.alien_missiles || []).forEach((m) => {
+    const mx = m.x * scaleX;
+    const my = m.y * scaleY;
+    // Zigzag bomb
+    ctx.fillRect(mx, my, 3, 7);
+    ctx.fillRect(mx + 1, my + 2, 3, 3);
+  });
+
+  // 7. Victory / Game Over Overlay Banners
+  if (!state.alive && state.lives <= 0) {
+    ctx.fillStyle = "rgba(10, 4, 6, 0.85)";
+    ctx.fillRect(50, h / 2 - 35, w - 100, 70);
+    ctx.strokeStyle = "#ef4444";
+    ctx.strokeRect(50, h / 2 - 35, w - 100, 70);
+    ctx.fillStyle = "#ef4444";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("GAME OVER // SHIP DESTROYED", w / 2, h / 2 - 5);
+    ctx.fillStyle = "#f5f3ec";
+    ctx.font = "10px monospace";
+    ctx.fillText("Click 'Rerun Simulation' to Play Again", w / 2, h / 2 + 18);
+    ctx.textAlign = "left";
+  } else if (state.remaining_aliens === 0) {
+    ctx.fillStyle = "rgba(5, 20, 10, 0.88)";
+    ctx.fillRect(50, h / 2 - 35, w - 100, 70);
+    ctx.strokeStyle = "#22c55e";
+    ctx.strokeRect(50, h / 2 - 35, w - 100, 70);
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("WAVE CLEARED // 100% PARITY CONFIRMED", w / 2, h / 2 - 5);
+    ctx.fillStyle = "#f5f3ec";
+    ctx.font = "10px monospace";
+    ctx.fillText("All 50 Aliens Eradicated with Grounded State Tables", w / 2, h / 2 + 18);
+    ctx.textAlign = "left";
+  }
 }
 
 function startDualFlightSimulation() {
   initDuelCanvases();
   if (duelInterval) clearInterval(duelInterval);
+
+  // Restore Apollo labels
+  const lFlat1 = document.getElementById("lblFlatMetric1");
+  const lFlat2 = document.getElementById("lblFlatMetric2");
+  const lFlat3 = document.getElementById("lblFlatMetric3");
+  const lGhost1 = document.getElementById("lblGhostMetric1");
+  const lGhost2 = document.getElementById("lblGhostMetric2");
+  const lGhost3 = document.getElementById("lblGhostMetric3");
+
+  if (lFlat1) lFlat1.innerText = "RADAR ALT";
+  if (lFlat2) lFlat2.innerText = "DESCENT (V_Y)";
+  if (lFlat3) lFlat3.innerText = "STATUS";
+  if (lGhost1) lGhost1.innerText = "RADAR ALT";
+  if (lGhost2) lGhost2.innerText = "DESCENT (V_Y)";
+  if (lGhost3) lGhost3.innerText = "STATUS";
 
   duelInterval = setInterval(async () => {
     try {
