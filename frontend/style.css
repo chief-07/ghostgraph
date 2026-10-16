@@ -1,23 +1,23 @@
-/* GhostGraph: Modern Minimalist Slate Charcoal & Cream White Theme */
+/* GhostGraph: True Matte Dark Charcoal & Light Cream Theme */
 :root {
-  --bg-main: #0c0e14;
-  --bg-surface: #131720;
-  --bg-surface-elevated: #1a202c;
-  --bg-surface-active: #222a3a;
+  --bg-main: #0a0b0d;
+  --bg-surface: #111216;
+  --bg-surface-elevated: #16171d;
+  --bg-surface-active: #1f2128;
   
-  --border-subtle: #1e2535;
-  --border-strong: #2d374d;
-  --border-focus: #4b5875;
+  --border-subtle: #1c1e24;
+  --border-strong: #262832;
+  --border-focus: #3d404d;
   
-  --text-cream: #f3f0e8;
-  --text-primary: #e6e2d8;
-  --text-secondary: #9da6b8;
-  --text-dim: #606a7e;
+  --text-cream: #f5f3ec;
+  --text-primary: #eae6df;
+  --text-secondary: #a3a099;
+  --text-dim: #6e6b63;
   
-  --accent-sage: #2eb872;
+  --accent-sage: #22c55e;
   --accent-coral: #ef4444;
-  --accent-slate-blue: #38bdf8;
-  --accent-ochre: #f59e0b;
+  --accent-amber: #f59e0b;
+  --accent-cyan: #38bdf8;
   
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, monospace;
@@ -40,21 +40,21 @@ html, body {
 
 /* Minimalist Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: var(--bg-main);
 }
 ::-webkit-scrollbar-thumb {
-  background: #232a3b;
+  background: #22242c;
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #36415a;
+  background: #333642;
 }
 
-/* Typography & Fonts */
+/* Typography */
 .font-cream {
   color: var(--text-cream);
 }
@@ -68,11 +68,11 @@ pre, code {
   font-size: 11px;
 }
 
-/* Screen View Transitions (No clumsy page scrolling) */
+/* Screen Transitions (Discrete Views, Zero Stacked Page Scroll) */
 .screen-view {
   display: none;
   opacity: 0;
-  transition: opacity 0.2s ease-in-out;
+  transition: opacity 0.15s ease-in-out;
 }
 .screen-view.active {
   display: flex;
@@ -82,10 +82,10 @@ pre, code {
 /* Graph Canvas Container */
 .graph-container {
   width: 100%;
-  height: 500px;
-  background-color: #0b0d13;
+  height: 480px;
+  background-color: var(--bg-main);
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
 }
 #customGraphCanvas {
@@ -98,19 +98,9 @@ pre, code {
   cursor: grabbing;
 }
 
-/* Flight Viewports */
+/* Simulation Canvas Viewport */
 .sim-canvas {
-  background-color: #080a0f;
+  background-color: #07080a;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-}
-
-/* Pulse animation utility */
-@keyframes signal-glow {
-  0% { box-shadow: 0 0 0 0 rgba(46, 184, 114, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(46, 184, 114, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(46, 184, 114, 0); }
-}
-.glow-signal {
-  animation: signal-glow 2s infinite;
 }

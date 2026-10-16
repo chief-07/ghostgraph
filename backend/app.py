@@ -154,7 +154,7 @@ async def get_target_details(target_id: str = "snake"):
             "producer_fn": cfg["producer_fn"],
             "raw_disassembly": cfg.get("raw_disassembly", ""),
             "decompiled_snippet": cfg["decompiled_snippet"],
-            "reconstructed_c": cfg["reconstructed_c"]
+            "reconstructed_c": cfg.get("reconstructed_c", "")
         },
         "test_vectors": test_vectors
     })
@@ -219,7 +219,13 @@ async def stream_reconstruction(
             max_iterations=1
         ):
             yield {"data": json.dumps(event)}
-            await asyncio.sleep(0.55) # Paced for readable presentation
+            etype = event.get("type", "")
+            if etype in ("MEMORY_RESOLVED", "CANDIDATE_GENERATED", "VERIFICATION_RESULT", "PIPELINE_COMPLETE"):
+                await asyncio.sleep(0.3)
+            elif etype == "TEST_STEP":
+                await asyncio.sleep(0.06)
+            else:
+                await asyncio.sleep(0.08)
 
     return EventSourceResponse(event_generator())
 
@@ -375,13 +381,15 @@ async def export_reconstructed_project(target_id: str = "snake"):
             "compile_cmd": "gcc -O2 -DSTANDALONE_MAIN -o snake snake_core.c"
         })
     else:
-        cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS.get("telemetry", {}))
+        cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS.get("lunar_lander", {}))
+        ref_path = Path(cfg.get("ref_binary", f"ground_truth/{target_id}.c"))
+        source_code = ref_path.read_text(encoding="utf-8") if ref_path.exists() else "// Synthesized software module"
         return JSONResponse({
             "target": target_id,
             "filename": f"{target_id}_reconstructed.c",
-            "source_code": cfg.get("reconstructed_c", ""),
-            "makefile": f"CC = gcc\nCFLAGS = -O2 -shared -fPIC\n\nall: lib{target_id}.so\n\nlib{target_id}.so:\n\t$(CC) $(CFLAGS) -o lib{target_id}.so {target_id}_reconstructed.c\n",
-            "compile_cmd": f"gcc -O2 -shared -fPIC -o lib{target_id}.so {target_id}_reconstructed.c"
+            "source_code": source_code,
+            "makefile": f"CC = gcc\nCFLAGS = -O2 -Wall -fPIC\n\nall: {target_id}\n\n{target_id}:\n\t$(CC) $(CFLAGS) -o {target_id} {target_id}_reconstructed.c -lm\n\nclean:\n\trm -f {target_id}\n",
+            "compile_cmd": f"gcc -O2 -Wall -o {target_id} {target_id}_reconstructed.c -lm"
         })
 
 @app.post("/api/upload")

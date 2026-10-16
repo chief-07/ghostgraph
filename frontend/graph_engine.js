@@ -1,7 +1,7 @@
 /**
- * GhostGraph High-Performance Custom Canvas Graph Engine
- * High-DPI anti-aliased graph visualizer with spring physics, 
- * interactive pan/zoom, query pulse packets, and verified node states.
+ * GhostGraph High-Performance Dynamic Canvas Graph Engine
+ * High-DPI anti-aliased graph visualizer supporting dynamic node/edge addition,
+ * live spring physics, multi-agent query pulses, and state transitions.
  */
 
 class GhostCanvasGraph {
@@ -21,28 +21,29 @@ class GhostCanvasGraph {
     this.lastMouseX = 0;
     this.lastMouseY = 0;
 
-    // Animation loop state
+    // Simulation & layout
     this.animationFrameId = null;
     this.physicsRunning = true;
     this.simulationTicks = 0;
 
-    // Color Palette
+    // Minimalist Dark Charcoal Palette
     this.colors = {
-      bg: "#0c0e14",
-      grid: "#161b26",
-      edgeDefault: "#283247",
+      bg: "#0a0b0d",
+      grid: "#14161d",
+      edgeDefault: "#262933",
       edgeCalls: "#38bdf8",
       edgeReads: "#f59e0b",
       edgeWrites: "#f87171",
-      edgeTests: "#2eb872",
-      nodeProgram: "#f3f0e8",
+      edgeTests: "#22c55e",
+      nodeProgram: "#f5f3ec",
       nodeFunction: "#38bdf8",
       nodeMemory: "#f59e0b",
-      nodeTestCase: "#2eb872",
-      nodeVerified: "#2eb872",
+      nodeTestCase: "#22c55e",
+      nodeVerified: "#22c55e",
       nodeFailed: "#ef4444",
-      text: "#e6e2d8",
-      textMuted: "#9da6b8"
+      nodeInner: "#121318",
+      text: "#f5f3ec",
+      textMuted: "#8e8b82"
     };
 
     this.initEvents();
@@ -76,11 +77,9 @@ class GhostCanvasGraph {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Convert screen coords to graph coords
       const graphX = (mouseX - this.panX) / this.zoom;
       const graphY = (mouseY - this.panY) / this.zoom;
 
-      // Check if clicked on a node
       this.draggedNode = this.getNodeAt(graphX, graphY);
       this.isDragging = true;
       this.lastMouseX = mouseX;
@@ -124,7 +123,6 @@ class GhostCanvasGraph {
       const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
       const newZoom = Math.max(0.25, Math.min(3.0, this.zoom * zoomFactor));
 
-      // Zoom towards mouse pointer
       this.panX = mouseX - (mouseX - this.panX) * (newZoom / this.zoom);
       this.panY = mouseY - (mouseY - this.panY) * (newZoom / this.zoom);
       this.zoom = newZoom;
@@ -134,77 +132,91 @@ class GhostCanvasGraph {
   getNodeAt(x, y) {
     for (const node of this.nodes.values()) {
       const dist = Math.hypot(node.x - x, node.y - y);
-      if (dist <= node.radius + 6) {
+      if (dist <= node.radius + 8) {
         return node;
       }
     }
     return null;
   }
 
-  setElements(elements) {
+  clear() {
     this.nodes.clear();
     this.edges = [];
     this.particles = [];
+    this.simulationTicks = 0;
+    this.physicsRunning = true;
+    this.panX = 0;
+    this.panY = 0;
+    this.zoom = 1.0;
+  }
 
-    // Tier-based default coordinates for clean presentation
-    const tierMap = {
-      program: 0,
-      function: 1,
-      memory: 2,
-      testcase: 3
+  addNode({ id, label, type = "function", status = "default", address = "" }) {
+    if (this.nodes.has(id)) {
+      const existing = this.nodes.get(id);
+      if (label) existing.label = label;
+      if (status) existing.status = status;
+      return existing;
+    }
+
+    const tierY = {
+      program: 60,
+      function: 180,
+      memory: 300,
+      testcase: 420
     };
 
-    const tierCounts = { 0: 0, 1: 0, 2: 0, 3: 0 };
-    const tierY = { 0: 70, 1: 180, 2: 300, 3: 410 };
+    const count = Array.from(this.nodes.values()).filter(n => n.type === type).length;
+    const radius = type === "program" ? 22 : type === "function" ? 18 : type === "memory" ? 16 : 14;
 
-    elements.forEach((el) => {
-      if (el.data.source && el.data.target) {
-        this.edges.push({
-          source: el.data.source,
-          target: el.data.target,
-          label: el.data.label || "CALLS",
-          status: "default"
-        });
-      } else {
-        const type = el.data.type || "function";
-        const tier = tierMap[type] ?? 1;
-        const count = tierCounts[tier]++;
-        const radius = type === "program" ? 22 : type === "function" ? 18 : type === "memory" ? 16 : 14;
+    const node = {
+      id: id,
+      label: label || id,
+      type: type,
+      address: address,
+      x: 180 + count * 130 + (Math.random() * 20 - 10),
+      y: (tierY[type] || 200) + (Math.random() * 20 - 10),
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      radius: radius,
+      status: status
+    };
 
-        this.nodes.set(el.data.id, {
-          id: el.data.id,
-          label: el.data.label || el.data.id,
-          type: type,
-          x: 200 + count * 140,
-          y: tierY[tier] + (Math.random() * 20 - 10),
-          vx: 0,
-          vy: 0,
-          radius: radius,
-          status: "default"
-        });
-      }
-    });
-
+    this.nodes.set(id, node);
     this.simulationTicks = 0;
     this.physicsRunning = true;
     this.fit();
+    return node;
   }
 
-  emitQueryPulse(sourceId, targetId, color = "#2eb872") {
+  addEdge({ source, target, label = "CALLS", status = "default" }) {
+    const exists = this.edges.some(e => e.source === source && e.target === target && e.label === label);
+    if (!exists) {
+      this.edges.push({
+        source,
+        target,
+        label,
+        status
+      });
+      this.simulationTicks = 0;
+      this.physicsRunning = true;
+    }
+  }
+
+  updateNode(id, updates) {
+    const node = this.nodes.get(id);
+    if (node) {
+      Object.assign(node, updates);
+    }
+  }
+
+  pulseEdge(sourceId, targetId, color = "#22c55e") {
     this.particles.push({
       sourceId,
       targetId,
       progress: 0,
-      speed: 0.035 + Math.random() * 0.015,
+      speed: 0.04 + Math.random() * 0.02,
       color: color
     });
-  }
-
-  setNodeStatus(nodeId, status) {
-    const node = this.nodes.get(nodeId);
-    if (node) {
-      node.status = status;
-    }
   }
 
   setAllStatus(status) {
@@ -233,7 +245,7 @@ class GhostCanvasGraph {
 
     const scaleX = (this.width - padding * 2) / graphW;
     const scaleY = (this.height - padding * 2) / graphH;
-    this.zoom = Math.max(0.4, Math.min(1.2, Math.min(scaleX, scaleY)));
+    this.zoom = Math.max(0.4, Math.min(1.1, Math.min(scaleX, scaleY)));
 
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
@@ -250,13 +262,12 @@ class GhostCanvasGraph {
       return;
     }
 
-    const kRepel = 2400;
+    const kRepel = 2200;
     const kSpring = 0.04;
     const damping = 0.85;
 
     const nodeList = Array.from(this.nodes.values());
 
-    // Repulsion between all nodes
     for (let i = 0; i < nodeList.length; i++) {
       for (let j = i + 1; j < nodeList.length; j++) {
         const n1 = nodeList[i];
@@ -264,7 +275,7 @@ class GhostCanvasGraph {
         const dx = n2.x - n1.x;
         const dy = n2.y - n1.y;
         const dist = Math.hypot(dx, dy) || 1;
-        if (dist < 260) {
+        if (dist < 240) {
           const force = kRepel / (dist * dist);
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
@@ -274,7 +285,6 @@ class GhostCanvasGraph {
       }
     }
 
-    // Spring forces on edges
     for (const edge of this.edges) {
       const src = this.nodes.get(edge.source);
       const tgt = this.nodes.get(edge.target);
@@ -292,7 +302,6 @@ class GhostCanvasGraph {
       if (tgt !== this.draggedNode) { tgt.vx -= fx; tgt.vy -= fy; }
     }
 
-    // Apply velocities with damping
     for (const node of nodeList) {
       if (node === this.draggedNode) continue;
       node.vx *= damping;
@@ -323,11 +332,11 @@ class GhostCanvasGraph {
     const dpr = window.devicePixelRatio || 1;
     ctx.scale(dpr, dpr);
 
-    // Dark sleek background
+    // Deep Charcoal Background
     ctx.fillStyle = this.colors.bg;
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle Grid pattern
+    // Subtle Coordinate Grid
     ctx.strokeStyle = this.colors.grid;
     ctx.lineWidth = 1;
     const gridSize = 32 * this.zoom;
@@ -343,7 +352,7 @@ class GhostCanvasGraph {
     }
     ctx.stroke();
 
-    // Camera transform
+    // Camera Transform
     ctx.translate(this.panX, this.panY);
     ctx.scale(this.zoom, this.zoom);
 
@@ -357,7 +366,7 @@ class GhostCanvasGraph {
       if (edge.label === "CALLS") edgeColor = this.colors.edgeCalls;
       else if (edge.label === "READS") edgeColor = this.colors.edgeReads;
       else if (edge.label === "WRITES") edgeColor = this.colors.edgeWrites;
-      else if (edge.label === "TESTED_BY") edgeColor = this.colors.edgeTests;
+      else if (edge.label === "TESTS") edgeColor = this.colors.edgeTests;
 
       if (edge.status === "verified") edgeColor = this.colors.nodeVerified;
       if (edge.status === "failed") edgeColor = this.colors.nodeFailed;
@@ -377,9 +386,9 @@ class GhostCanvasGraph {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Draw Arrow Head
+      // Draw Directional Arrow
       const angle = Math.atan2(tgt.y - src.y, tgt.x - src.x);
-      const arrowDist = tgt.radius + 2;
+      const arrowDist = tgt.radius + 3;
       const arrowX = tgt.x - Math.cos(angle) * arrowDist;
       const arrowY = tgt.y - Math.sin(angle) * arrowDist;
 
@@ -397,7 +406,7 @@ class GhostCanvasGraph {
       ctx.closePath();
       ctx.fill();
 
-      // Edge label at midpoint
+      // Label at Midpoint
       const midX = (src.x + tgt.x) / 2;
       const midY = (src.y + tgt.y) / 2;
       ctx.font = "9px monospace";
@@ -419,7 +428,7 @@ class GhostCanvasGraph {
       ctx.shadowBlur = 10;
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(curX, curY, 4, 0, Math.PI * 2);
+      ctx.arc(curX, curY, 4.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -436,47 +445,46 @@ class GhostCanvasGraph {
         strokeColor = this.colors.nodeMemory;
         glyph = "0x";
       } else if (node.type === "testcase") {
-        strokeColor = this.colors.nodeTestCase;
-        glyph = "tc";
+        strokeColor = node.status === "FAILED" ? this.colors.nodeFailed : this.colors.nodeTestCase;
+        glyph = node.status === "FAILED" ? "✕" : "tc";
       }
 
-      if (node.status === "verified") {
+      if (node.status === "verified" || node.status === "PASSED") {
         strokeColor = this.colors.nodeVerified;
         glyph = "✓";
-      } else if (node.status === "failed") {
+      } else if (node.status === "failed" || node.status === "FAILED") {
         strokeColor = this.colors.nodeFailed;
         glyph = "✕";
       }
 
       ctx.save();
-      // Outer Glow when verified or querying
-      if (node.status === "verified" || node.status === "querying") {
+      if (node.status === "verified" || node.status === "PASSED" || node.status === "resolved") {
         ctx.shadowColor = strokeColor;
         ctx.shadowBlur = 14;
       }
 
-      // Dark Node Inner Fill
-      ctx.fillStyle = "#131720";
+      // Dark Charcoal Center
+      ctx.fillStyle = this.colors.nodeInner;
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Node Rim
+      // Outer Rim
       ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = node.status === "verified" ? 2.5 : 1.8;
+      ctx.lineWidth = (node.status === "verified" || node.status === "PASSED") ? 2.5 : 1.8;
       ctx.stroke();
       ctx.restore();
 
-      // Node Glyph in Center
+      // Center Glyph
       ctx.font = "bold 9px monospace";
       ctx.fillStyle = strokeColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(glyph, node.x, node.y);
 
-      // Node Text Label (Clean Monospace Underneath)
+      // Label Underneath
       ctx.font = "10px monospace";
-      ctx.fillStyle = node.status === "verified" ? "#4ade80" : this.colors.text;
+      ctx.fillStyle = (node.status === "verified" || node.status === "PASSED") ? "#4ade80" : this.colors.text;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(node.label, node.x, node.y + node.radius + 5);
