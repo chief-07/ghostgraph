@@ -63,8 +63,24 @@
     </div>
 
     <!-- Preloaded Benchmark Targets Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full text-left">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full text-left">
       
+      <!-- Target 0: Commercial Billing Engine -->
+      <div onclick="selectTarget('billing')" class="border border-[#1c1e24] hover:border-[#3d404d] bg-[#111216] hover:bg-[#16171d] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#16171d] text-[#a3a099] border border-[#262832]">Enterprise</span>
+          <i class="fa-solid fa-file-invoice-dollar text-xs text-[#6e6b63] group-hover:text-[#f5f3ec] transition-colors"></i>
+        </div>
+        <div>
+          <div class="text-sm font-bold text-[#f5f3ec] font-mono">Commercial Billing & Tariffs</div>
+          <div class="text-xs text-[#a3a099] mt-1">Multi-tier progressive tax tables (0x00405000) & IEEE 754 Banker's Rounding.</div>
+        </div>
+        <div class="text-[11px] font-mono text-[#a3a099] group-hover:text-[#f5f3ec] flex items-center gap-1.5 pt-2 border-t border-[#1c1e24] transition-colors">
+          <span>Launch Swarm</span>
+          <i class="fa-solid fa-arrow-right text-[9px] group-hover:translate-x-1 transition-transform"></i>
+        </div>
+      </div>
+
       <!-- Target 1: Apollo Guidance Computer -->
       <div onclick="selectTarget('lunar_lander')" class="border border-[#1c1e24] hover:border-[#3d404d] bg-[#111216] hover:bg-[#16171d] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
         <div class="flex items-center justify-between">
