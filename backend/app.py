@@ -133,10 +133,10 @@ async def get_targets():
     return JSONResponse(list(TARGETS.values()))
 
 @app.get("/api/target/details")
-async def get_target_details(target_id: str = "snake"):
+async def get_target_details(target_id: str = "lunar_lander"):
     """Returns detailed technical specification and decompiled snippet for the target."""
-    target = TARGETS.get(target_id, TARGETS["snake"])
-    cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["snake"])
+    target = TARGETS.get(target_id, TARGETS["lunar_lander"])
+    cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["lunar_lander"])
 
     vectors_path = Path(target["vectors_path"])
     test_vectors = []
@@ -171,7 +171,7 @@ async def ingest_target(request: Request, target_id: Optional[str] = None):
     if not target_id:
         form = await request.form()
         target_id = form.get("target_id")
-    target_id = target_id or "snake"
+    target_id = target_id or "lunar_lander"
 
     target = TARGETS.get(target_id)
     if not target:
@@ -205,7 +205,7 @@ async def execute_custom_cypher(request: Request):
 
 @app.get("/api/reconstruct/stream")
 async def stream_reconstruction(
-    target_id: str = "snake",
+    target_id: str = "lunar_lander",
     use_graph: bool = True
 ):
     """
@@ -367,7 +367,7 @@ async def reset_snake():
     return JSONResponse(active_snake.get_state())
 
 @app.get("/api/export")
-async def export_reconstructed_project(target_id: str = "snake"):
+async def export_reconstructed_project(target_id: str = "lunar_lander"):
     """Returns standalone compilable C project files with Makefile."""
     if target_id == "snake":
         code_path = Path("ground_truth/snake_core.c")
