@@ -1,122 +1,91 @@
-/* GhostGraph: Dark Aerospace Systems Engineering Stylesheet */
+/* GhostGraph: Modern Minimalist Slate Charcoal & Cream White Theme */
 :root {
-  --bg-deep: #07090e;
-  --bg-panel: #0d111a;
-  --bg-card: #121826;
-  --border-subtle: #1c2438;
-  --border-active: #2e3b59;
+  --bg-main: #0c0e14;
+  --bg-surface: #131720;
+  --bg-surface-elevated: #1a202c;
+  --bg-surface-active: #222a3a;
   
-  --accent-cyan: #00e5ff;
-  --accent-green: #00ff66;
-  --accent-amber: #ffb000;
-  --accent-red: #ff3344;
+  --border-subtle: #1e2535;
+  --border-strong: #2d374d;
+  --border-focus: #4b5875;
   
-  --text-primary: #e6edf3;
-  --text-muted: #8b949e;
-  --text-dim: #484f58;
+  --text-cream: #f3f0e8;
+  --text-primary: #e6e2d8;
+  --text-secondary: #9da6b8;
+  --text-dim: #606a7e;
+  
+  --accent-sage: #2eb872;
+  --accent-coral: #ef4444;
+  --accent-slate-blue: #38bdf8;
+  --accent-ochre: #f59e0b;
+  
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background-color: var(--bg-deep);
+  background-color: var(--bg-main);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom Minimalist Scrollbars */
+/* Minimalist Scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-deep);
+  background: var(--bg-main);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e283d;
+  background: #232a3b;
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-cyan);
+  background: #36415a;
 }
 
-/* Cytoscape Graph Canvas */
+/* Typography */
+.font-cream {
+  color: var(--text-cream);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Clean Cytoscape Canvas Container */
 #cy {
   width: 100%;
-  height: 580px;
-  background: radial-gradient(circle at center, #0e1422 0%, #07090e 100%);
+  height: 540px;
+  background-color: #0f121a;
   border-radius: 8px;
 }
 
-/* Monospace Code & Assembly Blocks */
-pre, code, .font-mono {
-  font-family: "JetBrains Mono", "Cascadia Code", Consolas, Monaco, monospace;
+/* Code & Pre Blocks */
+pre, code {
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
-/* Stepper Screen Viewports */
-.step-screen {
+/* State Visibility */
+.state-panel {
   display: none;
 }
-.step-screen.active {
+.state-panel.active {
   display: block;
 }
 
-/* Step Tab Active States */
-.step-tab.active {
-  background-color: rgba(0, 229, 255, 0.12);
-  color: #00e5ff;
-  border-color: rgba(0, 229, 255, 0.4);
-}
-
-/* Vector CRT Canvas Display */
-.crt-viewport {
-  position: relative;
-  background-color: #05070a;
-  border: 1px solid #1a253a;
+/* Canvas Viewport */
+.sim-canvas {
+  background-color: #0b0d13;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  overflow: hidden;
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9), 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-.crt-scanlines {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.25) 50%
-  );
-  background-size: 100% 4px;
-  pointer-events: none;
-  z-index: 20;
-}
-
-.crt-phosphor-glow {
-  text-shadow: 0 0 8px rgba(0, 255, 102, 0.6);
-}
-
-.crt-amber-glow {
-  text-shadow: 0 0 8px rgba(255, 176, 0, 0.6);
-}
-
-/* Code Highlighting */
-.code-highlight-crit {
-  background-color: rgba(255, 176, 0, 0.15);
-  border-left: 3px solid var(--accent-amber);
-  color: #ffd166;
-  padding-left: 6px;
-  display: block;
-}
-
-.code-highlight-err {
-  background-color: rgba(255, 51, 68, 0.15);
-  border-left: 3px solid var(--accent-red);
-  color: #ff6b7a;
-  padding-left: 6px;
-  display: block;
-}
-
-.code-highlight-ok {
-  background-color: rgba(0, 255, 102, 0.12);
-  border-left: 3px solid var(--accent-green);
-  color: #55ff99;
-  padding-left: 6px;
-  display: block;
 }

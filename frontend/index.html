@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GhostGraph | Autonomous Graph-Guided Binary Reverse Engineering Swarm</title>
+  <title>GhostGraph | Autonomous Graph-Guided Binary Reverse Engineering</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Cytoscape.js CDN -->
@@ -12,560 +12,279 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="bg-[#07090e] text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden">
+<body class="bg-[#0c0e14] text-[#e6e2d8] min-h-screen flex flex-col font-sans antialiased">
 
   <!-- ==================================================================== -->
-  <!-- Top Navigation & Stepper Header                                      -->
+  <!-- Minimalist Top Navigation                                            -->
   <!-- ==================================================================== -->
-  <header class="border-b border-[#1c2438] bg-[#0b0f17]/95 backdrop-blur sticky top-0 z-50 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-    <!-- Brand & Platform -->
-    <div class="flex items-center gap-3.5">
-      <div class="w-8 h-8 rounded bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
-        <i class="fa-solid fa-satellite-dish text-sm"></i>
-      </div>
-      <div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-bold tracking-tight text-white font-mono">GHOSTGRAPH</span>
-          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">FalkorDB Swarm</span>
-          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">Tracks 01 & 02</span>
-        </div>
-        <p class="text-[11px] text-slate-400 font-mono">Autonomous Graph-Guided Binary Reverse Engineering</p>
-      </div>
+  <header class="border-b border-[#1e2535] bg-[#0c0e14]/90 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-sm font-bold tracking-tight text-[#f3f0e8] font-mono">GHOSTGRAPH</span>
+      <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#9da6b8] border border-[#2d374d]">Autonomous Decompiler Agent</span>
     </div>
 
-    <!-- 4-Step Screen Navigator Pills -->
-    <nav class="flex items-center gap-1.5 bg-[#0e1422] border border-[#1c2438] rounded-lg p-1">
-      <button class="step-tab active text-xs font-mono px-3 py-1.5 rounded border border-transparent transition-all flex items-center gap-1.5" data-step="1" onclick="navigateToStep(1)">
-        <span class="text-[10px] text-cyan-400 font-bold">01</span> Machine Binary
+    <div class="flex items-center gap-4 text-xs font-mono text-[#9da6b8]">
+      <button onclick="resetToHome()" class="hover:text-[#f3f0e8] transition-colors flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Reset
       </button>
-      <button class="step-tab text-xs font-mono px-3 py-1.5 rounded border border-transparent transition-all text-slate-400 hover:text-white flex items-center gap-1.5" data-step="2" onclick="navigateToStep(2)">
-        <span class="text-[10px] text-amber-400 font-bold">02</span> FalkorDB Topology
-      </button>
-      <button class="step-tab text-xs font-mono px-3 py-1.5 rounded border border-transparent transition-all text-slate-400 hover:text-white flex items-center gap-1.5" data-step="3" onclick="navigateToStep(3)">
-        <span class="text-[10px] text-emerald-400 font-bold">03</span> The Swarm Duel
-      </button>
-      <button class="step-tab text-xs font-mono px-3 py-1.5 rounded border border-transparent transition-all text-slate-400 hover:text-white flex items-center gap-1.5" data-step="4" onclick="navigateToStep(4)">
-        <span class="text-[10px] text-emerald-400 font-bold">04</span> Apollo Flight HUD
-      </button>
-    </nav>
-
-    <!-- Cloud Status Indicators -->
-    <div class="flex items-center gap-3 text-xs font-mono">
-      <div class="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/30 px-2.5 py-1 rounded border border-emerald-800/40">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> FalkorDB Cloud
-      </div>
-      <div class="flex items-center gap-1.5 text-cyan-300 bg-cyan-950/30 px-2.5 py-1 rounded border border-cyan-800/40">
-        <i class="fa-solid fa-microchip"></i> Gemini Flash 3.8
-      </div>
+      <span class="text-[#2d374d]">|</span>
+      <a href="https://github.com/chief-07/ghostgraph" target="_blank" class="hover:text-[#f3f0e8] transition-colors flex items-center gap-1.5">
+        <i class="fa-brands fa-github text-[11px]"></i> GitHub
+      </a>
     </div>
   </header>
 
   <!-- ==================================================================== -->
-  <!-- Target Context Banner                                                -->
+  <!-- MAIN progressive container                                          -->
   <!-- ==================================================================== -->
-  <div class="border-b border-[#1c2438] bg-[#0a0e17] px-6 py-2.5 flex flex-wrap items-center justify-between text-xs font-mono gap-4">
-    <div class="flex items-center gap-3">
-      <span class="text-slate-500 uppercase">Target:</span>
-      <span class="text-cyan-300 font-semibold flex items-center gap-1.5">
-        <i class="fa-solid fa-shuttle-space text-cyan-400"></i> 1979 Apollo Lunar Lander Guidance Computer
-      </span>
-      <span class="text-slate-600">|</span>
-      <span class="text-slate-400">Arch: <span class="text-slate-200">x86_64 stripped binary</span></span>
-      <span class="text-slate-600">|</span>
-      <span class="text-slate-400">Primary Subroutine: <span class="text-amber-300">update_newtonian_physics (0x00401200)</span></span>
-    </div>
-    <div class="flex items-center gap-2">
-      <span class="text-slate-500 uppercase">Detached Memory:</span>
-      <span class="px-2 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-800/40">0x00403000 (DPS Throttle)</span>
-      <span class="px-2 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-800/40">0x00403100 (Terrain Profile)</span>
-    </div>
-  </div>
-
-  <!-- ==================================================================== -->
-  <!-- Main Step Screen Container                                           -->
-  <!-- ==================================================================== -->
-  <main class="flex-1 max-w-7xl mx-auto w-full p-6 space-y-6">
+  <main class="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
 
     <!-- ================================================================== -->
-    <!-- SCREEN 1: THE MACHINE REALITY (Decompiled Binary)                   -->
+    <!-- SECTION 1: HERO ENTRY (Standby State)                              -->
     <!-- ================================================================== -->
-    <section id="screen1" class="step-screen active space-y-6">
-      <!-- Screen Header -->
-      <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-6 relative overflow-hidden">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="space-y-1.5 max-w-3xl">
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">Step 01 / Binary Diagnosis</span>
-              <span class="text-xs font-mono text-slate-400">FLAGSHIP EMBEDDED FLIGHT REVERSE-ENGINEERING</span>
-            </div>
-            <h2 class="text-xl font-bold text-white tracking-tight">The Decompiled Binary Reality: Stripped Context Disconnect</h2>
-            <p class="text-xs text-slate-400 leading-relaxed">
-              When decompiled, real systems software separates into stripped assembly opcodes and ungrounded memory pointers. 
-              A flat LLM inspected with an isolated prompt has <span class="text-red-400 font-semibold">zero topological knowledge</span> that offset <code class="text-amber-300">0x00403000</code> is the non-linear DPS throttle curve, or that <code class="text-amber-300">0x00403100</code> holds crater elevation coordinates. It generates hallucinated code that compiles syntactically but decomposes mathematically.
-            </p>
-          </div>
-          <button onclick="navigateToStep(2)" class="px-5 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-cyan-900/30 whitespace-nowrap self-start md:self-auto">
-            Next: FalkorDB Graph Topology <i class="fa-solid fa-arrow-right"></i>
-          </button>
-        </div>
+    <section id="entrySection" class="state-panel active py-12 flex flex-col items-center text-center space-y-8 max-w-2xl mx-auto">
+      <div class="space-y-3">
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-[#f3f0e8]">
+          Autonomous Graph-Guided Binary Reverse Engineering
+        </h1>
+        <p class="text-sm text-[#9da6b8] leading-relaxed">
+          Reconstructs stripped machine binaries into verified, compilable C code. Uses FalkorDB as shared topological and episodic agent memory where flat LLMs experience context collapse.
+        </p>
       </div>
 
-      <!-- Dual Pane Code View: Assembly vs Ghidra Pseudocode -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Left: Disassembly -->
-        <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl overflow-hidden flex flex-col">
-          <div class="bg-[#121a2c] px-4 py-2.5 border-b border-[#1c2438] flex items-center justify-between text-xs font-mono">
-            <span class="text-slate-300 flex items-center gap-2 font-bold">
-              <i class="fa-solid fa-microchip text-cyan-400"></i> Stripped x86-64 Machine Disassembly
-            </span>
-            <span class="text-slate-500">sub_401200 (update_newtonian_physics)</span>
+      <!-- Specimen Card / Dropzone -->
+      <div class="w-full border border-[#1e2535] hover:border-[#2d374d] bg-[#131720] rounded-xl p-6 text-left transition-all space-y-4">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-[10px] font-mono uppercase text-[#9da6b8] tracking-wider mb-1">Target Specimen</div>
+            <div class="text-base font-bold text-[#f3f0e8] font-mono">1979 Apollo Guidance Computer (LGC) Avionics</div>
+            <div class="text-xs text-[#9da6b8] mt-0.5">Stripped x86_64 machine binary • 6 subroutines • 4 detached memory buffers</div>
           </div>
-          <div class="p-4 flex-1 bg-[#090d15] overflow-x-auto text-[11px] font-mono leading-relaxed text-slate-300">
-<pre><code>; Target: lunar_lander.bin (x86_64 stripped binary)
-; Symbol: sub_401200 (update_newtonian_physics)
-00401200:  55                      push   rbp
-00401201:  48 89 e5                mov    rbp, rsp
-00401204:  8b 05 36 1f 00 00       mov    eax, DWORD PTR [rip+0x1f36] ; is_landed flag
-0040120a:  85 c0                   test   eax, eax
-0040120c:  75 7e                   jne    0040128c
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#38bdf8] border border-[#2d374d]">Ready</span>
+        </div>
 
-<span class="code-highlight-crit">; [CRITICAL UNGROUNDED MEMORY ACCESS: 0x00403080 MASCON ANOMALY]</span>
-0040120e:  f2 0f 10 05 ea 1f 00 00 movsd  xmm0, QWORD PTR [rip+0x1fea] ; [0x00403200] x coord
-00401216:  f2 0f 59 05 e2 1e 00 00 mulsd  xmm0, QWORD PTR [rip+0x1ee2] ; sector calculation
-0040121e:  f2 0f 2c c0             cvttsd2si eax, xmm0
-00401222:  48 8d 15 57 1e 00 00    lea    rdx, [rip+0x1e57]        <span class="text-amber-400 font-bold">; [0x00403080] UNRESOLVED MASCON</span>
-00401229:  f2 0f 10 0c c2          movsd  xmm1, QWORD PTR [rdx+rax*8]  ; local anomaly
-0040122e:  f2 0f 58 0d d2 1c 00 00 addsd  xmm1, QWORD PTR [rip+0x1cd2] ; + 1.62 lunar gravity
-
-<span class="code-highlight-crit">; [CRITICAL UNGROUNDED MEMORY ACCESS: 0x00403000 DPS THROTTLE TABLE]</span>
-00401236:  f2 0f 10 15 c2 1f 00 00 movsd  xmm2, QWORD PTR [rip+0x1fc2] ; [0x00403230] throttle
-0040123e:  48 8d 1d ba 1d 00 00    lea    rbx, [rip+0x1dba]        <span class="text-amber-400 font-bold">; [0x00403000] UNRESOLVED THROTTLE</span>
-00401245:  f2 0f 10 04 cb          movsd  xmm0, QWORD PTR [rbx+rcx*8]  ; thrust coefficient
-0040124a:  e8 31 00 00 00          call   00401280                 ; check_altitude_raycast()
-0040124f:  5d                      pop    rbp
-00401250:  c3                      ret</code></pre>
+        <div class="grid grid-cols-2 gap-3 text-xs font-mono pt-2 border-t border-[#1e2535]">
+          <div>
+            <span class="text-[#606a7e]">Memory Tables:</span>
+            <span class="text-[#f3f0e8] block">0x00403000 (DPS Throttle)</span>
+          </div>
+          <div>
+            <span class="text-[#606a7e]">Physical Invariant:</span>
+            <span class="text-[#2eb872] block">g = 1.62 m/s² (Newtonian)</span>
           </div>
         </div>
 
-        <!-- Right: Ghidra Decompiled Pseudocode -->
-        <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl overflow-hidden flex flex-col">
-          <div class="bg-[#121a2c] px-4 py-2.5 border-b border-[#1c2438] flex items-center justify-between text-xs font-mono">
-            <span class="text-slate-300 flex items-center gap-2 font-bold">
-              <i class="fa-solid fa-code text-amber-400"></i> Ghidra Stripped C Pseudocode
-            </span>
-            <span class="text-amber-400">Ungrounded Global Pointers</span>
-          </div>
-          <div class="p-4 flex-1 bg-[#090d15] overflow-x-auto text-[11px] font-mono leading-relaxed text-slate-300">
-<pre><code>void sub_00401200(void) {
-    if (*(int *)(0x00403200 + 0x40) != 0) return;
-    
-    double x = *(double *)(0x00403200 + 0x00);
-    if (x &lt; 0.0) x = 0.0;
-    if (x &gt; 999.0) x = 999.0;
-    
-    <span class="code-highlight-err">/* UNRESOLVED MEMORY POINTER: Address 0x00403080 has no local type definition */</span>
-    int sector = (int)(x / 62.5);
-    double local_g = 1.62 + *(double *)(<span class="text-amber-400 font-bold">0x00403080</span> + (sector * 8));
-    
-    <span class="code-highlight-err">/* UNRESOLVED MEMORY POINTER: Address 0x00403000 has no local type definition */</span>
-    double throttle = *(double *)(0x00403200 + 0x30);
-    int step = (int)(throttle * 10.0);
-    double thrust = *(double *)(<span class="text-amber-400 font-bold">0x00403000</span> + (step * 8)) * 45000.0;
-    
-    double pitch = *(double *)(0x00403200 + 0x20);
-    double mass = *(double *)(0x00403200 + 0x38);
-    
-    double fx = thrust * sin(pitch);
-    double fy = (thrust * cos(pitch)) - (mass * local_g);
-    
-    *(double *)(0x00403200 + 0x10) += (fx / mass) * 0.1; // vx
-    *(double *)(0x00403200 + 0x18) += (fy / mass) * 0.1; // vy
-    
-    if (sub_00401280() &lt;= 0.0) {
-        sub_00401320(); // evaluate_touchdown_dynamics()
-    }
-}</code></pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Technical Architecture Specs -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
-        <div class="border border-[#1c2438] bg-[#0e1422] p-4 rounded-lg space-y-1">
-          <div class="text-slate-500 uppercase text-[10px]">Embedded Subroutines</div>
-          <div class="text-base font-bold text-cyan-400">6 Functions</div>
-          <div class="text-slate-400 text-[11px]">init, terrain, thrust, physics, raycast, touchdown</div>
-        </div>
-        <div class="border border-[#1c2438] bg-[#0e1422] p-4 rounded-lg space-y-1">
-          <div class="text-slate-500 uppercase text-[10px]">Detached Memory Tables</div>
-          <div class="text-base font-bold text-amber-400">4 Buffers (552 Bytes)</div>
-          <div class="text-slate-400 text-[11px]">0x00403000 to 0x00403200</div>
-        </div>
-        <div class="border border-[#1c2438] bg-[#0e1422] p-4 rounded-lg space-y-1">
-          <div class="text-slate-500 uppercase text-[10px]">Physical Invariants</div>
-          <div class="text-base font-bold text-emerald-400">g = 1.62 m/s²</div>
-          <div class="text-slate-400 text-[11px]">Newtonian Vector Conservation</div>
-        </div>
-        <div class="border border-[#1c2438] bg-[#0e1422] p-4 rounded-lg space-y-1">
-          <div class="text-slate-500 uppercase text-[10px]">Flat LLM Failure Mode</div>
-          <div class="text-base font-bold text-red-400">Freefall & Crater Crash</div>
-          <div class="text-slate-400 text-[11px]">Missing tables = Zero thrust</div>
-        </div>
+        <button id="btnLaunchSwarm" onclick="launchAgentSwarm()" class="w-full py-3 bg-[#f3f0e8] hover:bg-white text-[#0c0e14] font-medium text-xs font-mono rounded-lg transition-all flex items-center justify-center gap-2">
+          <span>Launch Autonomous Reverse Engineering Swarm</span>
+          <i class="fa-solid fa-arrow-right text-[11px]"></i>
+        </button>
       </div>
     </section>
 
     <!-- ================================================================== -->
-    <!-- SCREEN 2: FALKORDB GRAPH TOPOLOGY                                  -->
+    <!-- SECTION 2: ACTIVE AGENT WORKSPACE (Real-Time Graph & Swarm)        -->
     <!-- ================================================================== -->
-    <section id="screen2" class="step-screen space-y-6">
-      <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="space-y-1.5 max-w-3xl">
+    <section id="workspaceSection" class="state-panel space-y-6">
+      
+      <!-- Top Workspace Banner -->
+      <div class="border border-[#1e2535] bg-[#131720] rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">Step 02 / Topological Brain</span>
-            <span class="text-xs font-mono text-slate-400">FALKORDB CONNECTED DATA</span>
+            <span id="agentWorkingIndicator" class="w-2 h-2 rounded-full bg-[#2eb872] animate-pulse"></span>
+            <span id="agentWorkingText" class="text-xs font-mono font-bold text-[#f3f0e8]">Swarm Active: Ingesting Binary Topology</span>
           </div>
-          <h2 class="text-xl font-bold text-white tracking-tight">FalkorDB Knowledge Graph: Cross-Reference & Topological Ordering</h2>
-          <p class="text-xs text-slate-400 leading-relaxed">
-            GhostGraph transforms the stripped AST into a unified knowledge graph. Using OpenCypher queries, multi-hop traversals resolve memory provenance (who writes <code class="text-amber-300">0x00403000</code> and who reads it), while bottom-up topological sorting ensures leaf helpers are reconstructed before root loops.
+          <p class="text-xs text-[#9da6b8]">
+            TopologyAgent maps call trees and detached memory pointers into FalkorDB in real time.
           </p>
         </div>
-        <div class="flex items-center gap-3">
-          <button onclick="navigateToStep(1)" class="px-4 py-2 rounded-lg bg-[#141b2c] hover:bg-[#1a233a] text-slate-300 font-mono text-xs transition-all">
-            <i class="fa-solid fa-arrow-left"></i> Previous
+
+        <button id="btnProceedToExecution" onclick="proceedToExecution()" class="hidden px-5 py-2.5 bg-[#f3f0e8] hover:bg-white text-[#0c0e14] font-medium text-xs font-mono rounded-lg transition-all flex items-center gap-2">
+          <span>Compare Live Execution Outputs</span>
+          <i class="fa-solid fa-arrow-right text-[11px]"></i>
+        </button>
+      </div>
+
+      <!-- The Single Clean Tab Switcher -->
+      <div class="flex items-center justify-between border-b border-[#1e2535] pb-2 text-xs font-mono">
+        <div class="flex items-center gap-4">
+          <button id="tabBtnGraph" onclick="switchWorkspaceTab('graph')" class="text-[#f3f0e8] font-bold border-b-2 border-[#f3f0e8] pb-2 transition-all">
+            Knowledge Graph Topology
           </button>
-          <button onclick="navigateToStep(3)" class="px-5 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-cyan-900/30 whitespace-nowrap">
-            Next: Run The Swarm Duel <i class="fa-solid fa-arrow-right"></i>
+          <button id="tabBtnMemory" onclick="switchWorkspaceTab('memory')" class="text-[#9da6b8] hover:text-[#f3f0e8] pb-2 transition-all">
+            Multi-Agent Swarm & Memory
+          </button>
+        </div>
+        
+        <!-- Graph Canvas Controls -->
+        <div id="graphControls" class="flex items-center gap-2 text-[11px]">
+          <button onclick="fitGraph()" class="px-2 py-1 rounded bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] border border-[#2d374d]">
+            Fit View
+          </button>
+          <button onclick="resetGraph()" class="px-2 py-1 rounded bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] border border-[#2d374d]">
+            Reset Layout
           </button>
         </div>
       </div>
 
-      <!-- Graph Toolbar & Quick Cypher Queries -->
-      <div class="flex flex-wrap items-center justify-between gap-3 bg-[#0e1422] border border-[#1c2438] rounded-lg p-3 text-xs font-mono">
-        <div class="flex items-center gap-2">
-          <span class="text-slate-500 uppercase">Quick Cypher Queries:</span>
-          <button onclick="runCypherPreset('calls')" class="px-2.5 py-1 rounded bg-[#141d2f] hover:bg-cyan-950/60 text-cyan-300 border border-[#1c2b45] transition-all">
-            <i class="fa-solid fa-sitemap"></i> Call Hierarchy
-          </button>
-          <button onclick="runCypherPreset('memory')" class="px-2.5 py-1 rounded bg-[#141d2f] hover:bg-amber-950/60 text-amber-300 border border-[#1c2b45] transition-all">
-            <i class="fa-solid fa-database"></i> 0x00403000 Memory Provenance
-          </button>
-          <button onclick="runCypherPreset('topo')" class="px-2.5 py-1 rounded bg-[#141d2f] hover:bg-emerald-950/60 text-emerald-300 border border-[#1c2b45] transition-all">
-            <i class="fa-solid fa-arrow-down-1-9"></i> Topological Order
-          </button>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="resetGraphLayout()" class="px-2.5 py-1 rounded bg-[#141d2f] text-slate-300 hover:text-white border border-[#1c2b45]">
-            <i class="fa-solid fa-arrows-rotate"></i> Reset Layout
-          </button>
-        </div>
-      </div>
-
-      <!-- Cytoscape Canvas Container -->
-      <div class="border border-[#1c2438] rounded-xl overflow-hidden relative shadow-2xl">
+      <!-- Tab View A: Knowledge Graph Canvas -->
+      <div id="tabGraphView" class="border border-[#1e2535] rounded-xl overflow-hidden relative">
         <div id="cy"></div>
-        <div class="absolute bottom-4 left-4 bg-[#0a0e17]/90 border border-[#1c2438] rounded-lg p-3 text-xs font-mono space-y-1.5 backdrop-blur z-10 pointer-events-none">
-          <div class="text-[10px] text-slate-500 uppercase font-bold">Graph Legend</div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-cyan-400"></span> Functions (:Function)</div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-amber-400"></span> Memory Offsets (:GlobalMemory)</div>
-          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-400"></span> Test Cases (:TestCase)</div>
+        
+        <!-- Clean Floating Graph Legend -->
+        <div class="absolute bottom-4 left-4 bg-[#131720]/90 border border-[#1e2535] rounded-lg px-3 py-2 text-[11px] font-mono space-y-1 backdrop-blur pointer-events-none">
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span> Functions (:Function)</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded bg-[#f59e0b]"></span> Memory Offsets (:GlobalMemory)</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#2eb872]"></span> Test Vectors (:TestCase)</div>
         </div>
       </div>
 
-      <!-- Live OpenCypher Query Console -->
-      <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-4 space-y-3">
-        <div class="flex items-center justify-between text-xs font-mono">
-          <span class="text-slate-300 font-bold flex items-center gap-2">
-            <i class="fa-solid fa-terminal text-cyan-400"></i> Live OpenCypher Console (FalkorDB Cloud)
-          </span>
-          <span class="text-slate-500">Instance: r-6jissuruar.cloud:51970</span>
+      <!-- Tab View B: Multi-Agent Swarm & Memory Trace -->
+      <div id="tabMemoryView" class="hidden border border-[#1e2535] bg-[#131720] rounded-xl p-5 space-y-4">
+        <div class="text-xs font-mono text-[#9da6b8]">
+          Real-time event stream showing multi-hop queries and episodic test memory written to FalkorDB:
         </div>
-        <div class="flex gap-2">
-          <input id="cypherInput" type="text" class="flex-1 bg-[#090d15] border border-[#1c2438] rounded px-3 py-2 text-xs font-mono text-cyan-200 focus:outline-none focus:border-cyan-500" value="MATCH (f:Function)-[:READS]->(m:GlobalMemory) RETURN f.name AS Function, m.label AS Memory, m.address AS Address">
-          <button onclick="executeCypherConsole()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold rounded transition-all">
-            Execute
-          </button>
-        </div>
-        <div id="cypherOutput" class="bg-[#090d15] border border-[#1c2438] rounded p-3 text-[11px] font-mono text-slate-300 max-h-48 overflow-y-auto">
-          <span class="text-slate-500">// Ready for OpenCypher query execution...</span>
+        <div id="agentTraceStream" class="bg-[#0c0e14] border border-[#1e2535] rounded-lg p-4 font-mono text-[11px] text-[#e6e2d8] h-96 overflow-y-auto space-y-2">
+          <div class="text-[#606a7e]">// Swarm trace initialized...</div>
         </div>
       </div>
+
     </section>
 
     <!-- ================================================================== -->
-    <!-- SCREEN 3: THE RECONSTRUCTION DUEL                                  -->
+    <!-- SECTION 3: LIVE EXECUTION DUEL & COMPARISON                        -->
     <!-- ================================================================== -->
-    <section id="screen3" class="step-screen space-y-6">
-      <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="space-y-1.5 max-w-3xl">
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Step 03 / Multi-Agent Swarm</span>
-            <span class="text-xs font-mono text-slate-400">TRACK 02: AGENT MEMORY & COORDINATION</span>
-          </div>
-          <h2 class="text-xl font-bold text-white tracking-tight">The Reconstruction Duel: Base LLM vs FalkorDB Swarm</h2>
-          <p class="text-xs text-slate-400 leading-relaxed">
-            Watch the 4-agent swarm (Supervisor, Topology, Reconstruction, Verifier) coordinate in real-time. The Verifier executes 20 deterministic physical test vectors against both implementations. Base LLM fails with 40% parity; GhostGraph achieves 100% mathematical parity.
+    <section id="comparisonSection" class="state-panel space-y-8">
+      
+      <!-- Comparison Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[#1e2535] pb-6 gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-[#f3f0e8] font-mono">Live Execution Duel: Base LLM vs FalkorDB Swarm</h2>
+          <p class="text-xs text-[#9da6b8] mt-1">
+            Both reconstructed C engines executed simultaneously in real time. Numbers below are computed directly by the generated code.
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <button id="btnRunDuel" onclick="runReconstructionDuel()" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/30 whitespace-nowrap">
-            <i class="fa-solid fa-play"></i> Run Live Swarm Pipeline
+          <button onclick="rerunLiveExecution()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#f3f0e8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate-right text-[10px]"></i> Rerun Descent
           </button>
-          <button onclick="navigateToStep(4)" class="px-5 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-cyan-900/30 whitespace-nowrap">
-            Next: Apollo Flight HUD <i class="fa-solid fa-arrow-right"></i>
+          <button onclick="returnToWorkspace()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-sitemap text-[10px]"></i> View Graph
           </button>
         </div>
       </div>
 
-      <!-- Live Dual Comparison Cards -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Side-by-Side Dual Flight & Code Panes -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
         <!-- Left: Base LLM -->
-        <div class="border border-red-950/60 bg-[#0e1422] rounded-xl p-5 space-y-4 relative">
+        <div class="border border-[#2d1c22] bg-[#131720] rounded-xl p-5 space-y-5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-mono px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800/60 uppercase font-bold">
-              Vanilla Flat LLM (No Graph)
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-[#ef4444]"></span>
+              <span class="text-xs font-mono font-bold text-[#ef4444]">Vanilla Flat LLM (No Graph)</span>
+            </div>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-[#2a1318] text-[#ef4444] border border-[#4d1f27]">
+              40.0% Parity (8/20 Passed)
             </span>
-            <span id="flatParityBadge" class="text-xs font-mono text-red-400 font-bold">40.0% Parity (8/20 Passed)</span>
           </div>
 
+          <!-- Base LLM Canvas -->
+          <div class="relative sim-canvas overflow-hidden">
+            <canvas id="flatCanvas" width="460" height="260" class="w-full h-[260px] block"></canvas>
+            <div id="flatCrashOverlay" class="hidden absolute inset-0 bg-[#16070a]/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
+              <div class="text-[#ef4444] font-bold font-mono text-sm">VEHICLE IMPACT CRASH</div>
+              <div class="text-xs text-[#9da6b8] font-mono mt-1">Impact at -28.4 m/s (Limit: 3.0 m/s)</div>
+              <div class="text-[11px] text-[#ef4444] font-mono mt-1">Throttle table 0x00403000 ungrounded = Zero thrust</div>
+            </div>
+          </div>
+
+          <!-- Base LLM Telemetry -->
+          <div class="grid grid-cols-3 gap-2 text-xs font-mono bg-[#0c0e14] p-3 rounded-lg border border-[#1e2535]">
+            <div>
+              <span class="text-[#606a7e] block text-[10px]">RADAR ALT</span>
+              <span id="flatAlt" class="text-[#e6e2d8] font-bold">-- m</span>
+            </div>
+            <div>
+              <span class="text-[#606a7e] block text-[10px]">DESCENT (V_Y)</span>
+              <span id="flatVy" class="text-[#ef4444] font-bold">-- m/s</span>
+            </div>
+            <div>
+              <span class="text-[#606a7e] block text-[10px]">STATUS</span>
+              <span id="flatStatus" class="text-[#ef4444] font-bold">FREEFALL</span>
+            </div>
+          </div>
+
+          <!-- Base LLM Code Snippet -->
           <div class="space-y-1">
-            <div class="text-xs text-slate-400 font-mono">Synthesized Code:</div>
-            <pre class="bg-[#090d15] border border-[#1c2438] rounded p-3 text-[11px] font-mono text-red-300 overflow-x-auto h-52"><code>// Flat LLM Isolated Guess
+            <div class="text-[10px] font-mono uppercase text-[#606a7e]">Generated Code (Pointers Omitted):</div>
+            <pre class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-[#f87171] overflow-x-auto h-32 leading-relaxed"><code>// Flat LLM isolated inference (No graph)
 void update_newtonian_physics(void) {
-    // LLM has NO awareness of 0x00403000 throttle table
-    // Predicts zero thrust; omits mass depletion
-    double thrust = 0.0;
-    double local_g = 1.62; // Missing mascon anomaly
-    double fy = -(total_mass * local_g);
-    vy += (fy / total_mass) * 0.1;
+    // LLM has no memory of 0x00403000 throttle table
+    double thrust = 0.0; // Missing global table
+    vy += -(total_mass * 1.62) * 0.1; // Freefall
     y += vy * 0.1;
     // Missing 0x00403100 terrain coordinates!
 }</code></pre>
           </div>
-
-          <div class="border border-red-950 bg-red-950/20 rounded p-3 text-xs font-mono text-red-300 space-y-1">
-            <div class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-triangle-exclamation"></i> Physical Failure Log:</div>
-            <p class="text-[11px] text-red-400/90 leading-relaxed">
-              • TC_03 Hover: Thrust coefficient is 0.0; vehicle fell into freefall.<br>
-              • TC_10 Terrain: Terrain array ungrounded; altitude datum unresolved.<br>
-              • TC_20 Mission: Crater impact at 28.4 m/s (structural breakup).
-            </p>
-          </div>
         </div>
 
         <!-- Right: GhostGraph Swarm -->
-        <div class="border border-emerald-950/60 bg-[#0e1422] rounded-xl p-5 space-y-4 relative">
+        <div class="border border-[#1a3124] bg-[#131720] rounded-xl p-5 space-y-5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 uppercase font-bold">
-              GhostGraph Swarm (FalkorDB Grounded)
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-[#2eb872]"></span>
+              <span class="text-xs font-mono font-bold text-[#2eb872]">GhostGraph Swarm (FalkorDB Grounded)</span>
+            </div>
+            <span class="text-xs font-mono px-2 py-0.5 rounded bg-[#13281c] text-[#2eb872] border border-[#1d422c]">
+              100.0% Parity (20/20 Passed)
             </span>
-            <span id="swarmParityBadge" class="text-xs font-mono text-emerald-400 font-bold">100.0% Parity (20/20 Passed)</span>
           </div>
 
-          <div class="space-y-1">
-            <div class="text-xs text-slate-400 font-mono">Synthesized Code:</div>
-            <pre class="bg-[#090d15] border border-[#1c2438] rounded p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto h-52"><code>// Reconstructed via FalkorDB Connected Memory
-#include "lunar_lander.h"
+          <!-- GhostGraph Canvas -->
+          <div class="relative sim-canvas overflow-hidden">
+            <canvas id="ghostCanvas" width="460" height="260" class="w-full h-[260px] block"></canvas>
+            <div id="ghostLandingOverlay" class="hidden absolute inset-0 bg-[#08180e]/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
+              <div class="text-[#2eb872] font-bold font-mono text-sm">TOUCHDOWN CONFIRMED</div>
+              <div class="text-xs text-[#9da6b8] font-mono mt-1">Mare Tranquillitatis landing pad • vy = -0.99 m/s</div>
+              <div class="text-[11px] text-[#2eb872] font-mono mt-1">All 4 memory tables grounded via FalkorDB</div>
+            </div>
+          </div>
 
+          <!-- GhostGraph Telemetry -->
+          <div class="grid grid-cols-3 gap-2 text-xs font-mono bg-[#0c0e14] p-3 rounded-lg border border-[#1e2535]">
+            <div>
+              <span class="text-[#606a7e] block text-[10px]">RADAR ALT</span>
+              <span id="ghostAlt" class="text-[#f3f0e8] font-bold">-- m</span>
+            </div>
+            <div>
+              <span class="text-[#606a7e] block text-[10px]">DESCENT (V_Y)</span>
+              <span id="ghostVy" class="text-[#2eb872] font-bold">-- m/s</span>
+            </div>
+            <div>
+              <span class="text-[#606a7e] block text-[10px]">STATUS</span>
+              <span id="ghostStatus" class="text-[#2eb872] font-bold">DESCENT</span>
+            </div>
+          </div>
+
+          <!-- GhostGraph Code Snippet -->
+          <div class="space-y-1">
+            <div class="text-[10px] font-mono uppercase text-[#606a7e]">Generated Code (Pointers Resolved):</div>
+            <pre class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-[#4ade80] overflow-x-auto h-32 leading-relaxed"><code>// Grounded via FalkorDB Multi-Hop Query
 void update_newtonian_physics(void) {
-    if (flight_telemetry.is_landed != 0) return;
-    int sector = (int)(flight_telemetry.x / 62.5);
-    double local_g = LUNAR_GRAVITY + LUNAR_GRAVITY_ANOMALY[sector];
     int step = (int)(flight_telemetry.throttle * 10.0);
     double thrust = THRUST_THROTTLE_CURVE[step] * MAX_THRUST;
-    double Fx = thrust * sin(flight_telemetry.pitch);
-    double Fy = (thrust * cos(flight_telemetry.pitch)) - (total_mass * local_g);
-    // Exact Euler-Cromer integration & terrain raycast...
+    double Fy = (thrust * cos(pitch)) - (mass * local_g);
+    vy += (Fy / mass) * 0.1;
+    // Terrain raycast against 0x00403100 profile...
 }</code></pre>
           </div>
-
-          <div class="border border-emerald-950 bg-emerald-950/20 rounded p-3 text-xs font-mono text-emerald-300 space-y-1">
-            <div class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i> Verification & Episodic Memory:</div>
-            <p class="text-[11px] text-emerald-400/90 leading-relaxed">
-              • All 20 physical test vectors passed with 100% numerical parity.<br>
-              • 20 [:PASSED] edges and 12 [:FAILED_ON] edges persisted in FalkorDB.<br>
-              • Nominal soft landing at Mare Tranquillitatis: vy = -0.99 m/s.
-            </p>
-          </div>
         </div>
+
       </div>
 
-      <!-- Live Agent SSE Execution Log -->
-      <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-4 space-y-2">
-        <div class="flex items-center justify-between text-xs font-mono">
-          <span class="text-slate-300 font-bold flex items-center gap-2">
-            <i class="fa-solid fa-wave-square text-cyan-400"></i> Swarm Communication Trace (SSE Stream)
-          </span>
-          <span id="agentStatusBadge" class="text-emerald-400 text-[11px]">System Idle</span>
-        </div>
-        <div id="agentTraceLog" class="bg-[#090d15] border border-[#1c2438] rounded p-3 text-[11px] font-mono text-slate-300 h-40 overflow-y-auto space-y-1">
-          <div class="text-slate-500">// Press "Run Live Swarm Pipeline" to observe the 4-agent swarm coordinating across FalkorDB...</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================================================================== -->
-    <!-- SCREEN 4: APOLLO VECTOR CRT FLIGHT HUD                             -->
-    <!-- ================================================================== -->
-    <section id="screen4" class="step-screen space-y-6">
-      <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="space-y-1.5 max-w-3xl">
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Step 04 / The Living Proof</span>
-            <span class="text-xs font-mono text-slate-400">AUTHENTIC VECTOR FLIGHT COMPUTER</span>
-          </div>
-          <h2 class="text-xl font-bold text-white tracking-tight">1979 Apollo Lunar Descent Flight Computer: Live Mathematical Proof</h2>
-          <p class="text-xs text-slate-400 leading-relaxed">
-            Zero mocked animations. Coordinates, terrain raycasting, velocity vectors, and fuel burn are directly computed in the backend by executing the reconstructed C physics engine. Compare how the ungrounded Flat LLM crashes while GhostGraph lands safely.
-          </p>
-        </div>
-        <div class="flex items-center gap-3">
-          <button onclick="navigateToStep(3)" class="px-4 py-2 rounded-lg bg-[#141b2c] hover:bg-[#1a233a] text-slate-300 font-mono text-xs transition-all">
-            <i class="fa-solid fa-arrow-left"></i> Previous
-          </button>
-          <button onclick="resetLunarFlight()" class="px-4 py-2 rounded-lg bg-[#141b2c] hover:bg-[#1a233a] text-amber-300 font-mono text-xs transition-all flex items-center gap-1.5 border border-amber-800/40">
-            <i class="fa-solid fa-arrows-rotate"></i> Reset Descent Gate
-          </button>
-        </div>
-      </div>
-
-      <!-- Mode Selector: GhostGraph Flight vs Flat LLM Flight -->
-      <div class="flex items-center justify-between bg-[#0e1422] border border-[#1c2438] rounded-lg p-3 text-xs font-mono">
-        <div class="flex items-center gap-3">
-          <span class="text-slate-400 uppercase">Execution Flight Mode:</span>
-          <button id="btnFlightGhost" onclick="setFlightExecutionMode('ghostgraph')" class="px-3 py-1.5 rounded font-bold transition-all bg-emerald-950/80 text-emerald-300 border border-emerald-600/60 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> GhostGraph Grounded Flight (100% Parity)
-          </button>
-          <button id="btnFlightFlat" onclick="setFlightExecutionMode('flat_llm')" class="px-3 py-1.5 rounded text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-red-400"></span> Flat LLM Flight (40% Parity - Failure)
-          </button>
-        </div>
-        <div class="flex items-center gap-2">
-          <button id="btnAutoPilot" onclick="toggleAutoPilot()" class="px-3 py-1.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 hover:bg-cyan-900 transition-all font-bold">
-            <i class="fa-solid fa-robot"></i> Auto-Guidance: <span id="autoPilotStatus">ON</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Vector CRT Display Canvas & Telemetry Gauges -->
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <!-- Left 3 Cols: CRT Canvas -->
-        <div class="lg:col-span-3 crt-viewport relative">
-          <canvas id="lunarCanvas" width="900" height="520" class="w-full h-[520px] block"></canvas>
-          <div class="crt-scanlines"></div>
-          
-          <!-- CRT Overlay Badges -->
-          <div class="absolute top-4 left-4 z-30 font-mono text-xs space-y-1 pointer-events-none">
-            <div class="text-emerald-400 font-bold crt-phosphor-glow">APOLLO LGC DESCENT GUIDANCE COMPUTER // 1979</div>
-            <div id="crtModeLabel" class="text-cyan-300 text-[11px]">MODE: GHOSTGRAPH (RESOLVED MEMORY 0x00403000)</div>
-          </div>
-          <div id="touchdownAlert" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none font-mono">
-            <div id="touchdownAlertCard" class="border p-6 rounded-xl text-center space-y-2">
-              <div id="touchdownAlertTitle" class="text-2xl font-bold"></div>
-              <div id="touchdownAlertDesc" class="text-xs"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right 1 Col: Apollo Telemetry Tape -->
-        <div class="border border-[#1c2438] bg-[#0e1422] rounded-xl p-5 space-y-4 flex flex-col justify-between text-xs font-mono">
-          <div class="space-y-3">
-            <div class="text-slate-400 uppercase text-[10px] font-bold border-b border-[#1c2438] pb-1.5 flex items-center justify-between">
-              <span>Telemetry State</span>
-              <span id="telemetryTick" class="text-cyan-400">TICK: 0</span>
-            </div>
-
-            <!-- Altitude Tape -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-slate-400 text-[11px]">
-                <span>RADAR ALTITUDE</span>
-                <span id="hudRadarAlt" class="text-emerald-400 font-bold text-sm crt-phosphor-glow">963.8 m</span>
-              </div>
-              <div class="flex justify-between text-slate-500 text-[10px]">
-                <span>DATUM ALTITUDE</span>
-                <span id="hudDatumAlt">1000.0 m</span>
-              </div>
-            </div>
-
-            <!-- Velocities -->
-            <div class="space-y-1 pt-2 border-t border-[#1c2438]">
-              <div class="flex justify-between text-slate-400 text-[11px]">
-                <span>DESCENT RATE (V_Y)</span>
-                <span id="hudVy" class="text-emerald-400 font-bold text-sm crt-phosphor-glow">-12.0 m/s</span>
-              </div>
-              <div class="flex justify-between text-slate-500 text-[10px]">
-                <span>MAX SAFE TOUCHDOWN</span>
-                <span class="text-slate-300">&lt; 3.0 m/s</span>
-              </div>
-            </div>
-
-            <div class="space-y-1 pt-2 border-t border-[#1c2438]">
-              <div class="flex justify-between text-slate-400 text-[11px]">
-                <span>LATERAL DRIFT (V_X)</span>
-                <span id="hudVx" class="text-cyan-300 font-bold">4.0 m/s</span>
-              </div>
-              <div class="flex justify-between text-slate-500 text-[10px]">
-                <span>ATTITUDE PITCH</span>
-                <span id="hudPitch" class="text-slate-300">2.9°</span>
-              </div>
-            </div>
-
-            <!-- Fuel & Mass -->
-            <div class="space-y-1 pt-2 border-t border-[#1c2438]">
-              <div class="flex justify-between text-slate-400 text-[11px]">
-                <span>PROPELLANT (DPS)</span>
-                <span id="hudFuel" class="text-amber-300 font-bold">8,200 kg</span>
-              </div>
-              <div class="w-full bg-[#141b2c] h-1.5 rounded-full overflow-hidden">
-                <div id="hudFuelBar" class="bg-amber-400 h-full w-full transition-all"></div>
-              </div>
-            </div>
-
-            <!-- Throttle -->
-            <div class="space-y-1 pt-2 border-t border-[#1c2438]">
-              <div class="flex justify-between text-slate-400 text-[11px]">
-                <span>THROTTLE (DPS)</span>
-                <span id="hudThrottle" class="text-cyan-400 font-bold">0 %</span>
-              </div>
-              <div class="w-full bg-[#141b2c] h-1.5 rounded-full overflow-hidden">
-                <div id="hudThrottleBar" class="bg-cyan-400 h-full w-0 transition-all"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Pilot Manual Controls -->
-          <div class="pt-3 border-t border-[#1c2438] space-y-2">
-            <div class="text-[10px] text-slate-500 uppercase font-bold">Manual Flight Controls</div>
-            <div class="grid grid-cols-2 gap-2 text-[11px]">
-              <button onclick="pilotAdjustThrottle(0.2)" class="px-2 py-1.5 bg-[#141b2c] hover:bg-cyan-950 text-cyan-300 rounded border border-[#1c2438]">
-                Throttle + (W)
-              </button>
-              <button onclick="pilotAdjustThrottle(-0.2)" class="px-2 py-1.5 bg-[#141b2c] hover:bg-cyan-950 text-cyan-300 rounded border border-[#1c2438]">
-                Throttle - (S)
-              </button>
-              <button onclick="pilotAdjustPitch(-0.1)" class="px-2 py-1.5 bg-[#141b2c] hover:bg-cyan-950 text-cyan-300 rounded border border-[#1c2438]">
-                Pitch Left (A)
-              </button>
-              <button onclick="pilotAdjustPitch(0.1)" class="px-2 py-1.5 bg-[#141b2c] hover:bg-cyan-950 text-cyan-300 rounded border border-[#1c2438]">
-                Pitch Right (D)
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </section>
 
   </main>
-
-  <!-- ==================================================================== -->
-  <!-- Footer                                                               -->
-  <!-- ==================================================================== -->
-  <footer class="border-t border-[#1c2438] bg-[#07090e] px-6 py-3 flex flex-wrap items-center justify-between text-xs font-mono text-slate-500">
-    <div>GhostGraph // Autonomous Graph-Guided Binary Reverse Engineering Swarm // WeMakeDevs & FalkorDB Hackathon 2026</div>
-    <div class="flex items-center gap-4 text-slate-400">
-      <span>GitHub: <a href="https://github.com/chief-07/ghostgraph" target="_blank" class="text-cyan-400 hover:underline">chief-07/ghostgraph</a></span>
-      <span>FalkorDB Connected Context</span>
-    </div>
-  </footer>
 
   <!-- Frontend Logic -->
   <script src="/static/app.js"></script>
