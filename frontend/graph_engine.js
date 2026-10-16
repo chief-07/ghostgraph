@@ -26,24 +26,24 @@ class GhostCanvasGraph {
     this.physicsRunning = true;
     this.simulationTicks = 0;
 
-    // Minimalist Dark Charcoal Palette
+    // Clean White / Slate Palette
     this.colors = {
-      bg: "#0a0b0d",
-      grid: "#14161d",
-      edgeDefault: "#262933",
-      edgeCalls: "#38bdf8",
-      edgeReads: "#f59e0b",
-      edgeWrites: "#f87171",
-      edgeTests: "#22c55e",
-      nodeProgram: "#f5f3ec",
-      nodeFunction: "#38bdf8",
-      nodeMemory: "#f59e0b",
-      nodeTestCase: "#22c55e",
-      nodeVerified: "#22c55e",
-      nodeFailed: "#ef4444",
-      nodeInner: "#121318",
-      text: "#f5f3ec",
-      textMuted: "#8e8b82"
+      bg: "#ffffff",
+      grid: "#f1f5f9",
+      edgeDefault: "#cbd5e1",
+      edgeCalls: "#0284c7",
+      edgeReads: "#d97706",
+      edgeWrites: "#ef4444",
+      edgeTests: "#16a34a",
+      nodeProgram: "#0f172a",
+      nodeFunction: "#0284c7",
+      nodeMemory: "#d97706",
+      nodeTestCase: "#16a34a",
+      nodeVerified: "#16a34a",
+      nodeFailed: "#dc2626",
+      nodeInner: "#ffffff",
+      text: "#1e293b",
+      textMuted: "#64748b"
     };
 
     this.initEvents();
@@ -484,7 +484,7 @@ class GhostCanvasGraph {
 
       // Label Underneath
       ctx.font = "10px monospace";
-      ctx.fillStyle = (node.status === "verified" || node.status === "PASSED") ? "#4ade80" : this.colors.text;
+      ctx.fillStyle = (node.status === "verified" || node.status === "PASSED") ? "#16a34a" : this.colors.text;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(node.label, node.x, node.y + node.radius + 5);

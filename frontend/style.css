@@ -1,25 +1,25 @@
-/* GhostGraph: True Matte Dark Charcoal & Light Cream Theme */
+/* GhostGraph: Clean White Slate & Outfit Sans Theme */
 :root {
-  --bg-main: #0a0b0d;
-  --bg-surface: #111216;
-  --bg-surface-elevated: #16171d;
-  --bg-surface-active: #1f2128;
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #ffffff;
+  --bg-surface-active: #f1f5f9;
   
-  --border-subtle: #1c1e24;
-  --border-strong: #262832;
-  --border-focus: #3d404d;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus: #94a3b8;
   
-  --text-cream: #f5f3ec;
-  --text-primary: #eae6df;
-  --text-secondary: #a3a099;
-  --text-dim: #6e6b63;
+  --text-cream: #0f172a;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-dim: #94a3b8;
   
-  --accent-sage: #22c55e;
-  --accent-coral: #ef4444;
-  --accent-amber: #f59e0b;
-  --accent-cyan: #38bdf8;
+  --accent-sage: #16a34a;
+  --accent-coral: #dc2626;
+  --accent-amber: #d97706;
+  --accent-cyan: #0284c7;
   
-  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, monospace;
 }
 
@@ -40,18 +40,18 @@ html, body {
 
 /* Minimalist Scrollbars */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: var(--bg-main);
 }
 ::-webkit-scrollbar-thumb {
-  background: #22242c;
-  border-radius: 2px;
+  background: #cbd5e1;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #333642;
+  background: #94a3b8;
 }
 
 /* Typography */
@@ -83,10 +83,11 @@ pre, code {
 .graph-container {
   width: 100%;
   height: 480px;
-  background-color: var(--bg-main);
+  background-color: #ffffff;
   position: relative;
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid var(--border-subtle);
 }
 #customGraphCanvas {
   width: 100%;
@@ -100,7 +101,7 @@ pre, code {
 
 /* Simulation Canvas Viewport */
 .sim-canvas {
-  background-color: #07080a;
+  background-color: #f8fafc;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
 }

@@ -114,11 +114,11 @@ function switchCodeView(view) {
   const btnRecon = document.getElementById("btnTabRecon");
 
   if (view === "disasm") {
-    btnDisasm.className = "px-2 py-0.5 rounded bg-[#16171d] text-[#f5f3ec] border border-[#262832]";
-    btnRecon.className = "px-2 py-0.5 rounded text-[#a3a099] hover:text-[#f5f3ec]";
+    btnDisasm.className = "px-2 py-0.5 rounded bg-[#0f172a] text-white border border-[#0f172a] font-medium transition-all";
+    btnRecon.className = "px-2 py-0.5 rounded text-[#64748b] hover:text-[#0f172a] border border-transparent font-medium transition-all";
   } else {
-    btnRecon.className = "px-2 py-0.5 rounded bg-[#16171d] text-[#f5f3ec] border border-[#262832]";
-    btnDisasm.className = "px-2 py-0.5 rounded text-[#a3a099] hover:text-[#f5f3ec]";
+    btnRecon.className = "px-2 py-0.5 rounded bg-[#0f172a] text-white border border-[#0f172a] font-medium transition-all";
+    btnDisasm.className = "px-2 py-0.5 rounded text-[#64748b] hover:text-[#0f172a] border border-transparent font-medium transition-all";
   }
 
   updateCodeView();
@@ -133,14 +133,14 @@ function updateCodeView() {
 
   const cfg = currentTargetData.config;
   if (activeCodeView === "disasm") {
-    codeEl.innerHTML = `<span class="text-[#a3a099]">// TARGET ENTRYPOINT: ${cfg.primary_fn}</span>\n` +
-      `<span class="text-[#f59e0b]">// DETACHED GLOBAL POINTER: ${cfg.critical_mem}</span>\n\n` +
+    codeEl.innerHTML = `<span class="text-[#64748b]">// TARGET ENTRYPOINT: ${cfg.primary_fn}</span>\n` +
+      `<span class="text-[#d97706]">// DETACHED GLOBAL POINTER: ${cfg.critical_mem}</span>\n\n` +
       escapeHtml(cfg.decompiled_snippet);
   } else {
     if (!liveReconstructedCode) {
-      codeEl.innerHTML = `<span class="text-[#f59e0b] animate-pulse">// Reconstructor Agent awaiting live memory resolution from FalkorDB...</span>`;
+      codeEl.innerHTML = `<span class="text-[#d97706] animate-pulse">// Reconstructor Agent awaiting live memory resolution from FalkorDB...</span>`;
     } else {
-      codeEl.innerHTML = `<span class="text-[#22c55e]">// Synthesized C Code (Resolved via FalkorDB Graph Memory)</span>\n\n` +
+      codeEl.innerHTML = `<span class="text-[#16a34a] font-semibold">// Synthesized C Code (Resolved via FalkorDB Graph Memory)</span>\n\n` +
         escapeHtml(liveReconstructedCode);
     }
   }
@@ -187,8 +187,8 @@ function switchWorkspaceTab(tab) {
   const controls = document.getElementById("graphControls");
 
   if (tab === "graph") {
-    btnGraph.className = "text-[#f5f3ec] font-bold border-b-2 border-[#f5f3ec] pb-1.5 transition-all";
-    btnMem.className = "text-[#a3a099] hover:text-[#f5f3ec] pb-1.5 transition-all";
+    btnGraph.className = "text-[#0284c7] font-bold border-b-2 border-[#0284c7] pb-1.5 transition-all";
+    btnMem.className = "text-[#64748b] hover:text-[#0f172a] pb-1.5 transition-all";
     viewGraph.classList.remove("hidden");
     viewMem.classList.add("hidden");
     controls.classList.remove("hidden");
@@ -196,8 +196,8 @@ function switchWorkspaceTab(tab) {
       setTimeout(() => { graphEngine.resize(); graphEngine.fit(); }, 50);
     }
   } else {
-    btnMem.className = "text-[#f5f3ec] font-bold border-b-2 border-[#f5f3ec] pb-1.5 transition-all";
-    btnGraph.className = "text-[#a3a099] hover:text-[#f5f3ec] pb-1.5 transition-all";
+    btnMem.className = "text-[#0284c7] font-bold border-b-2 border-[#0284c7] pb-1.5 transition-all";
+    btnGraph.className = "text-[#64748b] hover:text-[#0f172a] pb-1.5 transition-all";
     viewMem.classList.remove("hidden");
     viewGraph.classList.add("hidden");
     controls.classList.add("hidden");
@@ -338,20 +338,20 @@ function appendTraceEvent(evt) {
   const div = document.createElement("div");
 
   if (evt.type === "PIPELINE_START") {
-    div.innerHTML = `<span class="text-[#38bdf8] font-bold">[SUPERVISOR]</span> Ingested binary target: ${evt.target_display_name}`;
+    div.innerHTML = `<span class="text-[#0284c7] font-bold">[SUPERVISOR]</span> Ingested binary target: ${evt.target_display_name}`;
   } else if (evt.type === "AGENT_STEP") {
-    div.innerHTML = `<span class="text-[#f59e0b] font-bold">[${evt.agent}]</span> ${evt.message}`;
+    div.innerHTML = `<span class="text-[#d97706] font-bold">[${evt.agent}]</span> ${evt.message}`;
   } else if (evt.type === "MEMORY_RESOLVED") {
-    div.innerHTML = `<span class="text-[#22c55e] font-bold">[FALKORDB]</span> Grounded address <strong>${evt.address}</strong> -> <em>${evt.label}</em> (written by ${evt.producer})`;
+    div.innerHTML = `<span class="text-[#16a34a] font-bold">[FALKORDB]</span> Grounded address <strong>${evt.address}</strong> -> <em>${evt.label}</em> (written by ${evt.producer})`;
   } else if (evt.type === "CANDIDATE_GENERATED") {
-    div.innerHTML = `<span class="text-[#f5f3ec] font-bold">[RECONSTRUCTOR]</span> Synthesized Candidate <strong>${evt.candidate_id}</strong> with grounded symbol tables.`;
+    div.innerHTML = `<span class="text-[#0f172a] font-bold">[RECONSTRUCTOR]</span> Synthesized Candidate <strong>${evt.candidate_id}</strong> with grounded symbol tables.`;
   } else if (evt.type === "TEST_STEP") {
-    const color = evt.status === "PASSED" ? "text-[#22c55e]" : "text-[#ef4444]";
+    const color = evt.status === "PASSED" ? "text-[#16a34a]" : "text-[#dc2626]";
     div.innerHTML = `<span class="${color} font-bold">[VERIFIER]</span> ${evt.test_id} (${evt.name}): <strong>${evt.status}</strong> ${evt.diff ? "- " + evt.diff : ""}`;
   } else if (evt.type === "VERIFICATION_RESULT") {
-    div.innerHTML = `<span class="text-[#22c55e] font-bold">[PARITY]</span> Verified Differential Parity: <strong>${evt.parity_percentage}%</strong> (${evt.passed}/${evt.total} Passed)`;
+    div.innerHTML = `<span class="text-[#16a34a] font-bold">[PARITY]</span> Verified Differential Parity: <strong>${evt.parity_percentage}%</strong> (${evt.passed}/${evt.total} Passed)`;
   } else if (evt.type === "PIPELINE_COMPLETE") {
-    div.innerHTML = `<span class="text-[#22c55e] font-bold">[COMPLETE]</span> Software reconstruction finished with genuine behavioral parity.`;
+    div.innerHTML = `<span class="text-[#16a34a] font-bold">[COMPLETE]</span> Software reconstruction finished with genuine behavioral parity.`;
   }
 
   traceStream.appendChild(div);
@@ -507,11 +507,11 @@ function drawLanderViewport(ctx, canvas, state, terrain, primaryColor) {
   const h = canvas.height;
 
   // Background
-  ctx.fillStyle = "#07080a";
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, w, h);
 
   // Subtle coordinate grid
-  ctx.strokeStyle = "#14161d";
+  ctx.strokeStyle = "#f1f5f9";
   ctx.lineWidth = 1;
   for (let x = 0; x < w; x += 40) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
