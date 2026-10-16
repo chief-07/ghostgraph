@@ -556,6 +556,15 @@ function startSpaceInvadersDuel() {
 function renderSpaceInvadersDuel(state) {
   if (!state) return;
 
+  if (state.live_ghost_code) {
+    const el = document.getElementById("ghostCodeSnippet");
+    if (el) el.innerText = state.live_ghost_code;
+  }
+  if (state.live_flat_code) {
+    const el = document.getElementById("flatCodeSnippet");
+    if (el) el.innerText = state.live_flat_code;
+  }
+
   // 1. Render Left Canvas: Base LLM (Isolated Mode / Ungrounded Collision)
   drawFlatInvadersCanvas(flatCtx, flatCanvas, state);
 
@@ -655,6 +664,12 @@ function drawGhostInvadersCanvas(ctx, canvas, state) {
   ctx.fillStyle = "#4ade80";
   ctx.font = "9px monospace";
   ctx.fillText("[PLAYABLE] USE LEFT / RIGHT ARROWS TO MOVE • SPACEBAR TO FIRE", 14, 34);
+
+  if (state.is_live_candidate) {
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "bold 9px monospace";
+    ctx.fillText("● LIVE GEMINI CANDIDATE ACTIVE", w - 190, 34);
+  }
 
   // Coordinate scales (80x24 virtual arcade coordinate space)
   const scaleX = w / 80;

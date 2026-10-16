@@ -291,6 +291,13 @@ class SupervisorAgent:
         synthesized_code = recon_result["source_code"]
         candidate_id = recon_result["candidate_id"]
 
+        if target_name == "space_invaders":
+            try:
+                from backend.app import active_invaders
+                active_invaders.load_synthesized_candidate(synthesized_code, use_graph_context)
+            except Exception as e:
+                logger.warning(f"Could not hot-load synthesized candidate: {e}")
+
         yield {
             "type": "CANDIDATE_GENERATED",
             "candidate_id": candidate_id,

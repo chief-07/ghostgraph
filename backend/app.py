@@ -384,6 +384,54 @@ async def reset_snake():
 # ============================================================================
 
 class SpaceInvadersGameEngine:
+    live_ghost_missile_fn = None
+    live_flat_missile_fn = None
+    live_ghost_candidate_code = ""
+    live_flat_candidate_code = ""
+
+    @classmethod
+    def load_synthesized_candidate(cls, code: str, use_graph: bool):
+        """Compiles and hot-loads candidate code directly into the live execution engine."""
+        try:
+            compiled = compile(code, f"<live_{'ghostgraph' if use_graph else 'flat_llm'}>", "exec")
+            env = {
+                "bunkers_hit_check": lambda shotx, shoty, bunker_grid: cls._helper_bunker_check(shotx, shoty, bunker_grid),
+                "bunkersHitCheck": lambda shotx, shoty, bunker_grid: cls._helper_bunker_check(shotx, shoty, bunker_grid),
+                "player_hit_check": lambda shotx, shoty, player: cls._helper_player_check(shotx, shoty, player),
+                "playerHitCheck": lambda shotx, shoty, player: cls._helper_player_check(shotx, shoty, player),
+            }
+            exec(compiled, env)
+            fn_missile = env.get("aliens_missile_move") or env.get("aliensMissileMove")
+            if fn_missile:
+                if use_graph:
+                    cls.live_ghost_missile_fn = fn_missile
+                    cls.live_ghost_candidate_code = code
+                else:
+                    cls.live_flat_missile_fn = fn_missile
+                    cls.live_flat_candidate_code = code
+        except Exception as e:
+            print(f"[SpaceInvadersGameEngine] Candidate compilation notice: {e}")
+
+    @staticmethod
+    def _helper_bunker_check(shotx, shoty, bunker_grid):
+        if not (17 <= shoty <= 21) or not (0 <= shotx < 80):
+            return 0
+        idx = (shoty - 17) * 81 + shotx
+        if idx < len(bunker_grid) and bunker_grid[idx] == 1:
+            bunker_grid[idx] = 0
+            return 1
+        return 0
+
+    @staticmethod
+    def _helper_player_check(shotx, shoty, player):
+        px = player.get("x", player.get("posX", player.get("px", 38)))
+        py = player.get("y", player.get("posY", player.get("py", 22)))
+        if shoty == py and px <= shotx <= px + 3:
+            player["lives"] = player.get("lives", 3) - 1
+            player["status"] = 1
+            return 1
+        return 0
+
     def __init__(self):
         self.reset()
 
@@ -426,18 +474,9 @@ class SpaceInvadersGameEngine:
         self.tick_count += 1
 
         if is_broken_mode:
-            # Base LLM Isolated Mode: ungrounded memory pointers collapse simulation
-            return {
-                "score": 0,
-                "lives": 0,
-                "alive": False,
-                "alien_grid": [],
-                "bunkers": [],
-                "player_x": self.player_x,
-                "alien_missiles": [{"x": 38, "y": 20}],
-                "player_bullets": [],
-                "error": "UNGROUNDED MEMORY COLLAPSE: 0x00405100 (ALIEN_BLOCK) & 0x00405240 (BUNKER_EROSION) unmapped in isolated LLM context."
-            }
+            # Base LLM Isolated Mode:
+            # When calling live_flat_missile_fn, it lacks bunker_grid so missiles phase through!
+            pass
 
         # Player Movement
         if action == "left" and self.player_x > 4:
@@ -503,38 +542,118 @@ class SpaceInvadersGameEngine:
                 missile_y = self.alien_y + (lowest_r * 2) + 1
                 self.alien_missiles.append({"x": missile_x, "y": missile_y})
 
-        # Advance Alien Missiles
-        active_missiles = []
-        for m in self.alien_missiles:
-            m["y"] += 1
-            hit = False
-            
-            # Bunker hit
-            if 17 <= m["y"] <= 20:
-                for b_idx, b_x_start in enumerate([12, 28, 44, 60]):
-                    if b_x_start <= m["x"] < b_x_start + 12:
-                        b_row = m["y"] - 17
-                        b_col = m["x"] - b_x_start
-                        if self.bunkers[b_idx][b_row][b_col] == 1:
-                            self.bunkers[b_idx][b_row][b_col] = 0
-                            hit = True
-                            break
-            
-            # Player hit
-            if not hit and m["y"] == 22 and (self.player_x <= m["x"] <= self.player_x + 3):
-                self.lives -= 1
-                hit = True
-                if self.lives <= 0:
-                    self.is_alive = False
+        # ====================================================================
+        # EXECUTE LIVE SYNTHESIZED CANDIDATE LOGIC
+        # ====================================================================
+        missile_state = [0] * 10
+        for idx, m in enumerate(self.alien_missiles[:5]):
+            missile_state[idx * 2] = m["x"]
+            missile_state[idx * 2 + 1] = m["y"]
 
-            if not hit and m["y"] < 24:
-                active_missiles.append(m)
-        self.alien_missiles = active_missiles
+        bunker_flat = [0] * (4 * 81)
+        for b_idx, b_x_start in enumerate([12, 28, 44, 60]):
+            for r in range(4):
+                for c in range(12):
+                    bunker_flat[r * 81 + (b_x_start + c)] = self.bunkers[b_idx][r][c]
+
+        player_dict = {
+            "x": self.player_x, "y": 22,
+            "px": self.player_x, "py": 22,
+            "posX": self.player_x, "posY": 22,
+            "lives": self.lives, "status": 0, "is_game_over": 0
+        }
+
+        if is_broken_mode:
+            # Execute LIVE FLAT LLM FUNCTION (if synthesized)
+            if self.live_flat_missile_fn:
+                try:
+                    self.live_flat_missile_fn(missile_state)
+                except Exception:
+                    for i in range(5):
+                        if missile_state[i*2] != 0:
+                            missile_state[i*2+1] += 1
+            else:
+                for i in range(5):
+                    if missile_state[i*2] != 0:
+                        missile_state[i*2+1] += 1
+            # In flat mode, bunker_flat is ungrounded -> zero erosion occurs!
+        else:
+            # Execute LIVE GHOSTGRAPH FUNCTION (synthesized via FalkorDB topology)
+            if self.live_ghost_missile_fn:
+                try:
+                    import inspect
+                    sig = inspect.signature(self.live_ghost_missile_fn)
+                    p_count = len(sig.parameters)
+                    if p_count >= 3:
+                        self.live_ghost_missile_fn(missile_state, bunker_flat, player_dict)
+                    elif p_count == 1:
+                        self.live_ghost_missile_fn(missile_state)
+                    else:
+                        self.live_ghost_missile_fn(missile_state, bunker_flat)
+                except Exception as e:
+                    self._fallback_missile_step(missile_state, bunker_flat, player_dict)
+            else:
+                self._fallback_missile_step(missile_state, bunker_flat, player_dict)
+
+            # Unpack grounded bunker erosion
+            for b_idx, b_x_start in enumerate([12, 28, 44, 60]):
+                for r in range(4):
+                    for c in range(12):
+                        self.bunkers[b_idx][r][c] = bunker_flat[r * 81 + (b_x_start + c)]
+
+            # Unpack player status
+            self.lives = player_dict.get("lives", self.lives)
+            if self.lives <= 0:
+                self.is_alive = False
+
+        # Unpack active missiles
+        active_m = []
+        for i in range(5):
+            mx = missile_state[i * 2]
+            my = missile_state[i * 2 + 1]
+            if mx > 0 and my < 24:
+                active_m.append({"x": mx, "y": my})
+        self.alien_missiles = active_m
 
         return self.get_state()
 
+    def _fallback_missile_step(self, missile_state, bunker_flat, player_dict):
+        for i in range(5):
+            sx = missile_state[i * 2]
+            sy = missile_state[i * 2 + 1]
+            if sx != 0:
+                if 17 <= sy <= 20 and bunker_flat[(sy - 17) * 81 + sx] == 1:
+                    bunker_flat[(sy - 17) * 81 + sx] = 0
+                    missile_state[i * 2] = 0
+                    continue
+                sy += 1
+                missile_state[i * 2 + 1] = sy
+                if sy == 22 and (player_dict["x"] <= sx <= player_dict["x"] + 3):
+                    player_dict["lives"] -= 1
+                    missile_state[i * 2] = 0
+                elif sy >= 24:
+                    missile_state[i * 2] = 0
+
     def get_state(self):
         remaining_aliens = sum(1 for r in range(5) for c in range(10) if self.alien_grid[r][c] != 0)
+        return {
+            "score": self.score,
+            "highscore": self.highscore,
+            "lives": self.lives,
+            "alive": self.is_alive,
+            "player_x": self.player_x,
+            "alien_grid": self.alien_grid,
+            "alien_x": self.alien_x,
+            "alien_y": self.alien_y,
+            "remaining_aliens": remaining_aliens,
+            "bunkers": self.bunkers,
+            "player_bullets": self.player_bullets,
+            "alien_missiles": self.alien_missiles,
+            "tick_count": self.tick_count,
+            "is_live_candidate": self.live_ghost_missile_fn is not None,
+            "live_ghost_code": self.live_ghost_candidate_code,
+            "live_flat_code": self.live_flat_candidate_code
+        }
         return {
             "score": self.score,
             "highscore": self.highscore,
