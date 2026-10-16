@@ -81,6 +81,37 @@ TARGET_CONFIGS = {
     }
     return hash;
 }"""
+    },
+    "space_invaders": {
+        "name": "1978 Space Invaders Arcade Subsystem (nInvaders)",
+        "primary_fn": "aliensMissileMove",
+        "critical_mem": "0x00405100",
+        "mem_label": "ALIEN_BLOCK_GRID",
+        "producer_fn": "aliensReset",
+        "ref_binary": "backend/data/targets/space_invaders_decompiled.json",
+        "decompiled_snippet": """int aliensMissileMove(void) {
+    int *missiles = (int *)0x00405400;
+    int fPlayerHit = 0;
+    for (int i = 0; i < 5; i++) {
+        int sx = missiles[i * 2];
+        int sy = missiles[i * 2 + 1];
+        if (sx != 0) {
+            if (bunkersHitCheck(sx, sy) == 1) {
+                missiles[i * 2] = 0;
+                continue;
+            }
+            sy++;
+            missiles[i * 2 + 1] = sy;
+            if (playerHitCheck(sx, sy) == 1) {
+                missiles[i * 2] = 0;
+                fPlayerHit = 1;
+            } else if (sy >= 24) {
+                missiles[i * 2] = 0;
+            }
+        }
+    }
+    return fPlayerHit;
+}"""
     }
 }
 
@@ -142,7 +173,8 @@ class SupervisorAgent:
             target_json_map = {
                 "lunar_lander": "backend/data/targets/lunar_lander_decompiled.json",
                 "telemetry": "backend/data/targets/telemetry_decompiled.json",
-                "keygen": "backend/data/targets/keygen_decompiled.json"
+                "keygen": "backend/data/targets/keygen_decompiled.json",
+                "space_invaders": "backend/data/targets/space_invaders_decompiled.json"
             }
             json_path = target_json_map.get(target_name, "backend/data/targets/lunar_lander_decompiled.json")
             if Path(json_path).exists():

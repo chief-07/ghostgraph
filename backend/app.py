@@ -47,6 +47,19 @@ app.add_middleware(
 
 # Benchmark Targets Registry
 TARGETS = {
+    "space_invaders": {
+        "id": "space_invaders",
+        "name": "1978 Space Invaders Arcade Subsystem (nInvaders)",
+        "badge": "FLAGSHIP CLASSIC ARCADE REVERSE-ENGINEERING",
+        "category": "Classic Embedded Arcade Architecture",
+        "arch": "x86_64 stripped binary",
+        "path": "backend/data/targets/space_invaders_decompiled.json",
+        "vectors_path": "",
+        "critical_symbol": "0x00405100 (ALIEN_BLOCK_GRID) & 0x00405240 (BUNKER_EROSION_GRID)",
+        "producer_fn": "aliensReset",
+        "consumer_fn": "aliensMissileMove",
+        "description": "Authentic nInvaders classic arcade architecture. The binary decouples alien swarm formation tables (0x00405100), four-bunker defensive erosion bitmasks (0x00405240), missile trajectory tables (0x00405400), and hardware player/game registers from the per-tick game loop. Reconstructs into clean, verified modern Python."
+    },
     "lunar_lander": {
         "id": "lunar_lander",
         "name": "1979 Apollo Lunar Lander Guidance Computer",

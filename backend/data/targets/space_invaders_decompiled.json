@@ -1,0 +1,163 @@
+{
+  "target_name": "space_invaders",
+  "display_name": "1978 Space Invaders Arcade Subsystem (nInvaders)",
+  "badge": "FLAGSHIP CLASSIC ARCADE REVERSE-ENGINEERING",
+  "category": "Classic Embedded Arcade Architecture",
+  "arch": "x86_64 stripped binary",
+  "primary_fn": "aliensMissileMove",
+  "critical_symbol": "0x00405100 (ALIEN_BLOCK_GRID) & 0x00405240 (BUNKER_EROSION_GRID)",
+  "producer_fn": "aliensReset",
+  "consumer_fn": "aliensMissileMove",
+  "description": "Authentic nInvaders classic arcade architecture. The binary decouples alien swarm formation tables (0x00405100), four-bunker defensive erosion bitmasks (0x00405240), missile trajectory tables (0x00405400), and hardware player/game registers from the per-tick game loop. GhostGraph uses FalkorDB to resolve multi-hop memory provenance and synthesize verified modern Python.",
+  "global_memory": [
+    {
+      "address": "0x00405100",
+      "label": "ALIEN_BLOCK_GRID",
+      "data_type": "int[5][10]",
+      "size": 200,
+      "description": "5x10 matrix of alien ships (Row 0: type 1 squid 30pts, Rows 1-2: type 2 crab 20pts, Rows 3-4: type 3 octopus 10pts). Initialized by aliensReset."
+    },
+    {
+      "address": "0x00405240",
+      "label": "BUNKER_EROSION_GRID",
+      "data_type": "int[4][81]",
+      "size": 1296,
+      "description": "Four defensive bunkers erosion bitmask array (4 rows x 81 columns). 1 indicates solid shield wall, 0 indicates eroded cavity. Initialized by bunkersReset."
+    },
+    {
+      "address": "0x00405380",
+      "label": "LOWEST_SHIP_TABLE",
+      "data_type": "int[10]",
+      "size": 40,
+      "description": "Lowest active alien row index per column (0-9) used for missile launch targeting. Calculated by render."
+    },
+    {
+      "address": "0x00405400",
+      "label": "ALIEN_MISSILE_STATE",
+      "data_type": "int[10]",
+      "size": 40,
+      "description": "Active alien missile coordinates [x0, y0, x1, y1, ...]. Initialized by aliensReset, advanced by aliensMissileMove."
+    },
+    {
+      "address": "0x00405520",
+      "label": "ALIENS_SWARM_STATE",
+      "data_type": "Aliens",
+      "size": 32,
+      "description": "Alien fleet dynamic bounding box and velocity state (posX, posY, right, bottom, left, speed, shipnum)."
+    },
+    {
+      "address": "0x00405600",
+      "label": "PLAYER_SHIP_STATE",
+      "data_type": "Player",
+      "size": 24,
+      "description": "Player defense cannon state (posX, posY, lives, is_exploding)."
+    },
+    {
+      "address": "0x00405700",
+      "label": "GAME_SESSION_STATE",
+      "data_type": "GameState",
+      "size": 24,
+      "description": "Global arcade session status (score, highscore, level, is_game_over)."
+    }
+  ],
+  "structs": [
+    {
+      "name": "Aliens",
+      "size": 32,
+      "fields": [
+        {"offset": 0, "name": "posX", "type": "int"},
+        {"offset": 4, "name": "posY", "type": "int"},
+        {"offset": 8, "name": "right", "type": "int"},
+        {"offset": 12, "name": "bottom", "type": "int"},
+        {"offset": 16, "name": "left", "type": "int"},
+        {"offset": 20, "name": "speed", "type": "int"},
+        {"offset": 24, "name": "shipnum", "type": "int"}
+      ]
+    },
+    {
+      "name": "Player",
+      "size": 24,
+      "fields": [
+        {"offset": 0, "name": "posX", "type": "int"},
+        {"offset": 4, "name": "posY", "type": "int"},
+        {"offset": 8, "name": "lives", "type": "int"},
+        {"offset": 12, "name": "status", "type": "int"}
+      ]
+    },
+    {
+      "name": "GameState",
+      "size": 24,
+      "fields": [
+        {"offset": 0, "name": "score", "type": "int"},
+        {"offset": 4, "name": "highscore", "type": "int"},
+        {"offset": 8, "name": "level", "type": "int"},
+        {"offset": 12, "name": "is_game_over", "type": "int"}
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "aliensReset",
+      "address": "0x00401020",
+      "signature": "void aliensReset(void)",
+      "pseudocode": "void aliensReset(void) {\n    /* Alien Formation Grid: 0x00405100 (5 rows x 10 cols) */\n    int *alienBlock = (int *)0x00405100;\n    int default_level[5][10] = {\n        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},\n        {2, 2, 2, 2, 2, 2, 2, 2, 2, 2},\n        {2, 2, 2, 2, 2, 2, 2, 2, 2, 2},\n        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3},\n        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3}\n    };\n    for (int r = 0; r < 5; r++) {\n        for (int c = 0; c < 10; c++) {\n            alienBlock[r * 10 + c] = default_level[r][c];\n        }\n    }\n    /* Swarm State Virtual Address: 0x00405520 */\n    *(int *)(0x00405520 + 0) = 0;  // posX\n    *(int *)(0x00405520 + 4) = 0;  // posY\n    *(int *)(0x00405520 + 8) = 0;  // right\n    *(int *)(0x00405520 + 12) = 0; // bottom\n    *(int *)(0x00405520 + 16) = 0; // left\n    *(int *)(0x00405520 + 20) = 1; // speed\n    *(int *)(0x00405520 + 24) = 50; // shipnum\n    /* Missile State Virtual Address: 0x00405400 */\n    int *missiles = (int *)0x00405400;\n    for (int i = 0; i < 10; i++) missiles[i] = 0;\n    missiles[0] = 5; // alienshotx[0]\n    missiles[1] = 1; // alienshoty[0]\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405100", "0x00405400", "0x00405520"]
+    },
+    {
+      "name": "bunkersReset",
+      "address": "0x00401100",
+      "signature": "void bunkersReset(void)",
+      "pseudocode": "void bunkersReset(void) {\n    /* Bunker Erosion Grid: 0x00405240 (4 rows x 81 columns) */\n    int *bunker = (int *)0x00405240;\n    const char *bunkerd[4] = {\n        \"        ###                 ###                 ###                 ###         \",\n        \"       #####               #####               #####               #####        \",\n        \"      #######             #######             #######             #######       \",\n        \"      ##   ##             ##   ##             ##   ##             ##   ##       \"\n    };\n    for (int row = 0; row < 4; row++) {\n        for (int col = 0; col < 80; col++) {\n            bunker[row * 81 + col] = (bunkerd[row][col] == '#') ? 1 : 0;\n        }\n    }\n}",
+      "callees": [],
+      "reads_memory": [],
+      "writes_memory": ["0x00405240"]
+    },
+    {
+      "name": "render",
+      "address": "0x00401200",
+      "signature": "void render(void)",
+      "pseudocode": "void render(void) {\n    int *alienBlock = (int *)0x00405100;\n    int *lowest_ship = (int *)0x00405380;\n    for (int k = 0; k < 10; k++) lowest_ship[k] = -1;\n    int count = 0;\n    int min_c = 10, max_c = -1, max_r = -1;\n    for (int r = 0; r < 5; r++) {\n        for (int c = 0; c < 10; c++) {\n            if (alienBlock[r * 10 + c] != 0) {\n                lowest_ship[c] = r;\n                count++;\n                if (c < min_c) min_c = c;\n                if (c > max_c) max_c = c;\n                if (r > max_r) max_r = r;\n            }\n        }\n    }\n    *(int *)(0x00405520 + 24) = count; // shipnum\n    *(int *)(0x00405520 + 8) = (max_c >= 0) ? max_c * 3 : 0; // right\n    *(int *)(0x00405520 + 16) = (min_c <= 9) ? -min_c * 3 : 0; // left\n    *(int *)(0x00405520 + 12) = (max_r >= 0) ? max_r * 2 : 0; // bottom\n}",
+      "callees": [],
+      "reads_memory": ["0x00405100"],
+      "writes_memory": ["0x00405380", "0x00405520"]
+    },
+    {
+      "name": "bunkersHitCheck",
+      "address": "0x00401300",
+      "signature": "int bunkersHitCheck(int shotx, int shoty)",
+      "pseudocode": "int bunkersHitCheck(int shotx, int shoty) {\n    /* Bunker grid starts at screen Y=18, Height=4, Width=80 */\n    if (shoty < 18 || shoty >= 22) return 0;\n    if (shotx < 0 || shotx >= 80) return 0;\n    int *bunker = (int *)0x00405240;\n    int row = shoty - 18;\n    int col = shotx;\n    if (bunker[row * 81 + col] == 1) {\n        bunker[row * 81 + col] = 0; // Erodes bunker block\n        return 1;\n    }\n    return 0;\n}",
+      "callees": [],
+      "reads_memory": ["0x00405240"],
+      "writes_memory": ["0x00405240"]
+    },
+    {
+      "name": "playerHitCheck",
+      "address": "0x00401400",
+      "signature": "int playerHitCheck(int shotx, int shoty)",
+      "pseudocode": "int playerHitCheck(int shotx, int shoty) {\n    int px = *(int *)(0x00405600 + 0);\n    int py = *(int *)(0x00405600 + 4);\n    /* Player cannon width is 3 chars: [px, px+1, px+2] */\n    if (shoty == py && shotx >= px && shotx <= px + 2) {\n        *(int *)(0x00405600 + 8) -= 1; // lives--\n        *(int *)(0x00405600 + 12) = 1; // status = EXPLODING\n        if (*(int *)(0x00405600 + 8) <= 0) {\n            *(int *)(0x00405700 + 12) = 1; // is_game_over = 1\n        }\n        return 1;\n    }\n    return 0;\n}",
+      "callees": [],
+      "reads_memory": ["0x00405600", "0x00405700"],
+      "writes_memory": ["0x00405600", "0x00405700"]
+    },
+    {
+      "name": "aliensMissileMove",
+      "address": "0x00401500",
+      "signature": "int aliensMissileMove(void)",
+      "pseudocode": "int aliensMissileMove(void) {\n    int *missiles = (int *)0x00405400;\n    int fPlayerHit = 0;\n    for (int i = 0; i < 5; i++) {\n        int sx = missiles[i * 2];\n        int sy = missiles[i * 2 + 1];\n        if (sx != 0) {\n            if (bunkersHitCheck(sx, sy) == 1) {\n                missiles[i * 2] = 0; // missile destroyed by bunker\n                continue;\n            }\n            sy++;\n            missiles[i * 2 + 1] = sy;\n            if (playerHitCheck(sx, sy) == 1) {\n                missiles[i * 2] = 0;\n                fPlayerHit = 1;\n            } else if (sy >= 24) {\n                missiles[i * 2] = 0; // missile off-screen\n            }\n        }\n    }\n    return fPlayerHit;\n}",
+      "callees": ["bunkersHitCheck", "playerHitCheck"],
+      "reads_memory": ["0x00405400", "0x00405240", "0x00405600"],
+      "writes_memory": ["0x00405400"]
+    },
+    {
+      "name": "doScoring",
+      "address": "0x00401600",
+      "signature": "void doScoring(int alien_type)",
+      "pseudocode": "void doScoring(int alien_type) {\n    int points = 0;\n    if (alien_type == 1) points = 30;\n    else if (alien_type == 2) points = 20;\n    else if (alien_type == 3) points = 10;\n    *(int *)(0x00405700 + 0) += points; // score += points\n    if (*(int *)(0x00405700 + 0) > *(int *)(0x00405700 + 4)) {\n        *(int *)(0x00405700 + 4) = *(int *)(0x00405700 + 0); // update highscore\n    }\n}",
+      "callees": [],
+      "reads_memory": ["0x00405700"],
+      "writes_memory": ["0x00405700"]
+    }
+  ]
+}
