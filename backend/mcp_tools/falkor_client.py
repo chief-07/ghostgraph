@@ -68,8 +68,6 @@ class FalkorClient:
         Falls back seamlessly to in-memory graph on socket/network failure.
         """
         params = params or {}
-        if not self.is_connected:
-            self._connect()
 
         if self.is_connected and self.graph:
             try:
@@ -157,10 +155,17 @@ class FalkorClient:
             }
             return [{"p.name": pname}]
 
-        # 5. Function Context Lookup: MATCH (f:Function {name: $name})
-        if "MATCH (f:Function {name: $name})" in cypher:
-            fname = params.get("name", "")
+        # 5. Function Context Lookup: MATCH (f:Function) by name or address
+        if "MATCH (f:Function {name: $name})" in cypher or "WHERE f.name = $id OR f.address = $id" in cypher:
+            fname = params.get("name") or params.get("id", "")
             fn_node = self._nodes.get(f"fn_{fname}", {})
+            if not fn_node:
+                for node in self._nodes.values():
+                    if node.get("type") == "Function" and (node.get("name") == fname or node.get("address") == fname):
+                        fn_node = node
+                        fname = node.get("name", fname)
+                        break
+
             callers = [e["source"] for e in self._edges if e["target"] == fname and e["type"] == "CALLS"]
             callees = [e["target"] for e in self._edges if e["source"] == fname and e["type"] == "CALLS"]
             
@@ -188,13 +193,40 @@ class FalkorClient:
 
             return [{
                 "name": fname,
+                "address": fn_node.get("address", ""),
                 "signature": fn_node.get("signature", f"void {fname}()"),
                 "pseudocode": fn_node.get("pseudocode", ""),
+                "raw_asm": fn_node.get("raw_asm", ""),
                 "callers": callers,
                 "callees": callees,
                 "reads": reads,
                 "writes": writes
             }]
+
+        # 5b. List All Functions & Call Graph for Supervisor Stream
+        if "RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees" in cypher:
+            results = []
+            for node in self._nodes.values():
+                if node.get("type") == "Function":
+                    fname = node.get("name", "")
+                    callees = [e["target"] for e in self._edges if e["source"] == fname and e["type"] == "CALLS"]
+                    results.append({
+                        "name": fname,
+                        "address": node.get("address", ""),
+                        "callees": callees
+                    })
+            return results
+
+        # 5c. List All GlobalMemory Buffers for Supervisor Stream
+        if "MATCH (m:GlobalMemory) RETURN m.address AS address, m.label AS label" in cypher:
+            results = []
+            for node in self._nodes.values():
+                if node.get("type") == "GlobalMemory":
+                    results.append({
+                        "address": node.get("address", ""),
+                        "label": node.get("label", "")
+                    })
+            return results
 
         # 6. Multi-Hop Memory Provenance: MATCH (mem:GlobalMemory)<-[:WRITES]-(initializer)
         if "MATCH (mem:GlobalMemory {address: $addr})<-[:WRITES]-(initializer:Function)" in cypher:
@@ -209,7 +241,9 @@ class FalkorClient:
                     "label": mem_node.get("label", addr),
                     "data_type": mem_node.get("data_type", "void*"),
                     "producer_function": p,
-                    "initialization_code": init_fn.get("pseudocode", "")
+                    "producer_address": init_fn.get("address", ""),
+                    "initialization_code": init_fn.get("pseudocode", ""),
+                    "producer_asm": init_fn.get("raw_asm", "")
                 })
             return results
 
@@ -237,10 +271,10 @@ class FalkorClient:
             return [{"struct_name": sname, "total_size": 0, "fields": []}]
 
         # 8. Record Candidate & Test Outcomes
-        if "MERGE (c:Candidate" in cypher:
+        if "MERGE (c:Candidate" in cypher or "CREATE (c:Candidate" in cypher:
             cid = params.get("cid", "cand_1")
             self._nodes[f"cand_{cid}"] = {"type": "Candidate", "id": cid, "props": params}
-            return [{"c.id": cid}]
+            return [{"c.id": cid, "id": cid}]
 
         if "MERGE (t:TestCase" in cypher and "PASSED" in cypher:
             tid = params.get("tid", "")

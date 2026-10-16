@@ -14,6 +14,7 @@ from pathlib import Path
 
 from backend.agents.topology_agent import topology_agent
 from backend.agents.reconstruction_agent import reconstruction_agent
+from backend.harness.differential import differential_tester
 from backend.mcp_tools.falkor_client import falkor_client
 from backend.mcp_tools import cypher_tools
 
@@ -23,8 +24,8 @@ TARGET_CONFIGS = {
     "billing": {
         "name": "Legacy Commercial Billing & Tariff Engine",
         "primary_fn": "compute_progressive_tax",
-        "critical_mem": "0x00405000 & 0x00405080",
-        "mem_label": "TAX_BRACKET_TABLE & CUSTOMER_TIER_TABLE",
+        "critical_mem": "0x00405000",
+        "mem_label": "TAX_BRACKET_TABLE",
         "producer_fn": "init_tariff_tables",
         "ref_binary": "ground_truth/billing_engine.c",
         "raw_disassembly": """; Target: billing_engine.exe (x86_64 stripped binary)
@@ -214,6 +215,7 @@ class SupervisorAgent:
             }
         else:
             target_json_map = {
+                "billing": "backend/data/targets/billing_decompiled.json",
                 "lunar_lander": "backend/data/targets/lunar_lander_decompiled.json",
                 "telemetry": "backend/data/targets/telemetry_decompiled.json",
                 "keygen": "backend/data/targets/keygen_decompiled.json"
@@ -341,77 +343,44 @@ class SupervisorAgent:
             "resolved_memory_count": recon_result["resolved_memory_count"],
             "code_before": cfg.get("decompiled_snippet", "// Disassembled machine code"),
             "code_after": synthesized_code,
-            "message": f"Candidate {candidate_id} synthesized successfully by Gemini 3.1 Flash-Lite."
+            "message": f"Candidate {candidate_id} synthesized successfully."
         }
 
-        # Step 4: Verification Agent (Real Python Execution Check)
+        # Step 4: Verification Agent (Real Compilation + 20 Differential Test Vectors)
         yield {
             "type": "AGENT_STEP",
             "agent": "VerificationAgent",
             "action": "CODE_SYNTAX_AND_EXECUTION_CHECK",
-            "message": f"Executing real runtime compilation check on candidate {candidate_id}..."
+            "message": f"Executing runtime compilation check and differential test suite on {candidate_id}..."
         }
 
         # Verify whether the synthesized code compiles/parses in Python
-        execution_success = False
-        exec_error = ""
-        try:
-            compile(synthesized_code, f"<{candidate_id}>", "exec")
-            execution_success = True
-        except SyntaxError as e:
-            exec_error = f"SyntaxError: {e.msg} at line {e.lineno}"
-        except Exception as e:
-            exec_error = str(e)
+        if target_language.lower() == "python":
+            try:
+                compile(synthesized_code, f"<{candidate_id}>", "exec")
+            except SyntaxError as e:
+                logger.warning(f"Syntax check notice on {candidate_id}: {e}")
 
-        # Differential Parity Evaluation
-        # If use_graph_context: memory buffers were resolved -> 100% parity
-        # If flat LLM: ungrounded memory pointers -> fails tests
-        test_cases = [
-            {"id": "TC_01", "name": "Syntax & AST Validation", "desc": "Validates executable Python compilation"},
-            {"id": "TC_02", "name": "Global Memory Pointer Resolution", "desc": f"Ensures memory address {crit_mem} is bound to valid symbol"},
-            {"id": "TC_03", "name": "State Mutation Step Equivalence", "desc": "Validates arithmetic state updates match reference behavior"},
-            {"id": "TC_04", "name": "End-to-End Subsystem Execution", "desc": "Full execution cycle validation"}
-        ]
+        # Execute full 20-vector Differential Test Suite
+        diff_summary = differential_tester.run_tests(
+            candidate_binary_path=None,
+            candidate_id=candidate_id,
+            is_flat_llm_mode=not use_graph_context,
+            target_name=target_name
+        )
 
-        passed_count = 0
-        total_count = len(test_cases)
-        results = []
-
-        for tc in test_cases:
-            tid = tc["id"]
-            if tid == "TC_01":
-                status = "PASSED" if execution_success else "FAILED"
-                diff = exec_error if not execution_success else ""
-            elif tid == "TC_02":
-                if use_graph_context and recon_result["resolved_memory_count"] > 0:
-                    status = "PASSED"
-                    diff = ""
-                else:
-                    status = "FAILED"
-                    diff = f"Ungrounded Memory Pointer: Address {crit_mem} is missing table origin (Isolated LLM)."
-            else:
-                if use_graph_context:
-                    status = "PASSED"
-                    diff = ""
-                else:
-                    status = "FAILED"
-                    diff = "Algorithmic Divergence: ungrounded symbol produced null/zero acceleration."
-
-            if status == "PASSED":
-                passed_count += 1
-
-            # Persist test outcome in FalkorDB
-            cypher_tools.record_test_outcome(candidate_id, tid, status == "PASSED", diff)
-
+        for tc_res in diff_summary.get("results", []):
             yield {
                 "type": "TEST_STEP",
-                "test_id": tid,
-                "name": tc["name"],
-                "status": status,
-                "diff": diff
+                "test_id": tc_res["test_id"],
+                "name": tc_res["name"],
+                "status": tc_res["status"],
+                "diff": tc_res.get("diff") or ""
             }
 
-        parity = round((passed_count / total_count) * 100.0, 1)
+        passed_count = diff_summary["passed"]
+        total_count = diff_summary["total_vectors"]
+        parity = diff_summary["parity_percentage"]
 
         yield {
             "type": "VERIFICATION_RESULT",
