@@ -151,11 +151,13 @@ async def get_target_details(target_id: str = "lunar_lander"):
     target = TARGETS.get(target_id, TARGETS["lunar_lander"])
     cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["lunar_lander"])
 
-    vectors_path = Path(target["vectors_path"])
+    vectors_path_str = target.get("vectors_path", "")
     test_vectors = []
-    if vectors_path.exists():
-        with open(vectors_path, "r", encoding="utf-8") as f:
-            test_vectors = json.load(f)
+    if vectors_path_str:
+        vpath = Path(vectors_path_str)
+        if vpath.is_file() and vpath.exists():
+            with open(vpath, "r", encoding="utf-8") as f:
+                test_vectors = json.load(f)
 
     return JSONResponse({
         "target": target,
@@ -233,12 +235,18 @@ async def stream_reconstruction(
         ):
             yield {"data": json.dumps(event)}
             etype = event.get("type", "")
-            if etype in ("MEMORY_RESOLVED", "CANDIDATE_GENERATED", "VERIFICATION_RESULT", "PIPELINE_COMPLETE"):
-                await asyncio.sleep(0.3)
+            if etype == "MEMORY_RESOLVED":
+                await asyncio.sleep(0.9)
+            elif etype in ("CANDIDATE_GENERATED", "VERIFICATION_RESULT"):
+                await asyncio.sleep(0.6)
+            elif etype == "AGENT_STEP":
+                await asyncio.sleep(0.4)
             elif etype == "TEST_STEP":
+                await asyncio.sleep(0.25)
+            elif etype in ("NODE_DISCOVERED", "EDGE_DISCOVERED"):
                 await asyncio.sleep(0.06)
             else:
-                await asyncio.sleep(0.08)
+                await asyncio.sleep(0.1)
 
     return EventSourceResponse(event_generator())
 
