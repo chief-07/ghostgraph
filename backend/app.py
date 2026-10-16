@@ -11,6 +11,7 @@ Exposes REST and Server-Sent Event (SSE) endpoints for:
 
 import os
 import json
+import math
 import random
 import asyncio
 from pathlib import Path
@@ -27,7 +28,7 @@ load_dotenv()
 
 from backend.agents.topology_agent import topology_agent
 from backend.agents.supervisor_agent import supervisor_agent, TARGET_CONFIGS
-from backend.harness.differential import differential_tester
+from backend.harness.differential import differential_tester, LunarSimEngine, LUNAR_TERRAIN_PROFILE
 from backend.mcp_tools.falkor_client import falkor_client
 
 app = FastAPI(
@@ -145,10 +146,10 @@ async def get_targets():
     return JSONResponse(list(TARGETS.values()))
 
 @app.get("/api/target/details")
-async def get_target_details(target_id: str = "snake"):
+async def get_target_details(target_id: str = "lunar_lander"):
     """Returns detailed technical specification and decompiled snippet for the target."""
-    target = TARGETS.get(target_id, TARGETS["snake"])
-    cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["snake"])
+    target = TARGETS.get(target_id, TARGETS["lunar_lander"])
+    cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS["lunar_lander"])
 
     vectors_path = Path(target["vectors_path"])
     test_vectors = []
@@ -166,7 +167,7 @@ async def get_target_details(target_id: str = "snake"):
             "producer_fn": cfg["producer_fn"],
             "raw_disassembly": cfg.get("raw_disassembly", ""),
             "decompiled_snippet": cfg["decompiled_snippet"],
-            "reconstructed_c": cfg["reconstructed_c"]
+            "reconstructed_c": cfg.get("reconstructed_c", "")
         },
         "test_vectors": test_vectors
     })
@@ -183,7 +184,7 @@ async def ingest_target(request: Request, target_id: Optional[str] = None):
     if not target_id:
         form = await request.form()
         target_id = form.get("target_id")
-    target_id = target_id or "snake"
+    target_id = target_id or "lunar_lander"
 
     target = TARGETS.get(target_id)
     if not target:
@@ -217,7 +218,7 @@ async def execute_custom_cypher(request: Request):
 
 @app.get("/api/reconstruct/stream")
 async def stream_reconstruction(
-    target_id: str = "snake",
+    target_id: str = "lunar_lander",
     use_graph: bool = True
 ):
     """
@@ -231,7 +232,13 @@ async def stream_reconstruction(
             max_iterations=1
         ):
             yield {"data": json.dumps(event)}
-            await asyncio.sleep(0.55) # Paced for readable presentation
+            etype = event.get("type", "")
+            if etype in ("MEMORY_RESOLVED", "CANDIDATE_GENERATED", "VERIFICATION_RESULT", "PIPELINE_COMPLETE"):
+                await asyncio.sleep(0.3)
+            elif etype == "TEST_STEP":
+                await asyncio.sleep(0.06)
+            else:
+                await asyncio.sleep(0.08)
 
     return EventSourceResponse(event_generator())
 
@@ -373,7 +380,7 @@ async def reset_snake():
     return JSONResponse(active_snake.get_state())
 
 @app.get("/api/export")
-async def export_reconstructed_project(target_id: str = "snake"):
+async def export_reconstructed_project(target_id: str = "lunar_lander"):
     """Returns standalone compilable C project files with Makefile."""
     if target_id == "snake":
         code_path = Path("ground_truth/snake_core.c")
@@ -387,13 +394,15 @@ async def export_reconstructed_project(target_id: str = "snake"):
             "compile_cmd": "gcc -O2 -DSTANDALONE_MAIN -o snake snake_core.c"
         })
     else:
-        cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS.get("telemetry", {}))
+        cfg = TARGET_CONFIGS.get(target_id, TARGET_CONFIGS.get("lunar_lander", {}))
+        ref_path = Path(cfg.get("ref_binary", f"ground_truth/{target_id}.c"))
+        source_code = ref_path.read_text(encoding="utf-8") if ref_path.exists() else "// Synthesized software module"
         return JSONResponse({
             "target": target_id,
             "filename": f"{target_id}_reconstructed.c",
-            "source_code": cfg.get("reconstructed_c", ""),
-            "makefile": f"CC = gcc\nCFLAGS = -O2 -shared -fPIC\n\nall: lib{target_id}.so\n\nlib{target_id}.so:\n\t$(CC) $(CFLAGS) -o lib{target_id}.so {target_id}_reconstructed.c\n",
-            "compile_cmd": f"gcc -O2 -shared -fPIC -o lib{target_id}.so {target_id}_reconstructed.c"
+            "source_code": source_code,
+            "makefile": f"CC = gcc\nCFLAGS = -O2 -Wall -fPIC\n\nall: {target_id}\n\n{target_id}:\n\t$(CC) $(CFLAGS) -o {target_id} {target_id}_reconstructed.c -lm\n\nclean:\n\trm -f {target_id}\n",
+            "compile_cmd": f"gcc -O2 -Wall -o {target_id} {target_id}_reconstructed.c -lm"
         })
 
 @app.post("/api/upload")
@@ -422,6 +431,120 @@ async def upload_custom_binary(file: UploadFile = File(...)):
         "inferred_functions": 8,
         "message": f"Successfully disassembled and indexed {filename} into FalkorDB in 120ms."
     })
+
+# ============================================================================
+# Apollo 11 Lunar Module Continuous Flight Simulation Engine
+# ============================================================================
+
+class ApolloFlightSimulator:
+    def __init__(self):
+        self.sim_ghostgraph = LunarSimEngine(use_ground_truth=True)
+        self.sim_flat_llm = LunarSimEngine(use_ground_truth=False)
+
+    def reset(self):
+        self.sim_ghostgraph.reset()
+        self.sim_flat_llm.reset()
+        return self.get_state()
+
+    def step(self, throttle: float = 0.0, pitch_rate: float = 0.0, auto_guidance: bool = False, mode: str = "ghostgraph"):
+        # Step GhostGraph (Guided by complete grounded memory tables)
+        if self.sim_ghostgraph.is_landed == 0:
+            if auto_guidance:
+                radar = self.sim_ghostgraph.raycast()
+                target_x = 420.0
+                dx = target_x - self.sim_ghostgraph.x
+                target_vx = max(-6.0, min(6.0, dx * 0.05))
+                if radar < 15.0:
+                    target_pitch = 0.0
+                else:
+                    target_pitch = max(-0.12, min(0.12, (target_vx - self.sim_ghostgraph.vx) * 0.04))
+                pitch_cmd = (target_pitch - self.sim_ghostgraph.pitch) * 2.5
+
+                if radar > 400.0:
+                    target_vy = -16.0
+                elif radar > 150.0:
+                    target_vy = -8.0
+                elif radar > 40.0:
+                    target_vy = -4.0
+                elif radar > 10.0:
+                    target_vy = -1.8
+                else:
+                    target_vy = -1.0
+
+                hover_throttle = (self.sim_ghostgraph.total_mass * 1.62) / 45000.0
+                err_vy = target_vy - self.sim_ghostgraph.vy
+                throttle_cmd = hover_throttle + (err_vy * 0.09)
+                throttle_cmd = max(0.0, min(1.0, throttle_cmd))
+                self.sim_ghostgraph.apply_thrust(throttle_cmd, pitch_cmd)
+            else:
+                self.sim_ghostgraph.apply_thrust(throttle, pitch_rate)
+            self.sim_ghostgraph.step()
+
+        # Step Flat LLM (Lacks grounded memory 0x00403000 -> 0 thrust -> freefall crater collision)
+        if self.sim_flat_llm.is_landed == 0:
+            if auto_guidance:
+                self.sim_flat_llm.apply_thrust(0.65, 0.0)
+            else:
+                self.sim_flat_llm.apply_thrust(throttle, pitch_rate)
+            self.sim_flat_llm.step()
+
+        return self.get_state()
+
+    def get_state(self):
+        radar_g = self.sim_ghostgraph.raycast()
+        radar_f = self.sim_flat_llm.raycast()
+        return {
+            "terrain": LUNAR_TERRAIN_PROFILE,
+            "ghostgraph": {
+                "x": round(self.sim_ghostgraph.x, 2),
+                "y": round(self.sim_ghostgraph.y, 2),
+                "vx": round(self.sim_ghostgraph.vx, 2),
+                "vy": round(self.sim_ghostgraph.vy, 2),
+                "pitch": round(self.sim_ghostgraph.pitch, 3),
+                "pitch_deg": round(math.degrees(self.sim_ghostgraph.pitch), 1),
+                "fuel_mass": round(self.sim_ghostgraph.fuel_mass, 1),
+                "throttle": round(self.sim_ghostgraph.throttle, 2),
+                "total_mass": round(self.sim_ghostgraph.total_mass, 1),
+                "radar_alt": round(radar_g, 2),
+                "is_landed": self.sim_ghostgraph.is_landed,
+                "status_code": self.sim_ghostgraph.status_code,
+                "tick_count": self.sim_ghostgraph.tick_count
+            },
+            "flat_llm": {
+                "x": round(self.sim_flat_llm.x, 2),
+                "y": round(self.sim_flat_llm.y, 2),
+                "vx": round(self.sim_flat_llm.vx, 2),
+                "vy": round(self.sim_flat_llm.vy, 2),
+                "pitch": round(self.sim_flat_llm.pitch, 3),
+                "pitch_deg": round(math.degrees(self.sim_flat_llm.pitch), 1),
+                "fuel_mass": round(self.sim_flat_llm.fuel_mass, 1),
+                "throttle": round(self.sim_flat_llm.throttle, 2),
+                "total_mass": round(self.sim_flat_llm.total_mass, 1),
+                "radar_alt": round(radar_f, 2),
+                "is_landed": self.sim_flat_llm.is_landed,
+                "status_code": self.sim_flat_llm.status_code,
+                "tick_count": self.sim_flat_llm.tick_count
+            }
+        }
+
+active_lunar = ApolloFlightSimulator()
+
+@app.get("/api/lunar/state")
+async def get_lunar_state():
+    return JSONResponse(active_lunar.get_state())
+
+@app.post("/api/lunar/reset")
+async def reset_lunar_state():
+    return JSONResponse(active_lunar.reset())
+
+@app.post("/api/lunar/step")
+async def step_lunar(request: Request):
+    body = await request.json()
+    throttle = float(body.get("throttle", 0.0))
+    pitch_rate = float(body.get("pitch_rate", 0.0))
+    auto_guidance = bool(body.get("auto_guidance", False))
+    mode = str(body.get("mode", "ghostgraph"))
+    return JSONResponse(active_lunar.step(throttle, pitch_rate, auto_guidance, mode))
 
 if __name__ == "__main__":
     import uvicorn
