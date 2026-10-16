@@ -379,10 +379,211 @@ async def reset_snake():
     active_snake.reset()
     return JSONResponse(active_snake.get_state())
 
+# ============================================================================
+# 1978 Space Invaders Continuous Arcade Game State Engine
+# ============================================================================
+
+class SpaceInvadersGameEngine:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.score = 0
+        self.highscore = 1200
+        self.lives = 3
+        self.is_alive = True
+        self.player_x = 38
+        self.tick_count = 0
+        
+        # 0x00405100: ALIEN_BLOCK_GRID (5 rows x 10 cols)
+        self.alien_grid = [
+            [1]*10,
+            [2]*10,
+            [2]*10,
+            [3]*10,
+            [3]*10
+        ]
+        self.alien_x = 10
+        self.alien_y = 3
+        self.alien_dir = 1
+        self.alien_speed = 1.0
+
+        # 0x00405240: BUNKER_EROSION_GRID (4 bunkers, 4 rows x 12 cols each)
+        bunker_shape = [
+            [0,0,1,1,1,1,1,1,1,1,0,0],
+            [0,1,1,1,1,1,1,1,1,1,1,0],
+            [1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,1,1,0,0,0,0,0,0,1,1,1]
+        ]
+        self.bunkers = [[row[:] for row in bunker_shape] for _ in range(4)]
+        self.alien_missiles = []
+        self.player_bullets = []
+
+    def step(self, action: str = "none", is_broken_mode: bool = False):
+        if not self.is_alive:
+            return self.get_state()
+            
+        self.tick_count += 1
+
+        if is_broken_mode:
+            # Base LLM Isolated Mode: ungrounded memory pointers collapse simulation
+            return {
+                "score": 0,
+                "lives": 0,
+                "alive": False,
+                "alien_grid": [],
+                "bunkers": [],
+                "player_x": self.player_x,
+                "alien_missiles": [{"x": 38, "y": 20}],
+                "player_bullets": [],
+                "error": "UNGROUNDED MEMORY COLLAPSE: 0x00405100 (ALIEN_BLOCK) & 0x00405240 (BUNKER_EROSION) unmapped in isolated LLM context."
+            }
+
+        # Player Movement
+        if action == "left" and self.player_x > 4:
+            self.player_x -= 2
+        elif action == "right" and self.player_x < 72:
+            self.player_x += 2
+        elif action == "fire" and len(self.player_bullets) < 3:
+            self.player_bullets.append({"x": self.player_x + 1, "y": 21})
+
+        # Advance Player Bullets
+        active_bullets = []
+        for b in self.player_bullets:
+            b["y"] -= 1
+            hit = False
+            
+            # Check bunker collision
+            if 17 <= b["y"] <= 20:
+                for b_idx, b_x_start in enumerate([12, 28, 44, 60]):
+                    if b_x_start <= b["x"] < b_x_start + 12:
+                        b_row = b["y"] - 17
+                        b_col = b["x"] - b_x_start
+                        if self.bunkers[b_idx][b_row][b_col] == 1:
+                            self.bunkers[b_idx][b_row][b_col] = 0
+                            hit = True
+                            break
+            
+            # Check alien collision
+            if not hit and b["y"] >= self.alien_y and b["y"] < self.alien_y + 10:
+                rel_y = b["y"] - self.alien_y
+                r_idx = rel_y // 2
+                if 0 <= r_idx < 5:
+                    rel_x = b["x"] - self.alien_x
+                    c_idx = rel_x // 4
+                    if 0 <= c_idx < 10 and self.alien_grid[r_idx][c_idx] != 0:
+                        alien_type = self.alien_grid[r_idx][c_idx]
+                        self.alien_grid[r_idx][c_idx] = 0
+                        pts = 30 if alien_type == 1 else (20 if alien_type == 2 else 10)
+                        self.score += pts
+                        if self.score > self.highscore:
+                            self.highscore = self.score
+                        hit = True
+
+            if not hit and b["y"] > 1:
+                active_bullets.append(b)
+        self.player_bullets = active_bullets
+
+        # Advance Swarm
+        if self.tick_count % 3 == 0:
+            self.alien_x += self.alien_dir * 1
+            if self.alien_x > 34 or self.alien_x < 4:
+                self.alien_dir *= -1
+                self.alien_y += 1
+                if self.alien_y >= 16:
+                    self.is_alive = False
+
+        # Drop Alien Missiles
+        if self.tick_count % 4 == 0 and len(self.alien_missiles) < 4:
+            active_cols = [c for c in range(10) if any(self.alien_grid[r][c] != 0 for r in range(5))]
+            if active_cols:
+                shot_c = random.choice(active_cols)
+                lowest_r = max(r for r in range(5) if self.alien_grid[r][shot_c] != 0)
+                missile_x = self.alien_x + (shot_c * 4) + 1
+                missile_y = self.alien_y + (lowest_r * 2) + 1
+                self.alien_missiles.append({"x": missile_x, "y": missile_y})
+
+        # Advance Alien Missiles
+        active_missiles = []
+        for m in self.alien_missiles:
+            m["y"] += 1
+            hit = False
+            
+            # Bunker hit
+            if 17 <= m["y"] <= 20:
+                for b_idx, b_x_start in enumerate([12, 28, 44, 60]):
+                    if b_x_start <= m["x"] < b_x_start + 12:
+                        b_row = m["y"] - 17
+                        b_col = m["x"] - b_x_start
+                        if self.bunkers[b_idx][b_row][b_col] == 1:
+                            self.bunkers[b_idx][b_row][b_col] = 0
+                            hit = True
+                            break
+            
+            # Player hit
+            if not hit and m["y"] == 22 and (self.player_x <= m["x"] <= self.player_x + 3):
+                self.lives -= 1
+                hit = True
+                if self.lives <= 0:
+                    self.is_alive = False
+
+            if not hit and m["y"] < 24:
+                active_missiles.append(m)
+        self.alien_missiles = active_missiles
+
+        return self.get_state()
+
+    def get_state(self):
+        remaining_aliens = sum(1 for r in range(5) for c in range(10) if self.alien_grid[r][c] != 0)
+        return {
+            "score": self.score,
+            "highscore": self.highscore,
+            "lives": self.lives,
+            "alive": self.is_alive,
+            "player_x": self.player_x,
+            "alien_grid": self.alien_grid,
+            "alien_x": self.alien_x,
+            "alien_y": self.alien_y,
+            "remaining_aliens": remaining_aliens,
+            "bunkers": self.bunkers,
+            "player_bullets": self.player_bullets,
+            "alien_missiles": self.alien_missiles,
+            "tick_count": self.tick_count
+        }
+
+active_invaders = SpaceInvadersGameEngine()
+
+@app.get("/api/invaders/state")
+async def get_invaders_state():
+    return JSONResponse(active_invaders.get_state())
+
+@app.post("/api/invaders/reset")
+async def reset_invaders():
+    active_invaders.reset()
+    return JSONResponse(active_invaders.get_state())
+
+@app.post("/api/invaders/step")
+async def step_invaders(request: Request):
+    body = await request.json()
+    action = str(body.get("action", "none"))
+    is_broken = bool(body.get("is_broken_mode", False))
+    return JSONResponse(active_invaders.step(action=action, is_broken_mode=is_broken))
+
 @app.get("/api/export")
 async def export_reconstructed_project(target_id: str = "lunar_lander"):
     """Returns standalone compilable C project files with Makefile."""
-    if target_id == "snake":
+    if target_id == "space_invaders":
+        code_path = Path("ground_truth/space_invaders_core.c")
+        code = code_path.read_text(encoding="utf-8") if code_path.exists() else ""
+        makefile = "CC = gcc\nCFLAGS = -O2 -Wall\n\nall: space_invaders\n\nspace_invaders: space_invaders_core.c\n\t$(CC) $(CFLAGS) -o space_invaders space_invaders_core.c\n\nclean:\n\trm -f space_invaders\n"
+        return JSONResponse({
+            "target": "space_invaders",
+            "filename": "space_invaders_core.c",
+            "source_code": code,
+            "makefile": makefile,
+            "compile_cmd": "gcc -O2 -Wall -o space_invaders space_invaders_core.c"
+        })
+    elif target_id == "snake":
         code_path = Path("ground_truth/snake_core.c")
         code = code_path.read_text(encoding="utf-8") if code_path.exists() else ""
         makefile = "CC = gcc\nCFLAGS = -O2 -Wall -DSTANDALONE_MAIN\n\nall: snake\n\nsnake: snake_core.c\n\t$(CC) $(CFLAGS) -o snake snake_core.c\n\nclean:\n\trm -f snake\n"
