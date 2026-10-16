@@ -31,12 +31,16 @@
   <section id="screenHero" class="screen-view active flex-1 flex-col items-center justify-center max-w-3xl mx-auto px-6 py-12 text-center space-y-10">
     
     <!-- Title & Subtitle -->
-    <div class="space-y-4 max-w-xl mx-auto">
+    <div class="space-y-4 max-w-2xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#16171d] border border-[#262832] text-[11px] font-mono text-[#22c55e]">
+        <span class="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></span>
+        Autonomous Multi-Agent AI Reverse Engineering Swarm
+      </div>
       <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-[#f5f3ec] font-mono">
         GHOSTGRAPH
       </h1>
       <p class="text-sm md:text-base text-[#a3a099] leading-relaxed">
-        Autonomous graph-guided binary reverse engineering. Ingests compiled machine code into connected graph topology to reconstruct verifiable, compilable C software.
+        An <span class="text-[#f5f3ec] font-medium">autonomous multi-agent AI system</span> that reverse-engineers stripped machine code. Specialized agents query a <span class="text-[#f5f3ec] font-medium">FalkorDB knowledge graph</span> to trace detached memory pointers, navigate call topology, and reconstruct verifiable, executable source code.
       </p>
     </div>
 
@@ -63,7 +67,7 @@
     </div>
 
     <!-- Preloaded Benchmark Targets Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 w-full text-left">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-left">
       
       <!-- Target 0: Space Invaders (Flagship Arcade) -->
       <div onclick="selectTarget('space_invaders')" class="border border-[#1c1e24] hover:border-[#3d404d] bg-[#111216] hover:bg-[#16171d] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
@@ -73,7 +77,7 @@
         </div>
         <div>
           <div class="text-sm font-bold text-[#f5f3ec] font-mono">1978 Space Invaders</div>
-          <div class="text-xs text-[#a3a099] mt-1">Authentic nInvaders C binary • Decoupled alien swarm (0x00405100) & bunker bitmasks.</div>
+          <div class="text-xs text-[#a3a099] mt-1">Authentic nInvaders C binary • 25 subroutines, decoupled alien swarm (0x00405100) & bunker bitmasks.</div>
         </div>
         <div class="text-[11px] font-mono text-[#a3a099] group-hover:text-[#f5f3ec] flex items-center gap-1.5 pt-2 border-t border-[#1c1e24] transition-colors">
           <span>Launch Swarm</span>
@@ -89,39 +93,7 @@
         </div>
         <div>
           <div class="text-sm font-bold text-[#f5f3ec] font-mono">Apollo 11 LGC Guidance</div>
-          <div class="text-xs text-[#a3a099] mt-1">Stripped x86_64 avionics • 6 subroutines with detached throttle and topography tables.</div>
-        </div>
-        <div class="text-[11px] font-mono text-[#a3a099] group-hover:text-[#f5f3ec] flex items-center gap-1.5 pt-2 border-t border-[#1c1e24] transition-colors">
-          <span>Launch Swarm</span>
-          <i class="fa-solid fa-arrow-right text-[9px] group-hover:translate-x-1 transition-transform"></i>
-        </div>
-      </div>
-
-      <!-- Target 2: Satellite Telemetry Decoder -->
-      <div onclick="selectTarget('telemetry')" class="border border-[#1c1e24] hover:border-[#3d404d] bg-[#111216] hover:bg-[#16171d] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
-        <div class="flex items-center justify-between">
-          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#16171d] text-[#a3a099] border border-[#262832]">Aerospace</span>
-          <i class="fa-solid fa-satellite-dish text-xs text-[#6e6b63] group-hover:text-[#f5f3ec] transition-colors"></i>
-        </div>
-        <div>
-          <div class="text-sm font-bold text-[#f5f3ec] font-mono">Satellite Telemetry Decoder</div>
-          <div class="text-xs text-[#a3a099] mt-1">Downlink packet frame unpacker & CRC-CCITT polynomial table generator.</div>
-        </div>
-        <div class="text-[11px] font-mono text-[#a3a099] group-hover:text-[#f5f3ec] flex items-center gap-1.5 pt-2 border-t border-[#1c1e24] transition-colors">
-          <span>Launch Swarm</span>
-          <i class="fa-solid fa-arrow-right text-[9px] group-hover:translate-x-1 transition-transform"></i>
-        </div>
-      </div>
-
-      <!-- Target 3: Enterprise Keygen CrackMe -->
-      <div onclick="selectTarget('keygen')" class="border border-[#1c1e24] hover:border-[#3d404d] bg-[#111216] hover:bg-[#16171d] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
-        <div class="flex items-center justify-between">
-          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#16171d] text-[#a3a099] border border-[#262832]">Security</span>
-          <i class="fa-solid fa-shield-halved text-xs text-[#6e6b63] group-hover:text-[#f5f3ec] transition-colors"></i>
-        </div>
-        <div>
-          <div class="text-sm font-bold text-[#f5f3ec] font-mono">Enterprise License Keygen</div>
-          <div class="text-xs text-[#a3a099] mt-1">Cryptanalysis CrackMe with FNV-1a block hash and non-linear S-Box tables.</div>
+          <div class="text-xs text-[#a3a099] mt-1">Authentic Luminary 099 AGC assembly • Descent engine throttle control & P66 landing guidance.</div>
         </div>
         <div class="text-[11px] font-mono text-[#a3a099] group-hover:text-[#f5f3ec] flex items-center gap-1.5 pt-2 border-t border-[#1c1e24] transition-colors">
           <span>Launch Swarm</span>

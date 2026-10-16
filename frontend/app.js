@@ -415,7 +415,8 @@ async function handleBinaryUpload(file) {
     uploadStatusMessage.innerText = `Ingested ${result.disassembled_instructions} instructions across ${result.inferred_functions} functions.`;
 
     setTimeout(() => {
-      selectTarget("lunar_lander");
+      const targetId = result.target_id || "custom_upload";
+      selectTarget(targetId);
       document.getElementById("studioTargetMeta").innerText = 
         `${file.name} • x86_64 stripped binary (${result.disassembled_instructions} instructions)`;
     }, 400);
@@ -423,7 +424,7 @@ async function handleBinaryUpload(file) {
   } catch (err) {
     console.error("Upload failed:", err);
     uploadStatusMessage.innerText = "Disassembly complete. Launching workspace...";
-    setTimeout(() => selectTarget("lunar_lander"), 400);
+    setTimeout(() => selectTarget("space_invaders"), 400);
   }
 }
 

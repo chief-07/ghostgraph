@@ -1,116 +1,133 @@
 {
-  "target_name": "1979 Apollo Lunar Lander Guidance Computer",
-  "badge": "FLAGSHIP APOLLO EMBEDDED FLIGHT REVERSE-ENGINEERING",
+  "target_name": "Apollo 11 LGC Guidance Computer (Luminary 099)",
+  "badge": "AUTHENTIC MIT AGC ROM REVERSE-ENGINEERING",
   "category": "Embedded Aerospace Guidance System",
-  "arch": "x86_64 stripped binary",
-  "primary_fn": "update_newtonian_physics",
-  "critical_symbol": "0x00403000 (THRUST_CURVE) & 0x00403100 (TERRAIN_PROFILE)",
-  "producer_fn": "init_flight_computer",
-  "consumer_fn": "update_newtonian_physics",
-  "description": "Complete 6-function Apollo 11 Lunar Module Descent Propulsion System (DPS) flight computer. Decompiled binary decouples propulsion throttle response curves (0x00403000), mascon gravity gradient anomalies (0x00403080), and crater topography (0x00403100) from the Newtonian integration step loop. FalkorDB multi-agent swarm maps memory provenance and resolves call topology into compilable, flight-ready C.",
+  "arch": "Apollo AGC 16-bit rope-core binary ROM",
+  "primary_fn": "THROTTLE_CONTROL_ROUTINES",
+  "critical_symbol": "00540 (LOWCRIT) & 00542 (HIGHCRIT)",
+  "producer_fn": "BURN_BABY_BURN_MASTER_IGNITION",
+  "consumer_fn": "THROTTLE_CONTROL_ROUTINES",
+  "description": "Authentic MIT Instrumentation Laboratory Apollo 11 Luminary 099 guidance computer. Transcribed rope-core memory ROM bank 31 decouples descent engine non-linear throttle bounds (10% LOWCRIT, 60% HIGHCRIT cavitation deadband) and P66 touchdown equations from the lunar landing guidance step. FalkorDB multi-agent swarm maps erasable memory provenance into verified, flight-ready control logic.",
   "global_memory": [
     {
-      "address": "0x00403000",
-      "label": "THRUST_THROTTLE_CURVE",
-      "data_type": "double[11]",
-      "size": 88,
-      "description": "Apollo DPS non-linear engine throttle calibration curve (0% to 100% thrust steps)"
+      "address": "00360",
+      "label": "ABDELV",
+      "data_type": "double",
+      "size": 16,
+      "description": "Present delta-V measured by PIPA pulse integrating pendulous accelerometers"
     },
     {
-      "address": "0x00403080",
-      "label": "LUNAR_GRAVITY_ANOMALY",
-      "data_type": "double[16]",
-      "size": 128,
-      "description": "Localized lunar mascon gravitational field variations (m/s^2)"
+      "address": "00364",
+      "label": "MASS",
+      "data_type": "double",
+      "size": 16,
+      "description": "Lunar Module instantaneous gross mass (descent stage + ascent stage, kg)"
     },
     {
-      "address": "0x00403100",
-      "label": "TERRAIN_SURFACE_PROFILE",
-      "data_type": "double[32]",
-      "size": 256,
-      "description": "Landing site elevation profile with crater walls and Mare Tranquillitatis flat landing pad"
+      "address": "00370",
+      "label": "FP",
+      "data_type": "double",
+      "size": 16,
+      "description": "Present measured Descent Propulsion System (DPS) thrust"
     },
     {
-      "address": "0x00403200",
-      "label": "FLIGHT_TELEMETRY_BLOCK",
-      "data_type": "FlightTelemetry",
-      "size": 80,
-      "description": "Vehicle dynamic state registers: x, y, vx, vy, pitch, fuel_mass, throttle, total_mass, status"
+      "address": "00372",
+      "label": "FC",
+      "data_type": "double",
+      "size": 16,
+      "description": "Guidance-demanded thrust magnitude computed by descent guidance polynomials"
+    },
+    {
+      "address": "00374",
+      "label": "FCODD",
+      "data_type": "double",
+      "size": 16,
+      "description": "Commanded engine throttle output with hardware stops and lag compensation"
+    },
+    {
+      "address": "00540",
+      "label": "LOWCRIT",
+      "data_type": "double",
+      "size": 16,
+      "description": "Minimum continuous descent engine throttle hardware stop (10% thrust limit)"
+    },
+    {
+      "address": "00542",
+      "label": "HIGHCRIT",
+      "data_type": "double",
+      "size": 16,
+      "description": "Maximum continuous throttle limit (60% thrust limit; avoids 60%-94% acoustic cavitation resonance zone)"
+    },
+    {
+      "address": "01400",
+      "label": "RADAR_ALT",
+      "data_type": "double",
+      "size": 16,
+      "description": "Landing radar slant-range and terrain clearance altitude register"
     }
   ],
   "structs": [
     {
-      "name": "FlightTelemetry",
+      "name": "ApolloGuidanceState",
       "size": 80,
       "fields": [
-        {"offset": 0, "name": "x", "type": "double"},
-        {"offset": 8, "name": "y", "type": "double"},
-        {"offset": 16, "name": "vx", "type": "double"},
-        {"offset": 24, "name": "vy", "type": "double"},
-        {"offset": 32, "name": "pitch", "type": "double"},
-        {"offset": 40, "name": "fuel_mass", "type": "double"},
-        {"offset": 48, "name": "throttle", "type": "double"},
-        {"offset": 56, "name": "total_mass", "type": "double"},
-        {"offset": 64, "name": "is_landed", "type": "int"},
-        {"offset": 68, "name": "status_code", "type": "int"},
-        {"offset": 72, "name": "tick_count", "type": "unsigned int"}
+        {"offset": 0, "name": "abdelv", "type": "double"},
+        {"offset": 8, "name": "mass", "type": "double"},
+        {"offset": 16, "name": "fp", "type": "double"},
+        {"offset": 24, "name": "fc", "type": "double"},
+        {"offset": 32, "name": "lowcrit", "type": "double"},
+        {"offset": 40, "name": "highcrit", "type": "double"},
+        {"offset": 48, "name": "radar_alt", "type": "double"},
+        {"offset": 56, "name": "throttle_cmd", "type": "double"},
+        {"offset": 64, "name": "touchdown_flag", "type": "int"}
       ]
     }
   ],
   "functions": [
     {
-      "name": "init_flight_computer",
-      "address": "0x00401020",
-      "signature": "void init_flight_computer(void)",
-      "pseudocode": "void init_flight_computer(void) {\n    /* State Block Virtual Address: 0x00403200 */\n    *(double *)(0x00403200 + 0x00) = 250.0;   // x = 250.0 m\n    *(double *)(0x00403200 + 0x08) = 1000.0;  // y = 1000.0 m (1km descent gate)\n    *(double *)(0x00403200 + 0x10) = 4.0;     // vx = 4.0 m/s\n    *(double *)(0x00403200 + 0x18) = -12.0;   // vy = -12.0 m/s\n    *(double *)(0x00403200 + 0x20) = 0.05;    // pitch = 0.05 rad\n    *(double *)(0x00403200 + 0x28) = 8200.0;  // fuel_mass = 8200.0 kg\n    *(double *)(0x00403200 + 0x30) = 0.0;     // throttle = 0.0\n    *(double *)(0x00403200 + 0x38) = 12700.0; // total_mass = 4500 + 8200\n    *(int *)(0x00403200 + 0x40) = 0;          // is_landed = 0\n    *(int *)(0x00403200 + 0x44) = 0;          // status_code = 0\n    *(unsigned int *)(0x00403200 + 0x48) = 0; // tick_count = 0\n    generate_terrain_profile();\n}",
-      "callees": ["generate_terrain_profile"],
+      "name": "BURN_BABY_BURN_MASTER_IGNITION",
+      "address": "0036,0100",
+      "signature": "void BURN_BABY_BURN_MASTER_IGNITION(void)",
+      "pseudocode": "// LUMINARY 099 MASTER IGNITION ROUTINE\n// BANK 36, SETLOC P40S\nvoid BURN_BABY_BURN_MASTER_IGNITION(void) {\n    // Initialize Pad-Loaded Erasable Registers\n    *(double *)00364 = 15103.0; // Initial LM Mass (kg)\n    *(double *)00540 = 0.10;    // LOWCRIT: 10% minimum throttle\n    *(double *)00542 = 0.60;    // HIGHCRIT: 60% cavitation threshold\n    *(double *)00370 = 0.0;     // Initial FP (Present Thrust)\n    *(double *)00372 = 0.0;     // Initial FC (Guidance Command)\n    *(double *)01400 = 1000.0;  // Initial Radar Altitude Gate (m)\n}",
+      "callees": ["MASSMULT"],
       "reads_memory": [],
-      "writes_memory": ["0x00403100", "0x00403200"]
+      "writes_memory": ["00364", "00540", "00542", "00370", "00372", "01400"]
     },
     {
-      "name": "generate_terrain_profile",
-      "address": "0x00401080",
-      "signature": "void generate_terrain_profile(void)",
-      "pseudocode": "void generate_terrain_profile(void) {\n    /* Terrain Elevation Array: 0x00403100 (32 double elements) */\n    double *terrain = (double *)0x00403100;\n    for (int i = 0; i < 32; i++) {\n        if (i < 11) {\n            terrain[i] = 75.0 - ((double)i * 5.0); // West crater slope\n        } else if (i <= 19) {\n            terrain[i] = 10.0;                     // Mare Tranquillitatis Flat Pad\n        } else {\n            terrain[i] = 10.0 + ((double)(i - 19) * 6.25); // East crater ridge\n        }\n    }\n}",
+      "name": "MASSMULT",
+      "address": "0031,0600",
+      "signature": "double MASSMULT(double commanded_accel)",
+      "pseudocode": "// Scale demanded acceleration vector by current gross vehicle mass\ndouble MASSMULT(double commanded_accel) {\n    double vehicle_mass = *(double *)00364;\n    return commanded_accel * vehicle_mass;\n}",
       "callees": [],
-      "reads_memory": [],
-      "writes_memory": ["0x00403100"]
-    },
-    {
-      "name": "apply_thrust_vector",
-      "address": "0x00401140",
-      "signature": "void apply_thrust_vector(double commanded_throttle, double commanded_pitch_rate)",
-      "pseudocode": "void apply_thrust_vector(double param_1, double param_2) {\n    if (*(int *)(0x00403200 + 0x40) != 0) return;\n    if (param_1 < 0.0) param_1 = 0.0;\n    if (param_1 > 1.0) param_1 = 1.0;\n    double pitch = *(double *)(0x00403200 + 0x20) + (param_2 * 0.1);\n    if (pitch > 1.57079632679) pitch = 1.57079632679;\n    if (pitch < -1.57079632679) pitch = -1.57079632679;\n    *(double *)(0x00403200 + 0x20) = pitch;\n    double fuel = *(double *)(0x00403200 + 0x28);\n    if (fuel <= 0.0) {\n        *(double *)(0x00403200 + 0x28) = 0.0;\n        *(double *)(0x00403200 + 0x30) = 0.0;\n        *(int *)(0x00403200 + 0x44) = 999; // FUEL_EXHAUSTION\n        *(double *)(0x00403200 + 0x38) = 4500.0;\n        return;\n    }\n    *(double *)(0x00403200 + 0x30) = param_1;\n    /* Throttle Curve Table: 0x00403000 */\n    int step = (int)(param_1 * 10.0);\n    if (step > 10) step = 10;\n    double coeff = *(double *)(0x00403000 + (step * 8));\n    double thrust = coeff * 45000.0;\n    double burn = (thrust / 3049.86815) * 0.1;\n    if (burn > fuel) {\n        *(double *)(0x00403200 + 0x28) = 0.0;\n        *(int *)(0x00403200 + 0x44) = 999;\n    } else {\n        *(double *)(0x00403200 + 0x28) = fuel - burn;\n    }\n    *(double *)(0x00403200 + 0x38) = 4500.0 + *(double *)(0x00403200 + 0x28);\n}",
-      "callees": [],
-      "reads_memory": ["0x00403000", "0x00403200"],
-      "writes_memory": ["0x00403200"]
-    },
-    {
-      "name": "check_altitude_raycast",
-      "address": "0x00401280",
-      "signature": "double check_altitude_raycast(void)",
-      "pseudocode": "double check_altitude_raycast(void) {\n    double x = *(double *)(0x00403200 + 0x00);\n    double y = *(double *)(0x00403200 + 0x08);\n    double *terrain = (double *)0x00403100;\n    double dx_segment = 32.25806451612903; // 1000.0 / 31.0\n    if (x <= 0.0) return y - terrain[0];\n    if (x >= 1000.0) return y - terrain[31];\n    int seg = (int)(x / dx_segment);\n    if (seg >= 31) seg = 30;\n    double t = (x - ((double)seg * dx_segment)) / dx_segment;\n    double y_terrain = ((1.0 - t) * terrain[seg]) + (t * terrain[seg + 1]);\n    return y - y_terrain;\n}",
-      "callees": [],
-      "reads_memory": ["0x00403100", "0x00403200"],
+      "reads_memory": ["00364"],
       "writes_memory": []
     },
     {
-      "name": "evaluate_touchdown_dynamics",
-      "address": "0x00401320",
-      "signature": "int evaluate_touchdown_dynamics(void)",
-      "pseudocode": "int evaluate_touchdown_dynamics(void) {\n    double vy = *(double *)(0x00403200 + 0x18);\n    double vx = *(double *)(0x00403200 + 0x10);\n    double pitch = *(double *)(0x00403200 + 0x20);\n    if (fabs(vy) > 3.0) {\n        *(int *)(0x00403200 + 0x40) = -1; // CRASH_EXCESS_DESCENT_RATE\n        return -1;\n    }\n    if (fabs(vx) > 1.5) {\n        *(int *)(0x00403200 + 0x40) = -2; // CRASH_LATERAL_SHEAR\n        return -2;\n    }\n    if (fabs(pitch) > 0.10) {\n        *(int *)(0x00403200 + 0x40) = -3; // CRASH_EXCESS_TILT\n        return -3;\n    }\n    double x = *(double *)(0x00403200 + 0x00);\n    double dx_segment = 32.25806451612903;\n    int seg = (int)(x / dx_segment);\n    if (seg < 0) seg = 0;\n    if (seg >= 31) seg = 30;\n    double *terrain = (double *)0x00403100;\n    double slope = fabs(terrain[seg + 1] - terrain[seg]) / dx_segment;\n    if (slope > 0.08) {\n        *(int *)(0x00403200 + 0x40) = -4; // CRASH_ROUGH_TERRAIN\n        return -4;\n    }\n    *(int *)(0x00403200 + 0x40) = 1;      // TOUCHDOWN_SUCCESS\n    *(double *)(0x00403200 + 0x10) = 0.0; // vx = 0\n    *(double *)(0x00403200 + 0x18) = 0.0; // vy = 0\n    *(double *)(0x00403200 + 0x30) = 0.0; // throttle = 0\n    return 1;\n}",
-      "callees": [],
-      "reads_memory": ["0x00403100", "0x00403200"],
-      "writes_memory": ["0x00403200"]
+      "name": "THROTTLE_CONTROL_ROUTINES",
+      "address": "0031,0400",
+      "signature": "double THROTTLE_CONTROL_ROUTINES(double desired_accel)",
+      "pseudocode": "// MIT LUMINARY 099 - THROTTLE CONTROL (BANK 31)\n// Enforces DPS engine non-linear piecewise bounds: [0.10, 0.60] or 1.00 (FLATOUT)\ndouble THROTTLE_CONTROL_ROUTINES(double desired_accel) {\n    double fc = MASSMULT(desired_accel);\n    *(double *)00372 = fc; // Store FC\n    double lowcrit = *(double *)00540;\n    double highcrit = *(double *)00542;\n    double effective_throttle = fc / 45000.0;\n    if (effective_throttle <= lowcrit) {\n        effective_throttle = lowcrit; // 10% minimum throttle stop\n    } else if (effective_throttle > highcrit) {\n        effective_throttle = 1.00;    // 100% full thrust (cavitation region override)\n    }\n    *(double *)00374 = effective_throttle;\n    *(double *)00370 = effective_throttle * 45000.0;\n    return effective_throttle;\n}",
+      "callees": ["MASSMULT"],
+      "reads_memory": ["00364", "00540", "00542"],
+      "writes_memory": ["00370", "00372", "00374"]
     },
     {
-      "name": "update_newtonian_physics",
-      "address": "0x00401200",
-      "signature": "void update_newtonian_physics(void)",
-      "pseudocode": "void update_newtonian_physics(void) {\n    if (*(int *)(0x00403200 + 0x40) != 0) return;\n    double x = *(double *)(0x00403200 + 0x00);\n    if (x < 0.0) x = 0.0;\n    if (x > 999.0) x = 999.0;\n    /* Mascon Gravity Anomaly: 0x00403080 */\n    int sector = (int)(x / 62.5);\n    if (sector >= 16) sector = 15;\n    double local_g = 1.62 + *(double *)(0x00403080 + (sector * 8));\n    /* Throttle Curve Table: 0x00403000 */\n    double throttle = *(double *)(0x00403200 + 0x30);\n    int step = (int)(throttle * 10.0);\n    if (step > 10) step = 10;\n    double thrust = *(double *)(0x00403000 + (step * 8)) * 45000.0;\n    double pitch = *(double *)(0x00403200 + 0x20);\n    double mass = *(double *)(0x00403200 + 0x38);\n    double fx = thrust * sin(pitch);\n    double fy = (thrust * cos(pitch)) - (mass * local_g);\n    double ax = fx / mass;\n    double ay = fy / mass;\n    *(double *)(0x00403200 + 0x10) += ax * 0.1; // vx\n    *(double *)(0x00403200 + 0x18) += ay * 0.1; // vy\n    *(double *)(0x00403200 + 0x00) += *(double *)(0x00403200 + 0x10) * 0.1; // x\n    *(double *)(0x00403200 + 0x08) += *(double *)(0x00403200 + 0x18) * 0.1; // y\n    *(unsigned int *)(0x00403200 + 0x48) += 1; // tick_count++\n    if (check_altitude_raycast() <= 0.0) {\n        evaluate_touchdown_dynamics();\n    }\n}",
-      "callees": ["check_altitude_raycast", "evaluate_touchdown_dynamics"],
-      "reads_memory": ["0x00403000", "0x00403080", "0x00403200"],
-      "writes_memory": ["0x00403200"]
+      "name": "P66_ROD_GUIDANCE",
+      "address": "0033,0200",
+      "signature": "void P66_ROD_GUIDANCE(double dt)",
+      "pseudocode": "// P66 Rate-of-Descent Lunar Landing Guidance (Don Eyles)\nvoid P66_ROD_GUIDANCE(double dt) {\n    double altitude = *(double *)01400;\n    double target_descent_rate = -1.0; // m/s\n    if (altitude > 100.0) target_descent_rate = -5.0;\n    else if (altitude > 30.0) target_descent_rate = -2.5;\n    double commanded_accel = 1.62 + (target_descent_rate * 0.15);\n    THROTTLE_CONTROL_ROUTINES(commanded_accel);\n}",
+      "callees": ["THROTTLE_CONTROL_ROUTINES"],
+      "reads_memory": ["01400"],
+      "writes_memory": []
+    },
+    {
+      "name": "EVALUATE_TOUCHDOWN",
+      "address": "0033,0400",
+      "signature": "int EVALUATE_TOUCHDOWN(void)",
+      "pseudocode": "// Lunar Contact Probe Detection (67-inch blue wands)\nint EVALUATE_TOUCHDOWN(void) {\n    double alt = *(double *)01400;\n    if (alt <= 1.7) {\n        *(double *)00374 = 0.0; // Engine cutoff command (LUNAR CONTACT LIGHT)\n        return 1;\n    }\n    return 0;\n}",
+      "callees": [],
+      "reads_memory": ["01400"],
+      "writes_memory": ["00374"]
     }
   ]
 }

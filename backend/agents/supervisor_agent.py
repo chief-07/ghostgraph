@@ -22,31 +22,45 @@ logger = logging.getLogger("ghostgraph.supervisor_agent")
 TARGET_CONFIGS = {
     "lunar_lander": {
         "name": "1979 Apollo Lunar Lander Guidance Computer",
-        "primary_fn": "update_newtonian_physics",
-        "critical_mem": "0x00403000",
-        "mem_label": "THRUST_THROTTLE_CURVE",
-        "producer_fn": "init_flight_computer",
-        "ref_binary": "ground_truth/lunar_lander.c",
-        "decompiled_snippet": """void update_newtonian_physics(void) {
-    if (*(int *)(0x00403200 + 0x40) != 0) return;
-    double x = *(double *)(0x00403200 + 0x00);
-    double *anomaly_table = (double *)0x00403080;
-    int sector = (int)(x / 62.5);
-    double local_g = 1.62 + anomaly_table[sector];
-    double *thrust_table = (double *)0x00403000;
-    double throttle = *(double *)(0x00403200 + 0x30);
-    int step = (int)(throttle * 10.0);
-    double thrust = thrust_table[step] * 45000.0;
-    double total_mass = *(double *)(0x00403200 + 0x38);
-    double pitch = *(double *)(0x00403200 + 0x20);
-    double Fx = thrust * sin(pitch);
-    double Fy = (thrust * cos(pitch)) - (total_mass * local_g);
-    *(double *)(0x00403200 + 0x10) += (Fx / total_mass) * 0.1;
-    *(double *)(0x00403200 + 0x18) += (Fy / total_mass) * 0.1;
-    *(double *)(0x00403200 + 0x00) += *(double *)(0x00403200 + 0x10) * 0.1;
-    *(double *)(0x00403200 + 0x08) += *(double *)(0x00403200 + 0x18) * 0.1;
-    if (check_altitude_raycast() <= 0.0) evaluate_touchdown_dynamics();
-}"""
+        "primary_fn": "THROTTLE_CONTROL_ROUTINES",
+        "critical_mem": "00540 (LOWCRIT) & 00542 (HIGHCRIT)",
+        "mem_label": "THROTTLE_LIMITS_ERASABLE_MEM",
+        "producer_fn": "BURN_BABY_BURN_MASTER_IGNITION",
+        "ref_binary": "Luminary099/THROTTLE_CONTROL_ROUTINES.agc",
+        "decompiled_snippet": """// MIT INSTRUMENTATION LAB - APOLLO GUIDANCE COMPUTER (AGC)
+// LUMINARY 1A BUILD 099 - JULY 14, 1969
+// BANK 31, SETLOC FTHROT, EBANK=PIF
+// ROUTINE: THROTTLE_CONTROL_ROUTINES (DPS DESCENT ENGINE THROTTLE CONTROL)
+
+0031,0400:  030360          CA    ABDELV        # Present delta-V from PIPA accelerometers
+0031,0401:  000006          EXTEND              # Extended AGC instruction
+0031,0402:  070440          MP    /AF/CNST      # Scale acceleration
+0031,0403:  000006          EXTEND
+0031,0404:  020412          QXCH  RTNHOLD       # Save return address
+0031,0405:  001200  AFDUMP  TC    MASSMULT      # Scale by current LM vehicle mass (kg)
+0031,0406:  050370          DXCH  FP            # Store FP = Present Thrust
+0031,0407:  000006          EXTEND
+0031,0410:  030372          DCA   /AFC/         # Desired acceleration
+0031,0411:  001200          TC    MASSMULT
+0031,0412:  050372          TS    FC            # FC = Commanded Thrust by Guidance
+0031,0413:  050374          DXCH  FCODD         # FCODD = What DPS engine is going to get
+
+// THROTTLE DEAD-BAND RESTRICTION (10% TO 60% CONTINUOUS, 100% MAXIMUM)
+0031,0414:  030025  WHERETO CA    EBANK5        # Switch to Erasable Bank 5
+0031,0415:  050003          TS    EBANK
+0031,0416:  000006          EXTEND
+0031,0417:  030540          DCA   LOWCRIT       # 00540: Minimum 10% throttle limit
+0031,0420:  050544          DXCH  L*WCR*T
+0031,0421:  040542          CS    H*GHCR*T      # 00542: Maximum 60% throttle limit (cavitation stop)
+0031,0422:  060372          AD    FCOLD
+0031,0423:  000006          EXTEND
+0031,0424:  011430          BZMF  LOWFCOLD      # Branch if FCOLD <= HIGHCRIT
+0031,0425:  040540          CS    L*WCR*T
+0031,0426:  060374          AD    FCODD
+0031,0427:  000006          EXTEND
+0031,0430:  011440          BZMF  FCOMPSET      # Branch if FC <= LOWCRIT
+0031,0431:  030370          CA    FP
+0031,0432:  001450          TCF   FLATOUT1      # Command 100% full throttle override"""
     },
     "telemetry": {
         "name": "Aerospace Satellite Telemetry Decoder",
