@@ -45,7 +45,7 @@ class FalkorClient:
         """Attempts connection to real FalkorDB instance."""
         try:
             import falkordb
-            kwargs = {"host": self.host, "port": self.port, "socket_timeout": 3.0}
+            kwargs = {"host": self.host, "port": self.port, "socket_timeout": 8.0}
             if self.username:
                 kwargs["username"] = self.username
             if self.password:
@@ -68,6 +68,9 @@ class FalkorClient:
         Falls back seamlessly to in-memory graph on socket/network failure.
         """
         params = params or {}
+        if not self.is_connected:
+            self._connect()
+
         if self.is_connected and self.graph:
             try:
                 res = self.graph.query(cypher, params)

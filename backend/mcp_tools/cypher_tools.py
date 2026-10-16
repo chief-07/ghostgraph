@@ -12,35 +12,40 @@ from backend.mcp_tools.falkor_client import falkor_client
 
 logger = logging.getLogger("ghostgraph.mcp_tools")
 
-def get_function_context(function_name: str, depth: int = 2) -> Dict[str, Any]:
+def get_function_context(function_identifier: str) -> Dict[str, Any]:
     """
-    Retrieves the complete topological context of a function:
-    - Pseudocode & signature
-    - Callers (incoming 1-2 hops)
-    - Callees (outgoing calls)
+    Retrieves the complete topological context of a function by name or hex address:
+    - Pseudocode, raw assembly, & signature
+    - Callers (incoming call edges)
+    - Callees (outgoing call edges)
     - Memory reads and writes
     """
     cypher = """
-    MATCH (f:Function {name: $name})
+    MATCH (f:Function)
+    WHERE f.name = $id OR f.address = $id
     OPTIONAL MATCH (caller:Function)-[:CALLS]->(f)
     OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
     OPTIONAL MATCH (f)-[:READS]->(read_mem:GlobalMemory)
     OPTIONAL MATCH (f)-[:WRITES]->(write_mem:GlobalMemory)
     RETURN f.name AS name,
+           f.address AS address,
            f.signature AS signature,
-           f.pseudocode AS pseudocode,
-           collect(DISTINCT caller.name) AS callers,
-           collect(DISTINCT callee.name) AS callees,
+           coalesce(f.pseudocode, f.raw_asm, '') AS pseudocode,
+           f.raw_asm AS raw_asm,
+           collect(DISTINCT coalesce(caller.name, caller.address)) AS callers,
+           collect(DISTINCT coalesce(callee.name, callee.address)) AS callees,
            collect(DISTINCT {address: read_mem.address, label: read_mem.label, type: read_mem.data_type}) AS reads,
            collect(DISTINCT {address: write_mem.address, label: write_mem.label, type: write_mem.data_type}) AS writes
     """
-    records = falkor_client.query(cypher, {"name": function_name})
+    records = falkor_client.query(cypher, {"id": function_identifier})
     if records:
         return records[0]
     return {
-        "name": function_name,
-        "signature": f"void {function_name}()",
+        "name": function_identifier,
+        "address": "",
+        "signature": f"void {function_identifier}()",
         "pseudocode": "// Function not found in graph",
+        "raw_asm": "",
         "callers": [],
         "callees": [],
         "reads": [],
@@ -51,17 +56,87 @@ def resolve_memory_source(memory_address: str) -> List[Dict[str, Any]]:
     """
     Multi-Hop Query (Track 01):
     Traces backwards through the graph to discover which function initialized
-    the memory at this address, returning its pseudocode and layout.
+    the memory at this address, returning its pseudocode, assembly, and parent caller.
     """
     cypher = """
     MATCH (mem:GlobalMemory {address: $addr})<-[:WRITES]-(initializer:Function)
+    OPTIONAL MATCH (caller:Function)-[:CALLS]->(initializer)
     RETURN mem.address AS address,
            mem.label AS label,
            mem.data_type AS data_type,
            initializer.name AS producer_function,
-           initializer.pseudocode AS initialization_code
+           initializer.address AS producer_address,
+           coalesce(initializer.pseudocode, initializer.raw_asm, '') AS initialization_code,
+           initializer.raw_asm AS producer_asm,
+           caller.name AS parent_caller
     """
     return falkor_client.query(cypher, {"addr": memory_address})
+
+def find_memory_consumers(memory_address: str) -> List[Dict[str, Any]]:
+    """
+    Identifies all functions in the binary that read from a given memory address.
+    """
+    cypher = """
+    MATCH (mem:GlobalMemory {address: $addr})<-[:READS]-(consumer:Function)
+    RETURN consumer.name AS consumer_name,
+           consumer.address AS consumer_address
+    """
+    return falkor_client.query(cypher, {"addr": memory_address})
+
+def get_call_chain(start_fn: str, target_fn: str) -> List[Dict[str, Any]]:
+    """
+    Multi-hop pathfinding: traces the execution call path from an entry point to a target subroutine.
+    """
+    cypher = """
+    MATCH (f1:Function), (f2:Function)
+    WHERE (f1.name = $start OR f1.address = $start) AND (f2.name = $target OR f2.address = $target)
+    MATCH p = (f1)-[:CALLS*1..6]->(f2)
+    RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS call_path
+    LIMIT 3
+    """
+    return falkor_client.query(cypher, {"start": start_fn, "target": target_fn})
+
+def detect_subsystem_clusters() -> List[Dict[str, Any]]:
+    """
+    Clusters functions into functional roles (Boot, Loop, Data Processing, Workers)
+    based on call degree and memory read/write topology.
+    """
+    cypher = """
+    MATCH (f:Function)
+    OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
+    OPTIONAL MATCH (caller:Function)-[:CALLS]->(f)
+    OPTIONAL MATCH (f)-[:READS|WRITES]->(m:GlobalMemory)
+    RETURN coalesce(f.name, f.address) AS function_name,
+           f.address AS address,
+           count(DISTINCT caller) AS caller_count,
+           count(DISTINCT callee) AS callee_count,
+           collect(DISTINCT m.address) AS shared_memory
+    """
+    records = falkor_client.query(cypher)
+    clusters = []
+    for r in records:
+        callers = r.get("caller_count", 0)
+        callees = r.get("callee_count", 0)
+        shared = r.get("shared_memory", [])
+
+        if callers == 0 and callees > 0:
+            role = "ENTRY_POINT / BOOT"
+        elif callers > 0 and callees > 1:
+            role = "SUBSYSTEM_COORDINATOR"
+        elif len(shared) > 0 and callees == 0:
+            role = "MEMORY_WORKER"
+        else:
+            role = "LEAF_SUBROUTINE"
+
+        clusters.append({
+            "function": r.get("function_name"),
+            "address": r.get("address"),
+            "role": role,
+            "caller_count": callers,
+            "callee_count": callees,
+            "memory_references": shared
+        })
+    return clusters
 
 def get_struct_definition(struct_name: str) -> Dict[str, Any]:
     """
@@ -112,7 +187,8 @@ def record_candidate(function_name: str, source_code: str, version: int, status:
         timestamp: timestamp()
     })
     WITH c
-    MATCH (f:Function {name: $fname})
+    MATCH (f:Function)
+    WHERE f.name = $fname OR f.address = $fname
     CREATE (c)-[:RECONSTRUCTS]->(f)
     RETURN c.id AS id
     """
