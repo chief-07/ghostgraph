@@ -28,6 +28,215 @@ class TopologyAgent:
         except Exception as e:
             logger.debug(f"Index notice: {e}")
 
+    def ingest_binary(
+        self,
+        binary_data: bytes,
+        program_name: str = "binary_target",
+        base_address: int = 0x00401000
+    ) -> Dict[str, Any]:
+        """
+        Genuinely disassembles machine code bytes using Capstone,
+        extracts function boundaries, call graphs, and RIP-relative memory references,
+        and persists the topological graph directly into FalkorDB Cloud.
+        """
+        import struct
+        import capstone
+        from capstone import x86
+
+        # Step 1: Detect ELF headers if present to find code offset & entrypoint
+        code_bytes = binary_data
+        load_addr = base_address
+
+        if binary_data.startswith(b"\x7fELF"):
+            try:
+                if binary_data[4] == 2:  # ELFCLASS64
+                    e_entry = struct.unpack_from("<Q", binary_data, 24)[0]
+                    e_phoff = struct.unpack_from("<Q", binary_data, 32)[0]
+                    e_phentsize = struct.unpack_from("<H", binary_data, 54)[0]
+                    e_phnum = struct.unpack_from("<H", binary_data, 56)[0]
+
+                    for i in range(e_phnum):
+                        offset = e_phoff + (i * e_phentsize)
+                        p_type, p_flags = struct.unpack_from("<II", binary_data, offset)
+                        if p_type == 1 and (p_flags & 1):  # PT_LOAD & PF_X
+                            p_offset = struct.unpack_from("<Q", binary_data, offset + 8)[0]
+                            p_vaddr = struct.unpack_from("<Q", binary_data, offset + 16)[0]
+                            p_filesz = struct.unpack_from("<Q", binary_data, offset + 32)[0]
+                            if p_filesz > 0 and p_offset < len(binary_data):
+                                code_bytes = binary_data[p_offset : p_offset + p_filesz]
+                                load_addr = p_vaddr
+                                break
+                    if e_entry != 0:
+                        load_addr = e_entry
+            except Exception as e:
+                logger.debug(f"ELF parse note: {e}")
+
+        # Step 2: Full Instruction Disassembly with Capstone
+        md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        md.detail = True
+
+        instructions = list(md.disasm(code_bytes, load_addr))
+        if not instructions:
+            return {
+                "status": "ERROR",
+                "message": "No valid x86_64 machine code instructions disassembled.",
+                "functions_count": 0
+            }
+
+        # Step 3: Discover Function Boundaries & Call Destinations
+        insn_by_addr = {insn.address: insn for insn in instructions}
+        call_targets = set()
+        ret_addrs = set()
+
+        for insn in instructions:
+            if insn.group(capstone.CS_GRP_CALL):
+                try:
+                    target_addr = int(insn.op_str, 16)
+                    call_targets.add(target_addr)
+                except ValueError:
+                    pass
+            elif insn.group(capstone.CS_GRP_RET):
+                ret_addrs.add(insn.address)
+
+        entry_points = sorted(list(call_targets | {load_addr}))
+
+        functions = []
+        function_map = {}
+
+        for i, entry in enumerate(entry_points):
+            fn_name = f"sub_{entry:08x}" if entry != load_addr else "main_entry"
+            fn_insns = []
+            next_entry = entry_points[i + 1] if i + 1 < len(entry_points) else float("inf")
+
+            cur = entry
+            while cur in insn_by_addr and cur < next_entry:
+                insn = insn_by_addr[cur]
+                fn_insns.append(insn)
+                cur += insn.size
+                if insn.address in ret_addrs:
+                    break
+
+            if fn_insns:
+                functions.append({
+                    "name": fn_name,
+                    "address": f"0x{entry:08X}",
+                    "instruction_count": len(fn_insns),
+                    "instructions": fn_insns,
+                    "asm_text": "\n".join(f"0x{ins.address:08X}: {ins.mnemonic} {ins.op_str}" for ins in fn_insns[:40])
+                })
+                function_map[entry] = fn_name
+
+        # Step 4: Extract CALLS and Memory READS/WRITES Edges
+        call_edges = []
+        read_edges = []
+        write_edges = []
+        global_memory = {}
+
+        for fn in functions:
+            for insn in fn["instructions"]:
+                if insn.group(capstone.CS_GRP_CALL):
+                    try:
+                        tgt = int(insn.op_str, 16)
+                        if tgt in function_map:
+                            call_edges.append({
+                                "caller": fn["name"],
+                                "callee": function_map[tgt]
+                            })
+                    except ValueError:
+                        pass
+
+                for op_idx, op in enumerate(insn.operands):
+                    if op.type == x86.X86_OP_MEM:
+                        base_reg = insn.reg_name(op.mem.base)
+                        if base_reg == "rip":
+                            disp = op.mem.disp
+                            target_mem = f"0x{(insn.address + insn.size + disp) & 0xFFFFFFFF:08X}"
+                            is_write = (op_idx == 0 and insn.mnemonic in ["mov", "add", "sub", "xor", "inc", "dec", "or", "and"])
+                            
+                            if is_write:
+                                write_edges.append({"fn": fn["name"], "addr": target_mem})
+                                access_type = "READ_WRITE"
+                            else:
+                                read_edges.append({"fn": fn["name"], "addr": target_mem})
+                                access_type = "READ_ONLY"
+
+                            if target_mem not in global_memory:
+                                global_memory[target_mem] = {
+                                    "address": target_mem,
+                                    "label": f"DATA_{target_mem[2:]}",
+                                    "access_type": access_type
+                                }
+
+        # Step 5: Ingest into FalkorDB Cloud
+        self.client.query(
+            "MERGE (p:Program {name: $name}) SET p.instruction_count = $cnt, p.functions_count = $fc RETURN p.name",
+            {"name": program_name, "cnt": len(instructions), "fc": len(functions)}
+        )
+
+        fn_payload = [{
+            "name": f["name"],
+            "address": f["address"],
+            "count": f["instruction_count"],
+            "asm": f["asm_text"]
+        } for f in functions]
+        if fn_payload:
+            self.client.query("""
+            MATCH (p:Program {name: $pname})
+            UNWIND $fns AS fn
+            MERGE (f:Function {address: fn.address})
+            SET f.name = fn.name,
+                f.instruction_count = fn.count,
+                f.raw_asm = fn.asm
+            MERGE (p)-[:CONTAINS]->(f)
+            RETURN count(f)
+            """, {"pname": program_name, "fns": fn_payload})
+
+        mem_payload = list(global_memory.values())
+        if mem_payload:
+            self.client.query("""
+            UNWIND $mem AS m
+            MERGE (g:GlobalMemory {address: m.address})
+            SET g.label = m.label,
+                g.access_type = m.access_type
+            RETURN count(g)
+            """, {"mem": mem_payload})
+
+        if call_edges:
+            self.client.query("""
+            UNWIND $calls AS c
+            MATCH (caller:Function {name: c.caller}), (callee:Function {name: c.callee})
+            MERGE (caller)-[:CALLS]->(callee)
+            RETURN count(*)
+            """, {"calls": call_edges})
+
+        if read_edges:
+            self.client.query("""
+            UNWIND $reads AS r
+            MATCH (f:Function {name: r.fn}), (m:GlobalMemory {address: r.addr})
+            MERGE (f)-[:READS]->(m)
+            RETURN count(*)
+            """, {"reads": read_edges})
+
+        if write_edges:
+            self.client.query("""
+            UNWIND $writes AS w
+            MATCH (f:Function {name: w.fn}), (m:GlobalMemory {address: w.addr})
+            MERGE (f)-[:WRITES]->(m)
+            RETURN count(*)
+            """, {"writes": write_edges})
+
+        return {
+            "status": "INGESTED",
+            "program_name": program_name,
+            "total_instructions": len(instructions),
+            "functions_count": len(functions),
+            "call_edges_count": len(call_edges),
+            "memory_nodes_count": len(global_memory),
+            "read_edges_count": len(read_edges),
+            "write_edges_count": len(write_edges),
+            "entry_point": f"0x{load_addr:08X}"
+        }
+
     def ingest_target(self, target_json_path: str, test_vectors_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Batched Ingestion using OpenCypher UNWIND.
