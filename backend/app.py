@@ -426,26 +426,47 @@ class ApolloFlightSimulator:
         return self.get_state()
 
     def step(self, throttle: float = 0.0, pitch_rate: float = 0.0, auto_guidance: bool = False, mode: str = "ghostgraph"):
-        sim = self.sim_ghostgraph if mode == "ghostgraph" else self.sim_flat_llm
-        if sim.is_landed != 0:
-            return self.get_state()
+        # Step GhostGraph (Guided by complete grounded memory tables)
+        if self.sim_ghostgraph.is_landed == 0:
+            if auto_guidance:
+                radar = self.sim_ghostgraph.raycast()
+                target_x = 420.0
+                dx = target_x - self.sim_ghostgraph.x
+                target_vx = max(-6.0, min(6.0, dx * 0.05))
+                if radar < 15.0:
+                    target_pitch = 0.0
+                else:
+                    target_pitch = max(-0.12, min(0.12, (target_vx - self.sim_ghostgraph.vx) * 0.04))
+                pitch_cmd = (target_pitch - self.sim_ghostgraph.pitch) * 2.5
 
-        if auto_guidance and mode == "ghostgraph":
-            radar = sim.raycast()
-            target_vy = -max(1.0, min(4.0, radar * 0.08))
-            thrust_cmd = 0.65 if sim.vy < target_vy else 0.42
-            if radar < 15.0:
-                pitch_cmd = -sim.pitch * 1.5
+                if radar > 400.0:
+                    target_vy = -16.0
+                elif radar > 150.0:
+                    target_vy = -8.0
+                elif radar > 40.0:
+                    target_vy = -4.0
+                elif radar > 10.0:
+                    target_vy = -1.8
+                else:
+                    target_vy = -1.0
+
+                hover_throttle = (self.sim_ghostgraph.total_mass * 1.62) / 45000.0
+                err_vy = target_vy - self.sim_ghostgraph.vy
+                throttle_cmd = hover_throttle + (err_vy * 0.09)
+                throttle_cmd = max(0.0, min(1.0, throttle_cmd))
+                self.sim_ghostgraph.apply_thrust(throttle_cmd, pitch_cmd)
             else:
-                pitch_cmd = -sim.vx * 0.15
-            sim.apply_thrust(thrust_cmd, pitch_cmd)
-        elif auto_guidance and mode != "ghostgraph":
-            # Flat LLM has missing tables, attempts same guidance but fails
-            sim.apply_thrust(0.65, 0.0)
-        else:
-            sim.apply_thrust(throttle, pitch_rate)
+                self.sim_ghostgraph.apply_thrust(throttle, pitch_rate)
+            self.sim_ghostgraph.step()
 
-        sim.step()
+        # Step Flat LLM (Lacks grounded memory 0x00403000 -> 0 thrust -> freefall crater collision)
+        if self.sim_flat_llm.is_landed == 0:
+            if auto_guidance:
+                self.sim_flat_llm.apply_thrust(0.65, 0.0)
+            else:
+                self.sim_flat_llm.apply_thrust(throttle, pitch_rate)
+            self.sim_flat_llm.step()
+
         return self.get_state()
 
     def get_state(self):

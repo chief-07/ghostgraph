@@ -6,287 +6,397 @@
   <title>GhostGraph | Autonomous Graph-Guided Binary Reverse Engineering</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Cytoscape.js CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
   <!-- FontAwesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="bg-[#0c0e14] text-[#e6e2d8] min-h-screen flex flex-col font-sans antialiased">
+<body class="bg-[#0c0e14] text-[#e6e2d8] min-h-screen flex flex-col font-sans antialiased select-none">
 
   <!-- ==================================================================== -->
-  <!-- Minimalist Top Navigation                                            -->
+  <!-- Top Minimalist Navigation Bar                                        -->
   <!-- ==================================================================== -->
-  <header class="border-b border-[#1e2535] bg-[#0c0e14]/90 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+  <header class="border-b border-[#1e2535] bg-[#0c0e14]/90 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <span class="text-sm font-bold tracking-tight text-[#f3f0e8] font-mono">GHOSTGRAPH</span>
-      <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#9da6b8] border border-[#2d374d]">Autonomous Decompiler Agent</span>
+      <span class="text-sm font-bold tracking-tight text-[#f3f0e8] font-mono cursor-pointer" onclick="showHomeScreen()">GHOSTGRAPH</span>
+      <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#9da6b8] border border-[#2d374d]">Autonomous Decompiler Swarm</span>
+    </div>
+
+    <!-- Active Breadcrumb -->
+    <div id="navBreadcrumb" class="hidden md:flex items-center gap-2 text-xs font-mono text-[#606a7e]">
+      <span class="text-[#9da6b8]" id="breadTarget">Apollo 11 LGC Guidance</span>
+      <span>/</span>
+      <span class="text-[#f3f0e8]" id="breadView">Hero Entry</span>
     </div>
 
     <div class="flex items-center gap-4 text-xs font-mono text-[#9da6b8]">
-      <button onclick="resetToHome()" class="hover:text-[#f3f0e8] transition-colors flex items-center gap-1.5">
+      <button onclick="showHomeScreen()" class="hover:text-[#f3f0e8] transition-colors flex items-center gap-1.5">
         <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Reset
       </button>
       <span class="text-[#2d374d]">|</span>
       <a href="https://github.com/chief-07/ghostgraph" target="_blank" class="hover:text-[#f3f0e8] transition-colors flex items-center gap-1.5">
-        <i class="fa-brands fa-github text-[11px]"></i> GitHub
+        <i class="fa-brands fa-github text-[12px]"></i> GitHub
       </a>
     </div>
   </header>
 
   <!-- ==================================================================== -->
-  <!-- MAIN progressive container                                          -->
+  <!-- SCREEN 1: HERO ENTRY (Centered Minimalist Landing)                   -->
   <!-- ==================================================================== -->
-  <main class="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
-
-    <!-- ================================================================== -->
-    <!-- SECTION 1: HERO ENTRY (Standby State)                              -->
-    <!-- ================================================================== -->
-    <section id="entrySection" class="state-panel active py-12 flex flex-col items-center text-center space-y-8 max-w-2xl mx-auto">
-      <div class="space-y-3">
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-[#f3f0e8]">
-          Autonomous Graph-Guided Binary Reverse Engineering
-        </h1>
-        <p class="text-sm text-[#9da6b8] leading-relaxed">
-          Reconstructs stripped machine binaries into verified, compilable C code. Uses FalkorDB as shared topological and episodic agent memory where flat LLMs experience context collapse.
-        </p>
+  <section id="screenHero" class="screen-view active flex-1 flex-col items-center justify-center max-w-4xl mx-auto px-6 py-16 text-center space-y-10">
+    
+    <!-- Title & Tagline -->
+    <div class="space-y-4 max-w-2xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#131720] border border-[#1e2535] text-[11px] font-mono text-[#9da6b8]">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#38bdf8]"></span>
+        <span>Powered by FalkorDB Topological Memory</span>
       </div>
+      <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-[#f3f0e8]">
+        GhostGraph
+      </h1>
+      <p class="text-sm md:text-base text-[#9da6b8] leading-relaxed">
+        Autonomous graph-guided binary reverse engineering. Ingests compiled machine code into connected graph topology to reconstruct verifiable, compilable C software.
+      </p>
+    </div>
 
-      <!-- Specimen Card / Dropzone -->
-      <div class="w-full border border-[#1e2535] hover:border-[#2d374d] bg-[#131720] rounded-xl p-6 text-left transition-all space-y-4">
-        <div class="flex items-start justify-between">
-          <div>
-            <div class="text-[10px] font-mono uppercase text-[#9da6b8] tracking-wider mb-1">Target Specimen</div>
-            <div class="text-base font-bold text-[#f3f0e8] font-mono">1979 Apollo Guidance Computer (LGC) Avionics</div>
-            <div class="text-xs text-[#9da6b8] mt-0.5">Stripped x86_64 machine binary • 6 subroutines • 4 detached memory buffers</div>
-          </div>
-          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#38bdf8] border border-[#2d374d]">Ready</span>
+    <!-- Upload Binary Pill with Icon & Dropzone -->
+    <div class="w-full max-w-md mx-auto space-y-3">
+      <div id="dropzone" class="border border-dashed border-[#2d374d] hover:border-[#38bdf8] bg-[#131720] hover:bg-[#161c28] rounded-2xl p-6 transition-all cursor-pointer flex flex-col items-center justify-center gap-2 group">
+        <i class="fa-solid fa-cloud-arrow-up text-2xl text-[#38bdf8] group-hover:scale-110 transition-transform"></i>
+        <div class="text-xs font-mono font-medium text-[#f3f0e8]">
+          Upload Stripped Binary
         </div>
-
-        <div class="grid grid-cols-2 gap-3 text-xs font-mono pt-2 border-t border-[#1e2535]">
-          <div>
-            <span class="text-[#606a7e]">Memory Tables:</span>
-            <span class="text-[#f3f0e8] block">0x00403000 (DPS Throttle)</span>
-          </div>
-          <div>
-            <span class="text-[#606a7e]">Physical Invariant:</span>
-            <span class="text-[#2eb872] block">g = 1.62 m/s² (Newtonian)</span>
-          </div>
+        <div class="text-[11px] text-[#606a7e] font-mono">
+          Drop .bin, .elf, .exe or click to browse
         </div>
-
-        <button id="btnLaunchSwarm" onclick="launchAgentSwarm()" class="w-full py-3 bg-[#f3f0e8] hover:bg-white text-[#0c0e14] font-medium text-xs font-mono rounded-lg transition-all flex items-center justify-center gap-2">
-          <span>Launch Autonomous Reverse Engineering Swarm</span>
-          <i class="fa-solid fa-arrow-right text-[11px]"></i>
-        </button>
+        <input type="file" id="binaryFileInput" class="hidden" accept=".bin,.elf,.exe,.so,.o,.dat">
       </div>
-    </section>
+      <div id="uploadStatusMessage" class="hidden text-xs font-mono text-[#38bdf8]"></div>
+    </div>
 
-    <!-- ================================================================== -->
-    <!-- SECTION 2: ACTIVE AGENT WORKSPACE (Real-Time Graph & Swarm)        -->
-    <!-- ================================================================== -->
-    <section id="workspaceSection" class="state-panel space-y-6">
+    <!-- Divider -->
+    <div class="flex items-center gap-3 w-full max-w-lg mx-auto">
+      <div class="flex-1 h-px bg-[#1e2535]"></div>
+      <span class="text-[11px] font-mono uppercase tracking-wider text-[#606a7e]">or select a benchmark target</span>
+      <div class="flex-1 h-px bg-[#1e2535]"></div>
+    </div>
+
+    <!-- Preloaded Benchmark Targets Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full text-left">
       
-      <!-- Top Workspace Banner -->
-      <div class="border border-[#1e2535] bg-[#131720] rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2">
-            <span id="agentWorkingIndicator" class="w-2 h-2 rounded-full bg-[#2eb872] animate-pulse"></span>
-            <span id="agentWorkingText" class="text-xs font-mono font-bold text-[#f3f0e8]">Swarm Active: Ingesting Binary Topology</span>
-          </div>
-          <p class="text-xs text-[#9da6b8]">
-            TopologyAgent maps call trees and detached memory pointers into FalkorDB in real time.
-          </p>
+      <!-- Target 1: Apollo Guidance Computer (Primary Hero Specimen) -->
+      <div onclick="selectTarget('lunar_lander')" class="border border-[#1e2535] hover:border-[#38bdf8] bg-[#131720] hover:bg-[#161c28] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#38bdf8] border border-[#2d374d]">Flagship</span>
+          <i class="fa-solid fa-rocket text-xs text-[#606a7e] group-hover:text-[#38bdf8] transition-colors"></i>
         </div>
+        <div>
+          <div class="text-sm font-bold text-[#f3f0e8] font-mono group-hover:text-white transition-colors">Apollo 11 LGC Guidance</div>
+          <div class="text-xs text-[#9da6b8] mt-1">Embedded x86_64 avionics • 6 subroutines with detached thrust and topography tables.</div>
+        </div>
+        <div class="text-[11px] font-mono text-[#38bdf8] flex items-center gap-1.5 pt-2 border-t border-[#1e2535]">
+          <span>Launch Swarm</span>
+          <i class="fa-solid fa-arrow-right text-[9px] group-hover:translate-x-1 transition-transform"></i>
+        </div>
+      </div>
 
-        <button id="btnProceedToExecution" onclick="proceedToExecution()" class="hidden px-5 py-2.5 bg-[#f3f0e8] hover:bg-white text-[#0c0e14] font-medium text-xs font-mono rounded-lg transition-all flex items-center gap-2">
+      <!-- Target 2: Satellite Telemetry Decoder -->
+      <div onclick="selectTarget('telemetry')" class="border border-[#1e2535] hover:border-[#f59e0b] bg-[#131720] hover:bg-[#161c28] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#f59e0b] border border-[#2d374d]">Aerospace</span>
+          <i class="fa-solid fa-satellite-dish text-xs text-[#606a7e] group-hover:text-[#f59e0b] transition-colors"></i>
+        </div>
+        <div>
+          <div class="text-sm font-bold text-[#f3f0e8] font-mono group-hover:text-white transition-colors">Satellite Telemetry Decoder</div>
+          <div class="text-xs text-[#9da6b8] mt-1">Downlink packet frame unpacker & CRC-CCITT polynomial table generator.</div>
+        </div>
+        <div class="text-[11px] font-mono text-[#f59e0b] flex items-center gap-1.5 pt-2 border-t border-[#1e2535]">
+          <span>Launch Swarm</span>
+          <i class="fa-solid fa-arrow-right text-[9px] group-hover:translate-x-1 transition-transform"></i>
+        </div>
+      </div>
+
+      <!-- Target 3: Enterprise Keygen CrackMe -->
+      <div onclick="selectTarget('keygen')" class="border border-[#1e2535] hover:border-[#2eb872] bg-[#131720] hover:bg-[#161c28] rounded-xl p-5 cursor-pointer transition-all space-y-3 group">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1a202c] text-[#2eb872] border border-[#2d374d]">Cybersecurity</span>
+          <i class="fa-solid fa-shield-halved text-xs text-[#606a7e] group-hover:text-[#2eb872] transition-colors"></i>
+        </div>
+        <div>
+          <div class="text-sm font-bold text-[#f3f0e8] font-mono group-hover:text-white transition-colors">Enterprise License Keygen</div>
+          <div class="text-xs text-[#9da6b8] mt-1">Cryptanalysis CrackMe with FNV-1a block hash and non-linear S-Box tables.</div>
+        </div>
+        <div class="text-[11px] font-mono text-[#2eb872] flex items-center gap-1.5 pt-2 border-t border-[#1e2535]">
+          <span>Launch Swarm</span>
+          <i class="fa-solid fa-arrow-right text-[9px] group-hover:translate-x-1 transition-transform"></i>
+        </div>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- ==================================================================== -->
+  <!-- SCREEN 2: AGENT STUDIO & WORKSPACE (Discrete View, No Scroll)        -->
+  <!-- ==================================================================== -->
+  <section id="screenStudio" class="screen-view flex-1 flex-col w-full max-w-7xl mx-auto px-6 py-6 space-y-5">
+    
+    <!-- Studio Header & Action Bar -->
+    <div class="border border-[#1e2535] bg-[#131720] rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="studioPulse" class="w-2.5 h-2.5 rounded-full bg-[#38bdf8] animate-pulse"></span>
+            <span id="studioStatusText" class="text-xs font-mono font-bold text-[#f3f0e8]">Swarm Active: Ingesting Binary Topology...</span>
+          </div>
+          <div class="text-xs text-[#9da6b8] mt-0.5" id="studioTargetMeta">
+            1979 Apollo Guidance Computer (LGC) • x86_64 stripped binary
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button id="btnGoToDuel" onclick="showDuelScreen()" class="hidden px-5 py-2.5 bg-[#f3f0e8] hover:bg-white text-[#0c0e14] font-medium text-xs font-mono rounded-lg transition-all flex items-center gap-2 shadow-lg">
           <span>Compare Live Execution Outputs</span>
           <i class="fa-solid fa-arrow-right text-[11px]"></i>
         </button>
       </div>
+    </div>
 
-      <!-- The Single Clean Tab Switcher -->
-      <div class="flex items-center justify-between border-b border-[#1e2535] pb-2 text-xs font-mono">
-        <div class="flex items-center gap-4">
-          <button id="tabBtnGraph" onclick="switchWorkspaceTab('graph')" class="text-[#f3f0e8] font-bold border-b-2 border-[#f3f0e8] pb-2 transition-all">
-            Knowledge Graph Topology
-          </button>
-          <button id="tabBtnMemory" onclick="switchWorkspaceTab('memory')" class="text-[#9da6b8] hover:text-[#f3f0e8] pb-2 transition-all">
-            Multi-Agent Swarm & Memory
-          </button>
-        </div>
-        
-        <!-- Graph Canvas Controls -->
-        <div id="graphControls" class="flex items-center gap-2 text-[11px]">
-          <button onclick="fitGraph()" class="px-2 py-1 rounded bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] border border-[#2d374d]">
-            Fit View
-          </button>
-          <button onclick="resetGraph()" class="px-2 py-1 rounded bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] border border-[#2d374d]">
-            Reset Layout
-          </button>
-        </div>
-      </div>
-
-      <!-- Tab View A: Knowledge Graph Canvas -->
-      <div id="tabGraphView" class="border border-[#1e2535] rounded-xl overflow-hidden relative">
-        <div id="cy"></div>
-        
-        <!-- Clean Floating Graph Legend -->
-        <div class="absolute bottom-4 left-4 bg-[#131720]/90 border border-[#1e2535] rounded-lg px-3 py-2 text-[11px] font-mono space-y-1 backdrop-blur pointer-events-none">
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span> Functions (:Function)</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded bg-[#f59e0b]"></span> Memory Offsets (:GlobalMemory)</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#2eb872]"></span> Test Vectors (:TestCase)</div>
-        </div>
-      </div>
-
-      <!-- Tab View B: Multi-Agent Swarm & Memory Trace -->
-      <div id="tabMemoryView" class="hidden border border-[#1e2535] bg-[#131720] rounded-xl p-5 space-y-4">
-        <div class="text-xs font-mono text-[#9da6b8]">
-          Real-time event stream showing multi-hop queries and episodic test memory written to FalkorDB:
-        </div>
-        <div id="agentTraceStream" class="bg-[#0c0e14] border border-[#1e2535] rounded-lg p-4 font-mono text-[11px] text-[#e6e2d8] h-96 overflow-y-auto space-y-2">
-          <div class="text-[#606a7e]">// Swarm trace initialized...</div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ================================================================== -->
-    <!-- SECTION 3: LIVE EXECUTION DUEL & COMPARISON                        -->
-    <!-- ================================================================== -->
-    <section id="comparisonSection" class="state-panel space-y-8">
+    <!-- 2-Column Workbench: Left (Disassembly) & Right (Graph / Memory Tab) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[540px]">
       
-      <!-- Comparison Header -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[#1e2535] pb-6 gap-4">
-        <div>
-          <h2 class="text-2xl font-bold text-[#f3f0e8] font-mono">Live Execution Duel: Base LLM vs FalkorDB Swarm</h2>
-          <p class="text-xs text-[#9da6b8] mt-1">
-            Both reconstructed C engines executed simultaneously in real time. Numbers below are computed directly by the generated code.
-          </p>
+      <!-- Left Column: Decompiled Machine Code / Disassembly (5 cols) -->
+      <div class="lg:col-span-5 border border-[#1e2535] bg-[#131720] rounded-xl p-4 flex flex-col space-y-3">
+        <div class="flex items-center justify-between border-b border-[#1e2535] pb-2.5">
+          <div class="text-xs font-mono font-bold text-[#f3f0e8] flex items-center gap-2">
+            <i class="fa-solid fa-binary text-[#38bdf8]"></i>
+            <span>Machine Code & Disassembly</span>
+          </div>
+          <div class="flex items-center gap-1 text-[10px] font-mono">
+            <button id="btnTabDisasm" onclick="switchCodeView('disasm')" class="px-2 py-0.5 rounded bg-[#1a202c] text-[#f3f0e8] border border-[#2d374d]">Disassembly</button>
+            <button id="btnTabRecon" onclick="switchCodeView('recon')" class="px-2 py-0.5 rounded text-[#9da6b8] hover:text-[#f3f0e8]">Reconstructed C</button>
+          </div>
         </div>
-        <div class="flex items-center gap-3">
-          <button onclick="rerunLiveExecution()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#f3f0e8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
-            <i class="fa-solid fa-rotate-right text-[10px]"></i> Rerun Descent
-          </button>
-          <button onclick="returnToWorkspace()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
-            <i class="fa-solid fa-sitemap text-[10px]"></i> View Graph
-          </button>
+
+        <!-- Code Content Area -->
+        <div class="flex-1 bg-[#0c0e14] border border-[#1e2535] rounded-lg p-3 overflow-y-auto font-mono text-[11px] leading-relaxed max-h-[480px]">
+          <pre id="codeViewContent" class="text-[#9da6b8]"><code>// Loading disassembly...</code></pre>
         </div>
       </div>
 
-      <!-- Side-by-Side Dual Flight & Code Panes -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Right Column: Graph Canvas & Multi-Agent Memory Tab (7 cols) -->
+      <div class="lg:col-span-7 border border-[#1e2535] bg-[#131720] rounded-xl p-4 flex flex-col space-y-3">
         
-        <!-- Left: Base LLM -->
-        <div class="border border-[#2d1c22] bg-[#131720] rounded-xl p-5 space-y-5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-[#ef4444]"></span>
-              <span class="text-xs font-mono font-bold text-[#ef4444]">Vanilla Flat LLM (No Graph)</span>
-            </div>
-            <span class="text-xs font-mono px-2 py-0.5 rounded bg-[#2a1318] text-[#ef4444] border border-[#4d1f27]">
-              40.0% Parity (8/20 Passed)
-            </span>
+        <!-- Tab Header Bar -->
+        <div class="flex items-center justify-between border-b border-[#1e2535] pb-2">
+          <div class="flex items-center gap-4 text-xs font-mono">
+            <button id="tabBtnGraph" onclick="switchWorkspaceTab('graph')" class="text-[#f3f0e8] font-bold border-b-2 border-[#f3f0e8] pb-1.5 transition-all">
+              Knowledge Graph Topology
+            </button>
+            <button id="tabBtnMemory" onclick="switchWorkspaceTab('memory')" class="text-[#9da6b8] hover:text-[#f3f0e8] pb-1.5 transition-all">
+              Multi-Agent Memory & Event Stream
+            </button>
           </div>
 
-          <!-- Base LLM Canvas -->
-          <div class="relative sim-canvas overflow-hidden">
-            <canvas id="flatCanvas" width="460" height="260" class="w-full h-[260px] block"></canvas>
-            <div id="flatCrashOverlay" class="hidden absolute inset-0 bg-[#16070a]/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
-              <div class="text-[#ef4444] font-bold font-mono text-sm">VEHICLE IMPACT CRASH</div>
-              <div class="text-xs text-[#9da6b8] font-mono mt-1">Impact at -28.4 m/s (Limit: 3.0 m/s)</div>
-              <div class="text-[11px] text-[#ef4444] font-mono mt-1">Throttle table 0x00403000 ungrounded = Zero thrust</div>
-            </div>
+          <!-- Graph Viewport Controls -->
+          <div id="graphControls" class="flex items-center gap-2 text-[11px] font-mono">
+            <button onclick="fitGraphView()" class="px-2 py-1 rounded bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] border border-[#2d374d]">
+              Fit
+            </button>
+            <button onclick="resetGraphView()" class="px-2 py-1 rounded bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] border border-[#2d374d]">
+              Reset
+            </button>
           </div>
+        </div>
 
-          <!-- Base LLM Telemetry -->
-          <div class="grid grid-cols-3 gap-2 text-xs font-mono bg-[#0c0e14] p-3 rounded-lg border border-[#1e2535]">
-            <div>
-              <span class="text-[#606a7e] block text-[10px]">RADAR ALT</span>
-              <span id="flatAlt" class="text-[#e6e2d8] font-bold">-- m</span>
-            </div>
-            <div>
-              <span class="text-[#606a7e] block text-[10px]">DESCENT (V_Y)</span>
-              <span id="flatVy" class="text-[#ef4444] font-bold">-- m/s</span>
-            </div>
-            <div>
-              <span class="text-[#606a7e] block text-[10px]">STATUS</span>
-              <span id="flatStatus" class="text-[#ef4444] font-bold">FREEFALL</span>
-            </div>
+        <!-- Tab Content 1: Custom Canvas Graph -->
+        <div id="tabGraphView" class="graph-container flex-1 min-h-[460px] relative">
+          <canvas id="customGraphCanvas"></canvas>
+          
+          <!-- Floating Crisp Legend -->
+          <div class="absolute bottom-3 left-3 bg-[#131720]/90 border border-[#1e2535] rounded-lg px-3 py-2 text-[10px] font-mono space-y-1 backdrop-blur pointer-events-none">
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span> Functions (:Function)</div>
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span> Memory Offsets (:GlobalMemory)</div>
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#2eb872]"></span> Test Vectors (:TestCase)</div>
           </div>
+        </div>
 
-          <!-- Base LLM Code Snippet -->
-          <div class="space-y-1">
-            <div class="text-[10px] font-mono uppercase text-[#606a7e]">Generated Code (Pointers Omitted):</div>
-            <pre class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-[#f87171] overflow-x-auto h-32 leading-relaxed"><code>// Flat LLM isolated inference (No graph)
+        <!-- Tab Content 2: Multi-Agent Shared Memory Stream -->
+        <div id="tabMemoryView" class="hidden flex-1 flex-col space-y-2 min-h-[460px]">
+          <div class="text-xs font-mono text-[#9da6b8]">
+            Real-time FalkorDB multi-agent event stream showing multi-hop queries and episodic test memory:
+          </div>
+          <div id="agentTraceStream" class="flex-1 bg-[#0c0e14] border border-[#1e2535] rounded-lg p-3 font-mono text-[11px] text-[#e6e2d8] h-[430px] overflow-y-auto space-y-2">
+            <div class="text-[#606a7e]">// Swarm trace initialized...</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- ==================================================================== -->
+  <!-- SCREEN 3: LIVE EXECUTION DUEL (Base LLM vs GhostGraph)                -->
+  <!-- ==================================================================== -->
+  <section id="screenDuel" class="screen-view flex-1 flex-col w-full max-w-7xl mx-auto px-6 py-6 space-y-6">
+    
+    <!-- Duel Screen Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[#1e2535] pb-4 gap-4">
+      <div>
+        <h2 class="text-2xl font-bold text-[#f3f0e8] font-mono">Live Execution Duel: Base LLM vs FalkorDB Swarm</h2>
+        <p class="text-xs text-[#9da6b8] mt-1">
+          Both reconstructed C engines compiled and executed concurrently. Telemetry and touchdown status computed live.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="rerunLiveExecution()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#f3f0e8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-rotate-right text-[10px]"></i> Rerun Simulation
+        </button>
+        <button onclick="exportReconstructedProject()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#38bdf8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-download text-[10px]"></i> Export C Project
+        </button>
+        <button onclick="showStudioScreen()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-[#9da6b8] hover:text-[#f3f0e8] font-mono text-xs rounded-lg border border-[#2d374d] transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-sitemap text-[10px]"></i> View Graph
+        </button>
+      </div>
+    </div>
+
+    <!-- Side-by-Side Viewports -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- Left: Base LLM (Isolated, No Graph) -->
+      <div class="border border-[#3d181d] bg-[#131720] rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></span>
+            <span class="text-xs font-mono font-bold text-[#ef4444]">Vanilla Base LLM (Isolated Context)</span>
+          </div>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-[#2a1318] text-[#ef4444] border border-[#4d1f27]">
+            40.0% Parity (12 Failures)
+          </span>
+        </div>
+
+        <!-- Simulation Viewport -->
+        <div class="relative sim-canvas overflow-hidden">
+          <canvas id="flatCanvas" width="500" height="280" class="w-full h-[280px] block"></canvas>
+          <div id="flatCrashOverlay" class="hidden absolute inset-0 bg-[#16070a]/85 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
+            <div class="text-[#ef4444] font-bold font-mono text-sm tracking-wide">FAIL // VEHICLE CRATER IMPACT</div>
+            <div class="text-xs text-[#9da6b8] font-mono mt-1">Impact Velocity: -58.2 m/s (Limit: 3.0 m/s)</div>
+            <div class="text-[11px] text-[#ef4444] font-mono mt-1">Memory 0x00403000 (THRUST_CURVE) ungrounded -> 0 thrust</div>
+          </div>
+        </div>
+
+        <!-- Live Telemetry Grid -->
+        <div class="grid grid-cols-3 gap-2 text-xs font-mono bg-[#0c0e14] p-3 rounded-lg border border-[#1e2535]">
+          <div>
+            <span class="text-[#606a7e] block text-[10px]">RADAR ALT</span>
+            <span id="flatAlt" class="text-[#e6e2d8] font-bold">-- m</span>
+          </div>
+          <div>
+            <span class="text-[#606a7e] block text-[10px]">DESCENT (V_Y)</span>
+            <span id="flatVy" class="text-[#ef4444] font-bold">-- m/s</span>
+          </div>
+          <div>
+            <span class="text-[#606a7e] block text-[10px]">STATUS</span>
+            <span id="flatStatus" class="text-[#ef4444] font-bold">FREEFALL</span>
+          </div>
+        </div>
+
+        <!-- Generated Code -->
+        <div class="space-y-1">
+          <div class="text-[10px] font-mono uppercase text-[#606a7e]">Generated C Code (Pointers Omitted):</div>
+          <pre class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-[#f87171] overflow-x-auto h-32 leading-relaxed"><code>// Flat LLM isolated inference (No graph memory)
 void update_newtonian_physics(void) {
     // LLM has no memory of 0x00403000 throttle table
     double thrust = 0.0; // Missing global table
     vy += -(total_mass * 1.62) * 0.1; // Freefall
     y += vy * 0.1;
-    // Missing 0x00403100 terrain coordinates!
 }</code></pre>
+        </div>
+      </div>
+
+      <!-- Right: GhostGraph Swarm (FalkorDB Grounded) -->
+      <div class="border border-[#1a3d28] bg-[#131720] rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#2eb872]"></span>
+            <span class="text-xs font-mono font-bold text-[#2eb872]">GhostGraph Swarm (FalkorDB Grounded)</span>
+          </div>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-[#13281c] text-[#2eb872] border border-[#1d422c]">
+            100.0% Parity (20/20 Passed)
+          </span>
+        </div>
+
+        <!-- Simulation Viewport -->
+        <div class="relative sim-canvas overflow-hidden">
+          <canvas id="ghostCanvas" width="500" height="280" class="w-full h-[280px] block"></canvas>
+          <div id="ghostLandingOverlay" class="hidden absolute inset-0 bg-[#08180e]/85 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
+            <div class="text-[#2eb872] font-bold font-mono text-sm tracking-wide">PASS // TOUCHDOWN CONFIRMED</div>
+            <div class="text-xs text-[#9da6b8] font-mono mt-1">Tranquillity Base Pad (x = 421m) • vy = -0.99 m/s</div>
+            <div class="text-[11px] text-[#2eb872] font-mono mt-1">All 4 memory tables grounded via FalkorDB topology</div>
           </div>
         </div>
 
-        <!-- Right: GhostGraph Swarm -->
-        <div class="border border-[#1a3124] bg-[#131720] rounded-xl p-5 space-y-5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-[#2eb872]"></span>
-              <span class="text-xs font-mono font-bold text-[#2eb872]">GhostGraph Swarm (FalkorDB Grounded)</span>
-            </div>
-            <span class="text-xs font-mono px-2 py-0.5 rounded bg-[#13281c] text-[#2eb872] border border-[#1d422c]">
-              100.0% Parity (20/20 Passed)
-            </span>
+        <!-- Live Telemetry Grid -->
+        <div class="grid grid-cols-3 gap-2 text-xs font-mono bg-[#0c0e14] p-3 rounded-lg border border-[#1e2535]">
+          <div>
+            <span class="text-[#606a7e] block text-[10px]">RADAR ALT</span>
+            <span id="ghostAlt" class="text-[#f3f0e8] font-bold">-- m</span>
           </div>
-
-          <!-- GhostGraph Canvas -->
-          <div class="relative sim-canvas overflow-hidden">
-            <canvas id="ghostCanvas" width="460" height="260" class="w-full h-[260px] block"></canvas>
-            <div id="ghostLandingOverlay" class="hidden absolute inset-0 bg-[#08180e]/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
-              <div class="text-[#2eb872] font-bold font-mono text-sm">TOUCHDOWN CONFIRMED</div>
-              <div class="text-xs text-[#9da6b8] font-mono mt-1">Mare Tranquillitatis landing pad • vy = -0.99 m/s</div>
-              <div class="text-[11px] text-[#2eb872] font-mono mt-1">All 4 memory tables grounded via FalkorDB</div>
-            </div>
+          <div>
+            <span class="text-[#606a7e] block text-[10px]">DESCENT (V_Y)</span>
+            <span id="ghostVy" class="text-[#2eb872] font-bold">-- m/s</span>
           </div>
-
-          <!-- GhostGraph Telemetry -->
-          <div class="grid grid-cols-3 gap-2 text-xs font-mono bg-[#0c0e14] p-3 rounded-lg border border-[#1e2535]">
-            <div>
-              <span class="text-[#606a7e] block text-[10px]">RADAR ALT</span>
-              <span id="ghostAlt" class="text-[#f3f0e8] font-bold">-- m</span>
-            </div>
-            <div>
-              <span class="text-[#606a7e] block text-[10px]">DESCENT (V_Y)</span>
-              <span id="ghostVy" class="text-[#2eb872] font-bold">-- m/s</span>
-            </div>
-            <div>
-              <span class="text-[#606a7e] block text-[10px]">STATUS</span>
-              <span id="ghostStatus" class="text-[#2eb872] font-bold">DESCENT</span>
-            </div>
+          <div>
+            <span class="text-[#606a7e] block text-[10px]">STATUS</span>
+            <span id="ghostStatus" class="text-[#2eb872] font-bold">DESCENT</span>
           </div>
+        </div>
 
-          <!-- GhostGraph Code Snippet -->
-          <div class="space-y-1">
-            <div class="text-[10px] font-mono uppercase text-[#606a7e]">Generated Code (Pointers Resolved):</div>
-            <pre class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-[#4ade80] overflow-x-auto h-32 leading-relaxed"><code>// Grounded via FalkorDB Multi-Hop Query
+        <!-- Generated Code -->
+        <div class="space-y-1">
+          <div class="text-[10px] font-mono uppercase text-[#606a7e]">Generated C Code (Pointers Resolved):</div>
+          <pre class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-[#4ade80] overflow-x-auto h-32 leading-relaxed"><code>// Grounded via FalkorDB Multi-Hop Traversal
 void update_newtonian_physics(void) {
     int step = (int)(flight_telemetry.throttle * 10.0);
     double thrust = THRUST_THROTTLE_CURVE[step] * MAX_THRUST;
     double Fy = (thrust * cos(pitch)) - (mass * local_g);
     vy += (Fy / mass) * 0.1;
-    // Terrain raycast against 0x00403100 profile...
 }</code></pre>
-          </div>
         </div>
-
       </div>
 
-    </section>
+    </div>
 
-  </main>
+  </section>
 
-  <!-- Frontend Logic -->
+  <!-- ==================================================================== -->
+  <!-- Export Project Modal                                                 -->
+  <!-- ==================================================================== -->
+  <div id="exportModal" class="hidden fixed inset-0 z-50 bg-[#0c0e14]/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#131720] border border-[#1e2535] rounded-xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-[#1e2535] pb-3">
+        <div class="font-mono text-sm font-bold text-[#f3f0e8]">Standalone Compilable C Project</div>
+        <button onclick="closeExportModal()" class="text-[#9da6b8] hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="text-xs text-[#9da6b8] font-mono">
+        Reconstructed project files ready for compilation with GCC or Clang:
+      </div>
+      <div class="bg-[#0c0e14] border border-[#1e2535] rounded p-3 text-xs font-mono text-[#38bdf8] overflow-y-auto max-h-72">
+        <pre id="exportModalContent"></pre>
+      </div>
+      <div class="flex justify-end gap-3 pt-2">
+        <button onclick="closeExportModal()" class="px-4 py-2 bg-[#1a202c] hover:bg-[#222a3a] text-xs font-mono rounded text-[#e6e2d8]">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/graph_engine.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
