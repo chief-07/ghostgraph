@@ -237,10 +237,18 @@ class TopologyAgent:
             "entry_point": f"0x{load_addr:08X}"
         }
 
-    def ingest_target(self, target_json_path: str, test_vectors_path: Optional[str] = None, target_id: Optional[str] = None) -> Dict[str, Any]:
+    def ingest_target(
+        self,
+        target_json_path: str,
+        test_vectors_path: Optional[str] = None,
+        target_id: Optional[str] = None,
+        reset_graph: bool = False
+    ) -> Dict[str, Any]:
         """
         Batched Ingestion using OpenCypher UNWIND.
-        Transforms 60+ individual roundtrip network queries into 4 fast atomic batches.
+        Transforms 60+ individual roundtrip network queries into fast atomic batches.
+        Preserves cross-session episodic memory (Candidates, TestCases, FAILED_ON edges)
+        across sessions unless reset_graph is explicitly requested (Track 02).
         """
         path = Path(target_json_path)
         if not path.exists():
@@ -258,7 +266,11 @@ class TopologyAgent:
         # Target Multigraph Isolation (Bug #5)
         clean_target_id = target_id or target_name
         self.client.select_target_graph(clean_target_id)
-        self.client.clear_graph()
+        if reset_graph:
+            logger.info(f"Explicit graph reset requested for {clean_target_id}...")
+            self.client.clear_graph()
+        else:
+            logger.info(f"Preserving durable cross-session episodic memory in graph {clean_target_id}...")
 
         logger.info(f"Batch ingesting {target_name} into FalkorDB Cloud (graph: {self.client.graph_name})...")
 
