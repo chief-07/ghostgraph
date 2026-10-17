@@ -10,6 +10,7 @@ import re
 import logging
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
+import falkordb
 
 load_dotenv()
 
@@ -99,10 +100,10 @@ class FalkorClient:
                     for row in res.result_set:
                         records.append({headers[i]: row[i] for i in range(min(len(headers), len(row)))})
             except Exception as e:
-                logger.warning(f"FalkorDB ro_query notice ({e}). Running in-memory.")
-                records = self._execute_in_memory(cypher, params)
+                logger.error(f"FalkorDB ro_query execution failed on Cloud: {e}")
+                raise
         else:
-            records = self._execute_in_memory(cypher, params)
+            raise ConnectionError(f"FalkorDB Cloud is not connected! (Target host: {self.host}:{self.port})")
 
         elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
         self.last_query_trace = {
@@ -114,25 +115,34 @@ class FalkorClient:
         return records
 
     def _connect(self) -> None:
-        """Attempts connection to real FalkorDB instance."""
-        try:
-            import falkordb
-            kwargs = {"host": self.host, "port": self.port, "socket_timeout": 2.0}
-            if self.username:
-                kwargs["username"] = self.username
-            if self.password:
-                kwargs["password"] = self.password
+        """Attempts connection to real FalkorDB instance with retry resilience."""
+        import time
+        last_err = None
+        for attempt in range(1, 4):
+            try:
+                kwargs = {
+                    "host": self.host,
+                    "port": self.port,
+                    "socket_timeout": 15.0,
+                    "socket_connect_timeout": 15.0,
+                }
+                if self.username:
+                    kwargs["username"] = self.username
+                if self.password:
+                    kwargs["password"] = self.password
 
-            self.client = falkordb.FalkorDB(**kwargs)
-            self.graph = self.client.select_graph(self.graph_name)
-            self.graph.query("RETURN 1")
-            self.is_connected = True
-            logger.info(f"Connected successfully to FalkorDB at {self.host}:{self.port} [Graph: {self.graph_name}]")
-        except Exception as e:
-            self.is_connected = False
-            logger.warning(
-                f"Could not connect to FalkorDB Cloud ({e}). Operating in resilient In-Memory Graph mode."
-            )
+                self.client = falkordb.FalkorDB(**kwargs)
+                self.graph = self.client.select_graph(self.graph_name)
+                self.graph.query("RETURN 1")
+                self.is_connected = True
+                logger.info(f"Connected successfully to FalkorDB at {self.host}:{self.port} [Graph: {self.graph_name}]")
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(1.0)
+
+        self.is_connected = False
+        logger.warning(f"Could not connect to FalkorDB Cloud ({last_err}) after 3 attempts.")
 
     def query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
@@ -160,11 +170,10 @@ class FalkorClient:
                         records.append({headers[i]: row[i] for i in range(min(len(headers), len(row)))})
                 return records
             except Exception as e:
-                logger.warning(f"FalkorDB Cloud socket error: {e}. Switching to In-Memory Graph.")
-                self.is_connected = False
+                logger.error(f"FalkorDB Cloud query error: {e}")
+                raise
 
-        # In-Memory Topological Graph Engine
-        return self._execute_in_memory(cypher, params)
+        raise ConnectionError(f"FalkorDB Cloud is not connected! (Target host: {self.host}:{self.port})")
 
     def _execute_in_memory(self, cypher: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Authentic in-memory Cypher execution engine."""
@@ -193,7 +202,8 @@ class FalkorClient:
                     "name": name,
                     "address": fn.get("address", ""),
                     "signature": fn.get("signature", ""),
-                    "pseudocode": fn.get("pseudocode", "")
+                    "pseudocode": fn.get("pseudocode", ""),
+                    "raw_asm": fn.get("raw_asm", "")
                 }
             return [{"count(f)": len(fns)}]
 
@@ -367,6 +377,7 @@ class FalkorClient:
                 results.append({
                     "address": addr,
                     "label": mem_node.get("label", addr),
+                    "description": mem_node.get("description", ""),
                     "data_type": mem_node.get("data_type", "void*"),
                     "producer_function": p,
                     "producer_address": init_fn.get("address", ""),
@@ -628,12 +639,15 @@ class FalkorClient:
 
     def clear_graph(self) -> None:
         """Clears all nodes and relationships in the current graph."""
-        if self.is_connected and self.graph:
-            try:
-                self.graph.delete()
-                self.graph = self.client.select_graph(self.graph_name)
-            except Exception as e:
-                logger.warning(f"Error resetting FalkorDB graph: {e}")
+        if not self.is_connected or not self.graph:
+            self._connect()
+            if not self.is_connected or not self.graph:
+                raise ConnectionError(f"FalkorDB Cloud is not connected! (Target host: {self.host}:{self.port})")
+        try:
+            self.graph.query("MATCH (n) DETACH DELETE n")
+        except Exception as e:
+            logger.warning(f"Error resetting FalkorDB graph: {e}")
+            raise
         self._nodes.clear()
         self._edges.clear()
 

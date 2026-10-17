@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CoreGraph | Autonomous Graph-Guided Binary Reconstruction</title>
+  <title>GhostGraph | Autonomous Graph-Guided Binary Reconstruction</title>
   <!-- Google Fonts: Outfit (Primary Sans) & JetBrains Mono (Code Only) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -457,22 +457,6 @@
           <div class="text-[16px] font-bold text-[#0b0b0e]">Apollo 11 Lunar Module</div>
           <p class="text-[12.5px] text-[#686c75] leading-relaxed">
             Rebuilds descent throttle control and touchdown equations from original 1969 Apollo AGC ROM code.
-          </p>
-          <div class="pt-1 text-[12.5px] font-semibold text-[#0b0b0e] flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-            <span>Start Reconstruction</span>
-            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-        </div>
-
-        <!-- Satellite Telemetry -->
-        <div onclick="selectTarget('telemetry')" class="border border-[#e5e7eb] hover:border-[#0b0b0e] bg-[#fafafa] hover:bg-white rounded-2xl p-5 cursor-pointer transition-all space-y-2 group">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white text-[#0b0b0e] border border-[#e4e5e9]">Satellite Telemetry</span>
-            <span class="text-[11px] font-mono text-[#0284c7] font-semibold">CRC-16 Decoder</span>
-          </div>
-          <div class="text-[16px] font-bold text-[#0b0b0e]">Satellite Telemetry Decoder</div>
-          <p class="text-[12.5px] text-[#686c75] leading-relaxed">
-            Recovers missing CRC-16 checksum lookup tables to ensure zero dropped telemetry packets.
           </p>
           <div class="pt-1 text-[12.5px] font-semibold text-[#0b0b0e] flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
             <span>Start Reconstruction</span>

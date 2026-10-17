@@ -30,15 +30,15 @@ def test_falkordb_status_transparency():
 
 def test_export_baseline_when_no_candidate():
     """Verify /api/export provides valid baseline, makefile, certificate, and audit trail when no candidate exists."""
-    falkor_client.select_target_graph("telemetry")
+    falkor_client.select_target_graph("billing")
     falkor_client.clear_graph()
 
-    response = client.get("/api/export?target_id=telemetry")
+    response = client.get("/api/export?target_id=billing")
     assert response.status_code == 200
     data = response.json()
 
-    assert data["target"] == "telemetry"
-    assert "telemetry_reconstructed" in data["filename"]
+    assert data["target"] == "billing"
+    assert "billing_reconstructed" in data["filename"]
     assert "source_code" in data
     assert "makefile" in data
     assert "compile_cmd" in data
@@ -46,7 +46,7 @@ def test_export_baseline_when_no_candidate():
     assert "cypher_audit_trail" in data
 
     cert = data["certificate"]
-    assert cert["target_id"] == "telemetry"
+    assert cert["target_id"] == "billing"
     assert cert["candidate_id"] == "baseline_unverified"
     assert cert["status"] == "BASELINE_UNVERIFIED"
     assert cert["parity_percentage"] == 0.0

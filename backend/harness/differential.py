@@ -674,7 +674,7 @@ def evaluate_billing_test(
             if diff < 0.02:  # Tolerates 2-cent precision/rounding variance
                 return True, ""
             else:
-                return False, f"Real Execution Mismatch: Candidate returned ${actual_tax:.2f} vs expected ${expected_tax:.2f} (delta: ${diff:.2f}) on taxable amount ${taxable_amount:.2f}"
+                return False, f"Real Execution Mismatch: Candidate returned {actual_tax:.2f} USD vs expected {expected_tax:.2f} USD (delta: {diff:.2f}) on taxable amount {taxable_amount:.2f} USD"
         except Exception as e:
             return False, f"Candidate Runtime Exception: {type(e).__name__}: {e}"
 
@@ -685,14 +685,14 @@ def evaluate_billing_test(
         diff = abs(actual_tax - expected_tax)
         if diff < 0.02:
             return True, ""
-        return False, f"Cent parity failure: Ungrounded 10% flat tax computed ${actual_tax:.2f} vs expected progressive bracket tax ${expected_tax:.2f} (delta: ${diff:.2f}) due to missing 0x00405000 progressive brackets."
+        return False, f"Cent parity failure: Ungrounded 10% flat tax computed {actual_tax:.2f} USD vs expected progressive bracket tax {expected_tax:.2f} USD (delta: {diff:.2f}) due to missing 0x00405000 progressive brackets."
 
     # Grounded reference calculation
     actual_tax = compute_reference_progressive_tax(taxable_amount)
     diff = abs(actual_tax - expected_tax)
     if diff < 0.02:
         return True, ""
-    return False, f"Reference calculation mismatch: ${actual_tax:.2f} vs expected ${expected_tax:.2f}"
+    return False, f"Reference calculation mismatch: {actual_tax:.2f} USD vs expected {expected_tax:.2f} USD"
 
 
 # ============================================================================

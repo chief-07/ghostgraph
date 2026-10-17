@@ -133,7 +133,7 @@ def find_shortest_call_path(start_fn: str, target_fn: str) -> Dict[str, Any]:
     cypher = """
     MATCH (f1:Function), (f2:Function)
     WHERE (f1.name = $start OR f1.address = $start) AND (f2.name = $target OR f2.address = $target)
-    MATCH p = shortestPath((f1)-[:CALLS*1..6]->(f2))
+    WITH f1, f2, shortestPath((f1)-[:CALLS*1..6]->(f2)) AS p
     RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS path_nodes
     """
     records = falkor_client.ro_query(cypher, {"start": start_fn, "target": target_fn})

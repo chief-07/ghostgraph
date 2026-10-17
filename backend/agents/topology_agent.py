@@ -284,7 +284,8 @@ class TopologyAgent:
             MERGE (m:GlobalMemory {address: b.address})
             SET m.label = b.label,
                 m.data_type = b.data_type,
-                m.size = b.size
+                m.size = b.size,
+                m.description = coalesce(b.description, '')
             RETURN count(m)
             """
             self.client.query(cypher_mem, {"buffers": global_memory})
@@ -297,11 +298,14 @@ class TopologyAgent:
             write_edges = []
 
             for fn in functions:
+                pseudocode = fn.get("pseudocode") or fn.get("decompiled_c") or fn.get("code") or ""
+                raw_asm = fn.get("raw_asm") or fn.get("assembly") or fn.get("asm_text") or ""
                 fn_payload.append({
                     "name": fn["name"],
                     "address": fn.get("address", ""),
                     "signature": fn.get("signature", ""),
-                    "pseudocode": fn.get("pseudocode", "")
+                    "pseudocode": pseudocode,
+                    "raw_asm": raw_asm
                 })
                 callees = fn.get("callees") or (fn.get("call_graph", {}).get("callees") if isinstance(fn.get("call_graph"), dict) else []) or []
                 for c in callees:
@@ -319,7 +323,8 @@ class TopologyAgent:
             MERGE (f:Function {name: fn.name})
             SET f.address = fn.address,
                 f.signature = fn.signature,
-                f.pseudocode = fn.pseudocode
+                f.pseudocode = fn.pseudocode,
+                f.raw_asm = fn.raw_asm
             MERGE (p)-[:CONTAINS]->(f)
             RETURN count(f)
             """

@@ -101,19 +101,6 @@ TARGETS = {
         "consumer_fn": "step_snake_tick",
         "description": "Complete 7-function retro arcade game engine. Ring buffer coordinate tables (0x00404000) and 2D direction vectors (0x00404100) detached from the physics loop. Reconstructs into a 100% playable game."
     },
-    "telemetry": {
-        "id": "telemetry",
-        "name": "Aerospace Satellite Telemetry Decoder",
-        "badge": "FLAGSHIP BENCHMARK",
-        "category": "Aerospace & Critical Infrastructure",
-        "arch": "x86_64 stripped binary",
-        "path": "backend/data/targets/telemetry_decompiled.json",
-        "vectors_path": "ground_truth/telemetry_test_vectors.json",
-        "critical_symbol": "0x00402010 (CRC16_LOOKUP_TABLE)",
-        "producer_fn": "init_crc16_poly",
-        "consumer_fn": "verify_crc16_checksum",
-        "description": "Satellite downlink packet unpacker, sensor telemetry calibration, and CRC-CCITT verification. Memory offset 0x00402010 detached from polynomial table generator."
-    },
     "pacman": {
         "id": "pacman",
         "name": "1980 Pac-Man Ghost AI & Maze Engine",
@@ -249,7 +236,7 @@ async def get_cypher_presets():
                 "id": "shortest_call_paths",
                 "title": "Multi-Hop Call Execution Chains",
                 "description": "Traverse the shortest call path between interacting subroutines.",
-                "query": "MATCH (f1:Function), (f2:Function) WHERE f1 <> f2 MATCH p = shortestPath((f1)-[:CALLS*1..5]->(f2)) RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS call_chain LIMIT 5"
+                "query": "MATCH (f1:Function), (f2:Function) WHERE f1 <> f2 WITH f1, f2, shortestPath((f1)-[:CALLS*1..5]->(f2)) AS p RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS call_chain LIMIT 5"
             },
             {
                 "id": "struct_definitions",
