@@ -49,13 +49,12 @@
           <span class="font-bold text-[16px] tracking-tight text-[#0b0b0e]">GhostGraph</span>
         </button>
 
-        <!-- Center Navigation Links (Exact Spacing & Weight from Reference) -->
+        <!-- Center Navigation Links -->
         <div class="hidden md:flex items-center gap-8 text-[14px] font-medium text-[#1c1d21]">
-          <button onclick="showHomeScreen()" class="hover:text-[#6b7280] transition-colors">Topology</button>
+          <button onclick="showHomeScreen()" class="hover:text-[#6b7280] transition-colors">Home</button>
           <button onclick="openTargetSelectorModal()" class="hover:text-[#6b7280] transition-colors">Targets</button>
           <button onclick="selectTarget(currentTargetId || 'space_invaders')" class="hover:text-[#6b7280] transition-colors">Studio</button>
-          <button onclick="showDuelScreen()" class="hover:text-[#6b7280] transition-colors">Verification</button>
-          <button onclick="exportReconstructedProject()" class="hover:text-[#6b7280] transition-colors">Export</button>
+          <button onclick="showDuelScreen()" class="hover:text-[#6b7280] transition-colors">Live Duel</button>
         </div>
 
         <!-- Right Pill Action Button (Exact Match to "Download For [icon]" Pill) -->
@@ -352,16 +351,20 @@
   <!-- TARGET SELECTOR & BINARY UPLOAD MODAL (Clean Studio White)           -->
   <!-- ==================================================================== -->
   <div id="targetSelectorModal" class="hidden fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white border border-[#e5e7eb] rounded-3xl max-w-2xl w-full p-7 space-y-6 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-[#f0f0f2] pb-4">
+  <div class="bg-white border border-[#e5e7eb] rounded-3xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+      <!-- Modal Header (fixed) -->
+      <div class="flex items-center justify-between border-b border-[#f0f0f2] px-7 pt-6 pb-4 flex-shrink-0">
         <div>
-          <h3 class="text-[18px] font-bold text-[#0b0b0e]">Select Benchmark Target or Upload Binary</h3>
-          <p class="text-[13px] text-[#686c75]">Choose a stripped binary specimen to ingest into FalkorDB</p>
+          <h3 class="text-[18px] font-bold text-[#0b0b0e]">Select Benchmark Target</h3>
+          <p class="text-[13px] text-[#686c75]">Choose a stripped binary to ingest into FalkorDB</p>
         </div>
-        <button onclick="closeTargetSelectorModal()" class="w-8 h-8 rounded-full bg-[#f3f4f6] hover:bg-[#e5e7eb] flex items-center justify-center text-[#141417]">
+        <button onclick="closeTargetSelectorModal()" class="w-8 h-8 rounded-full bg-[#f3f4f6] hover:bg-[#e5e7eb] flex items-center justify-center text-[#141417] flex-shrink-0">
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
+
+      <!-- Scrollable body -->
+      <div class="overflow-y-auto flex-1 px-7 py-5 space-y-4">
 
       <!-- Curated Benchmark Targets Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -447,8 +450,9 @@
         </div>
       </div>
 
-    </div>
-  </div>
+      </div><!-- end scrollable body -->
+  </div><!-- end modal sheet -->
+  </div><!-- end modal overlay -->
 
   <!-- ==================================================================== -->
   <!-- STANDALONE C PROJECT EXPORT MODAL                                    -->
