@@ -265,18 +265,13 @@ function startSwarmPipeline(targetId) {
         });
       }
 
-      // Memory Offset Discovered
+      // Memory Offset Discovered (Bug #7: No synthetic READS edges)
       if (data.type === "MEMORY_DISCOVERED" && graphEngine) {
         graphEngine.addNode({
           id: data.address,
-          label: data.address,
+          label: data.label || data.address,
           type: "memory",
           status: "unresolved"
-        });
-        graphEngine.addEdge({
-          source: currentPrimaryFn,
-          target: data.address,
-          label: "READS"
         });
       }
 
@@ -292,6 +287,13 @@ function startSwarmPipeline(targetId) {
           label: "WRITES"
         });
         graphEngine.pulseEdge(data.producer, data.address, "#f59e0b");
+      }
+
+      // FalkorDB Cypher Multi-Hop Query Unresolved
+      if (data.type === "MEMORY_UNRESOLVED" && graphEngine) {
+        graphEngine.updateNode(data.address, {
+          status: "unresolved"
+        });
       }
 
       // Candidate Synthesized

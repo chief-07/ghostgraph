@@ -303,11 +303,14 @@ class TopologyAgent:
                     "signature": fn.get("signature", ""),
                     "pseudocode": fn.get("pseudocode", "")
                 })
-                for c in fn.get("callees", []):
+                callees = fn.get("callees") or (fn.get("call_graph", {}).get("callees") if isinstance(fn.get("call_graph"), dict) else []) or []
+                for c in callees:
                     call_edges.append({"caller": fn["name"], "callee": c})
-                for r in fn.get("reads_memory", []):
+                reads = fn.get("reads_memory") or fn.get("memory_reads") or []
+                for r in reads:
                     read_edges.append({"fn": fn["name"], "addr": r})
-                for w in fn.get("writes_memory", []):
+                writes = fn.get("writes_memory") or fn.get("memory_writes") or []
+                for w in writes:
                     write_edges.append({"fn": fn["name"], "addr": w})
 
             cypher_fns = """

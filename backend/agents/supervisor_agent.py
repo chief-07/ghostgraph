@@ -99,8 +99,8 @@ double compute_progressive_tax(double taxable_amount) {
     "lunar_lander": {
         "name": "1979 Apollo Lunar Lander Guidance Computer",
         "primary_fn": "THROTTLE_CONTROL_ROUTINES",
-        "critical_mem": "00540 (LOWCRIT) & 00542 (HIGHCRIT)",
-        "mem_label": "THROTTLE_LIMITS_ERASABLE_MEM",
+        "critical_mem": "00540",
+        "mem_label": "LOWCRIT",
         "producer_fn": "BURN_BABY_BURN_MASTER_IGNITION",
         "ref_binary": "Luminary099/THROTTLE_CONTROL_ROUTINES.agc",
         "vectors_path": "ground_truth/lunar_test_vectors.json",
@@ -336,6 +336,23 @@ class SupervisorAgent:
                     "node_type": "memory"
                 }
 
+        # Stream Memory Access Edges (READS and WRITES) from FalkorDB (Scoped to isolated multigraph)
+        mem_edge_records = falkor_client.query("""
+        MATCH (f:Function)-[r:READS|WRITES]->(m:GlobalMemory)
+        RETURN f.name AS fn, type(r) AS rel, m.address AS addr
+        """)
+        for rel_rec in mem_edge_records:
+            fn_name = rel_rec.get("fn")
+            rel_type = rel_rec.get("rel")
+            addr = rel_rec.get("addr")
+            if fn_name and rel_type and addr:
+                yield {
+                    "type": "EDGE_DISCOVERED",
+                    "source": fn_name,
+                    "target": addr,
+                    "label": rel_type
+                }
+
         # Step 2: Multigraph Isolation & Blueprint Tool Trace (Organizer Blueprint Features 2 & 3)
         if use_graph_context:
 
@@ -359,37 +376,40 @@ class SupervisorAgent:
                 "path": shortest_path.get("path_nodes", [])
             }
 
-            # Query real provenance from FalkorDB using ro_query
+            # Query real provenance from FalkorDB using ro_query (Bug #6: truthful check)
             prov = cypher_tools.resolve_memory_source(crit_mem)
-            if prov:
+            if prov and prov[0].get("producer_function"):
                 real_label = prov[0].get("label") or crit_label
-                real_prod = prov[0].get("producer_function") or prod_fn
+                real_prod = prov[0].get("producer_function")
+                yield {
+                    "type": "MEMORY_RESOLVED",
+                    "address": crit_mem,
+                    "label": real_label,
+                    "producer": real_prod,
+                    "consumer": fn_to_reconstruct,
+                    "message": f"FalkorDB Provenance Resolved: {crit_mem} is '{real_label}' initialized by '{real_prod}'!",
+                    "trace": falkor_client.last_query_trace
+                }
+                yield {
+                    "type": "EDGE_DISCOVERED",
+                    "source": real_prod,
+                    "target": crit_mem,
+                    "label": "WRITES"
+                }
+                yield {
+                    "type": "EDGE_DISCOVERED",
+                    "source": fn_to_reconstruct,
+                    "target": crit_mem,
+                    "label": "READS"
+                }
             else:
-                real_label = crit_label
-                real_prod = prod_fn
-
-            yield {
-                "type": "MEMORY_RESOLVED",
-                "address": crit_mem,
-                "label": real_label,
-                "producer": real_prod,
-                "consumer": fn_to_reconstruct,
-                "message": f"FalkorDB Provenance Resolved: {crit_mem} is '{real_label}' initialized by '{real_prod}'!",
-                "trace": falkor_client.last_query_trace
-            }
-
-            yield {
-                "type": "EDGE_DISCOVERED",
-                "source": real_prod,
-                "target": crit_mem,
-                "label": "WRITES"
-            }
-            yield {
-                "type": "EDGE_DISCOVERED",
-                "source": fn_to_reconstruct,
-                "target": crit_mem,
-                "label": "READS"
-            }
+                yield {
+                    "type": "MEMORY_UNRESOLVED",
+                    "address": crit_mem,
+                    "consumer": fn_to_reconstruct,
+                    "message": f"FalkorDB Provenance Query: {crit_mem} producer could not be resolved from topology.",
+                    "trace": falkor_client.last_query_trace
+                }
         else:
             yield {
                 "type": "AGENT_STEP",

@@ -342,6 +342,19 @@ class FalkorClient:
                     })
             return results
 
+        # 5d. List All Memory Access Edges (READS and WRITES) for Supervisor Stream
+        if "MATCH (f:Function)-[r:READS|WRITES]->(m:GlobalMemory)" in cypher:
+            results = []
+            for e in self._edges:
+                rel_type = e.get("type")
+                if rel_type in ("READS", "WRITES"):
+                    results.append({
+                        "fn": e.get("source"),
+                        "rel": rel_type,
+                        "addr": e.get("target")
+                    })
+            return results
+
         # 6. Multi-Hop Memory Provenance: MATCH (mem:GlobalMemory)<-[:WRITES]-(initializer)
         if "MATCH (mem:GlobalMemory {address: $addr})<-[:WRITES]-(initializer:Function)" in cypher:
             addr = params.get("addr", "")
