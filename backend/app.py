@@ -234,17 +234,19 @@ async def execute_custom_cypher(request: Request):
 @app.get("/api/reconstruct/stream")
 async def stream_reconstruction(
     target_id: str = "lunar_lander",
-    use_graph: bool = True
+    use_graph: bool = True,
+    max_iterations: Optional[int] = None
 ):
     """
     Streams the live multi-agent execution events (Gemini reasoning,
     Cypher MCP calls, GCC compilation, differential diffs) via Server-Sent Events.
     """
+    iterations = max_iterations if max_iterations is not None else (2 if use_graph else 1)
     async def event_generator():
         for event in supervisor_agent.run_reconstruction_pipeline(
             target_name=target_id,
             use_graph_context=use_graph,
-            max_iterations=1
+            max_iterations=iterations
         ):
             yield {"data": json.dumps(event)}
             etype = event.get("type", "")

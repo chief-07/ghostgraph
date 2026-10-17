@@ -219,33 +219,51 @@ def get_struct_definition(struct_name: str) -> Dict[str, Any]:
         return records[0]
     return {"struct_name": struct_name, "total_size": 0, "fields": []}
 
-def fetch_failure_memory(target_name: str, candidate_version: int) -> List[Dict[str, Any]]:
+def fetch_failure_memory(target_name: str, candidate_version: int, function_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Episodic Memory Query (Track 02):
     Retrieves all test cases that failed in the previous candidate version,
     including the observed behavioral diff and targeted function.
     """
-    cypher = """
-    MATCH (c:Candidate {version: $version})-[:FAILED_ON]->(t:TestCase)
-    OPTIONAL MATCH (t)-[:EXERCISES]->(f:Function)
-    RETURN t.id AS test_id,
-           t.description AS description,
-           t.input_payload AS input,
-           t.expected_output AS expected,
-           c.diff AS observed_error,
-           f.name AS target_function
-    """
-    return falkor_client.query(cypher, {"version": candidate_version})
+    if function_name:
+        cypher = """
+        MATCH (c:Candidate {version: $version})-[r:FAILED_ON]->(t:TestCase)
+        WHERE (c.function_name = $fname OR c.id CONTAINS $fname)
+        OPTIONAL MATCH (t)-[:EXERCISES]->(f:Function)
+        RETURN t.id AS test_id,
+               t.description AS description,
+               t.input_payload AS input,
+               t.expected_output AS expected,
+               r.diff AS observed_error,
+               coalesce(f.name, c.function_name) AS target_function,
+               c.id AS candidate_id
+        """
+        return falkor_client.query(cypher, {"version": candidate_version, "fname": function_name})
+    else:
+        cypher = """
+        MATCH (c:Candidate {version: $version})-[r:FAILED_ON]->(t:TestCase)
+        OPTIONAL MATCH (t)-[:EXERCISES]->(f:Function)
+        RETURN t.id AS test_id,
+               t.description AS description,
+               t.input_payload AS input,
+               t.expected_output AS expected,
+               r.diff AS observed_error,
+               coalesce(f.name, c.function_name) AS target_function,
+               c.id AS candidate_id
+        """
+        return falkor_client.query(cypher, {"version": candidate_version})
 
-def record_candidate(function_name: str, source_code: str, version: int, status: str = "PENDING") -> str:
+def record_candidate(function_name: str, source_code: str, version: int, status: str = "PENDING", target_name: str = "", candidate_id: Optional[str] = None) -> str:
     """
     Commits a new candidate implementation into FalkorDB.
     """
-    candidate_id = f"cand_{function_name}_v{version}_{uuid.uuid4().hex[:6]}"
+    if not candidate_id:
+        candidate_id = f"cand_{function_name}_v{version}_{uuid.uuid4().hex[:6]}"
     cypher = """
     CREATE (c:Candidate {
         id: $cid,
         function_name: $fname,
+        target_name: $tname,
         source_code: $code,
         version: $version,
         status: $status,
@@ -260,6 +278,7 @@ def record_candidate(function_name: str, source_code: str, version: int, status:
     falkor_client.query(cypher, {
         "cid": candidate_id,
         "fname": function_name,
+        "tname": target_name,
         "code": source_code,
         "version": version,
         "status": status
@@ -267,23 +286,22 @@ def record_candidate(function_name: str, source_code: str, version: int, status:
     logger.info(f"Committed Candidate {candidate_id} to FalkorDB [v{version} for {function_name}]")
     return candidate_id
 
-def record_test_outcome(candidate_id: str, test_id: str, passed: bool, diff: str = "") -> None:
+def record_test_outcome(candidate_id: str, test_id: str, passed: Any, diff: str = "") -> None:
     """
     Records differential verification result in FalkorDB (Track 02).
     """
-    if passed:
+    is_passed = (passed is True) or (isinstance(passed, str) and passed.upper() == "PASSED")
+    if is_passed:
         cypher = """
         MERGE (c:Candidate {id: $cid})
-        WITH c
-        MATCH (t:TestCase {id: $tid})
+        MERGE (t:TestCase {id: $tid})
         MERGE (c)-[:PASSED]->(t)
         """
         falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id})
     else:
         cypher = """
         MERGE (c:Candidate {id: $cid})
-        WITH c
-        MATCH (t:TestCase {id: $tid})
+        MERGE (t:TestCase {id: $tid})
         CREATE (c)-[:FAILED_ON {diff: $diff, timestamp: timestamp()}]->(t)
         """
         falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id, "diff": diff})

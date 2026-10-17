@@ -81,7 +81,7 @@ class ReconstructionAgent:
             struct_info = get_struct_definition(struct_name) if struct_name else {}
 
             if version > 1:
-                failure_memory = fetch_failure_memory(target_name, version - 1)
+                failure_memory = fetch_failure_memory(target_name, version - 1, function_name=function_name)
 
         # 3. Live Code Generation via Gemini 3.1 Flash-Lite
         if not pseudocode or pseudocode.startswith("// Function not found"):
@@ -99,7 +99,8 @@ class ReconstructionAgent:
             struct_info=struct_info,
             failure_memory=failure_memory,
             use_graph_context=use_graph_context,
-            target_language=target_language
+            target_language=target_language,
+            version=version
         )
 
         synthesized_code = None
@@ -124,7 +125,8 @@ class ReconstructionAgent:
             function_name=function_name,
             source_code=synthesized_code,
             version=version,
-            status="SYNTHESIZED"
+            status="SYNTHESIZED",
+            target_name=target_name
         )
 
         return {
@@ -136,7 +138,8 @@ class ReconstructionAgent:
             "resolved_memory_count": len(resolved_memory),
             "recalled_failures_count": len(failure_memory),
             "source_code": synthesized_code,
-            "target_language": target_language
+            "target_language": target_language,
+            "provenance_prompt": prompt
         }
 
     def reconstruct_full_module(
@@ -350,6 +353,17 @@ Disassembled input:
 
 Output ONLY valid {lang.upper()} code inside a ```{lang} ``` block."""
 
+        failure_memory = kwargs.get('failure_memory') or []
+        fail_section = ""
+        if failure_memory:
+            fail_section = f"""- Prior Verified Failures (Track 02 Episodic Feedback):
+{json.dumps(failure_memory, indent=2)}
+CRITICAL SELF-HEALING REFINEMENT:
+Candidate v{kwargs.get('version', 2) - 1} failed {len(failure_memory)} differential test vector(s).
+Carefully review the 'observed_error' values above and correct the calculation, formula, or boundary conditions so all test vectors pass!"""
+        else:
+            fail_section = "- Prior Verified Failures: [] (Initial Synthesis v1)"
+
         return f"""You are GhostGraph's autonomous reverse engineering agent powered by FalkorDB graph memory.
 Task: Reconstruct subroutine '{fn}' from '{target}' into clean, idiomatic, fully working modern {lang.upper()}.
 
@@ -359,7 +373,7 @@ FALKORDB TOPOLOGICAL CONTEXT:
 - Grounded Global Memory Buffers (Multi-Hop Provenance):
 {json.dumps(kwargs.get('resolved_memory'), indent=2)}
 - Struct Layout: {json.dumps(kwargs.get('struct_info'), indent=2)}
-- Prior Verified Failures: {kwargs.get('failure_memory')}
+{fail_section}
 
 Disassembled Machine Code / Pseudocode:
 {code_input}

@@ -109,7 +109,7 @@ class FalkorClient:
         """Attempts connection to real FalkorDB instance."""
         try:
             import falkordb
-            kwargs = {"host": self.host, "port": self.port, "socket_timeout": 8.0}
+            kwargs = {"host": self.host, "port": self.port, "socket_timeout": 2.0}
             if self.username:
                 kwargs["username"] = self.username
             if self.password:
@@ -335,22 +335,45 @@ class FalkorClient:
             return [{"struct_name": sname, "total_size": 0, "fields": []}]
 
         # 8. Record Candidate & Test Outcomes
-        if "MERGE (c:Candidate" in cypher or "CREATE (c:Candidate" in cypher:
-            cid = params.get("cid", "cand_1")
-            self._nodes[f"cand_{cid}"] = {"type": "Candidate", "id": cid, "props": params}
-            return [{"c.id": cid, "id": cid}]
-
-        if "MERGE (t:TestCase" in cypher and "PASSED" in cypher:
+        if "PASSED" in cypher and ("MERGE (t:TestCase" in cypher or ":PASSED" in cypher):
             tid = params.get("tid", "")
             cid = params.get("cid", "")
             self._edges.append({"source": cid, "target": tid, "type": "PASSED"})
             return []
 
-        if "MERGE (t:TestCase" in cypher and "FAILED_ON" in cypher:
+        if "FAILED_ON" in cypher and ("CREATE" in cypher or "MERGE" in cypher) and "diff" in params:
             tid = params.get("tid", "")
             cid = params.get("cid", "")
             self._edges.append({"source": cid, "target": tid, "type": "FAILED_ON", "diff": params.get("diff", "")})
             return []
+
+        # 8b. Fetch Failure Memory (Track 02 Episodic Retrieval)
+        if "FAILED_ON" in cypher and ("observed_error" in cypher or "r.diff" in cypher or "RETURN" in cypher):
+            ver = params.get("version")
+            fname = params.get("fname")
+            failures = []
+            for e in self._edges:
+                if e.get("type") == "FAILED_ON":
+                    cid = e.get("source", "")
+                    cand_node = self._nodes.get(f"cand_{cid}", {})
+                    props = cand_node.get("props", {})
+                    if ver is not None and props.get("version") is not None and int(props.get("version")) != int(ver):
+                        continue
+                    if fname and props.get("fname") and props.get("fname") != fname and fname not in cid:
+                        continue
+                    failures.append({
+                        "test_id": e.get("target", ""),
+                        "description": f"Failed differential test {e.get('target', '')}",
+                        "observed_error": e.get("diff", ""),
+                        "candidate_id": cid,
+                        "target_function": props.get("fname", fname or "")
+                    })
+            return failures
+
+        if "MERGE (c:Candidate" in cypher or "CREATE (c:Candidate" in cypher:
+            cid = params.get("cid", "cand_1")
+            self._nodes[f"cand_{cid}"] = {"type": "Candidate", "id": cid, "props": params}
+            return [{"c.id": cid, "id": cid}]
 
         # Default fallback: return empty list
         return []

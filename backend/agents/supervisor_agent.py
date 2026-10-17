@@ -460,18 +460,100 @@ class SupervisorAgent:
             "message": f"Verification Result: {parity}% Parity ({passed_count}/{total_count} Tests Passed)"
         }
 
-        # Step 5: Pipeline Completion
+        # Step 5: Multi-Turn Self-Healing Refinement (Track 02: Episodic Memory in FalkorDB)
+        current_version = 1
         converged = (parity == 100.0)
+
+        while current_version < max_iterations and not converged and use_graph_context:
+            current_version += 1
+            yield {
+                "type": "AGENT_STEP",
+                "agent": "SupervisorAgent",
+                "action": "EPISODIC_MEMORY_SELF_HEAL",
+                "message": f"Candidate v{current_version - 1} achieved {parity}% parity ({passed_count}/{total_count} passed). Querying FalkorDB failure memory to self-heal Candidate v{current_version}..."
+            }
+
+            recon_result = self.reconstructor.reconstruct_function(
+                function_name=fn_to_reconstruct,
+                target_name=target_name,
+                version=current_version,
+                use_graph_context=use_graph_context,
+                target_language=target_language
+            )
+            synthesized_code = recon_result["source_code"]
+            candidate_id = recon_result["candidate_id"]
+
+            if target_name == "space_invaders":
+                try:
+                    from backend.app import active_invaders
+                    active_invaders.load_synthesized_candidate(synthesized_code, use_graph_context)
+                except Exception as e:
+                    logger.warning(f"Could not hot-load synthesized candidate: {e}")
+
+            recalled_count = recon_result.get("recalled_failures_count", 0)
+            yield {
+                "type": "CANDIDATE_GENERATED",
+                "candidate_id": candidate_id,
+                "target_function": fn_to_reconstruct,
+                "version": current_version,
+                "resolved_memory_count": recon_result["resolved_memory_count"],
+                "recalled_failures_count": recalled_count,
+                "code_before": cfg.get("decompiled_snippet", "// Disassembled machine code"),
+                "code_after": synthesized_code,
+                "message": f"Synthesized Candidate {candidate_id} (v{current_version}) using {recalled_count} failure memories from FalkorDB."
+            }
+
+            yield {
+                "type": "AGENT_STEP",
+                "agent": "VerificationAgent",
+                "action": "CODE_SYNTAX_AND_EXECUTION_CHECK",
+                "message": f"Re-executing differential test suite on refined candidate {candidate_id} (v{current_version})..."
+            }
+
+            diff_summary = differential_tester.run_tests(
+                candidate_binary_path=None,
+                candidate_id=candidate_id,
+                candidate_code=synthesized_code,
+                is_flat_llm_mode=not use_graph_context,
+                target_name=target_name
+            )
+
+            for tc_res in diff_summary.get("results", []):
+                yield {
+                    "type": "TEST_STEP",
+                    "test_id": tc_res["test_id"],
+                    "name": tc_res["name"],
+                    "status": tc_res["status"],
+                    "diff": tc_res.get("diff") or ""
+                }
+
+            passed_count = diff_summary["passed"]
+            total_count = diff_summary["total_vectors"]
+            parity = diff_summary["parity_percentage"]
+            converged = (parity == 100.0)
+
+            yield {
+                "type": "VERIFICATION_RESULT",
+                "candidate_id": candidate_id,
+                "target_function": fn_to_reconstruct,
+                "version": current_version,
+                "passed": passed_count,
+                "total": total_count,
+                "parity_percentage": parity,
+                "message": f"Self-Healing Result (v{current_version}): {parity}% Parity ({passed_count}/{total_count} Tests Passed)"
+            }
+
+        # Step 6: Pipeline Completion
         yield {
             "type": "PIPELINE_COMPLETE",
             "converged": converged,
             "final_parity": parity,
             "passed_count": passed_count,
             "total_count": total_count,
-            "iterations": 1,
+            "iterations": current_version,
             "target": target_name,
             "mode": "FalkorDB Connected Context" if use_graph_context else "Vanilla Flat LLM (No Graph)",
-            "message": "Autonomous reconstruction completed with verified graph parity." if converged else "Verification failed: Flat LLM omitted global memory dependencies."
+            "message": f"Autonomous reconstruction completed with verified graph parity after {current_version} iteration(s)." if converged else "Verification failed: Flat LLM omitted global memory dependencies."
         }
 
 # Global singleton instance
