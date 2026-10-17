@@ -1457,3 +1457,245 @@ function closeGuideModal() {
   const modal = document.getElementById("guideModal");
   if (modal) modal.classList.add("hidden");
 }
+
+// ============================================================================
+// FalkorDB Cypher Exploration Console (Bug #10)
+// ============================================================================
+let cypherPresets = [];
+let activePresetId = null;
+
+async function openCypherModal() {
+  const modal = document.getElementById("cypherModal");
+  if (modal) modal.classList.remove("hidden");
+
+  // Attach Ctrl+Enter handler if not already attached
+  const queryInput = document.getElementById("cypherQueryInput");
+  if (queryInput && !queryInput.dataset.shortcutAttached) {
+    queryInput.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        runConsoleCypher();
+      }
+    });
+    queryInput.dataset.shortcutAttached = "true";
+  }
+
+  // Load presets if not loaded
+  if (cypherPresets.length === 0) {
+    await loadCypherPresets();
+  }
+}
+
+function closeCypherModal() {
+  const modal = document.getElementById("cypherModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function clearCypherConsole() {
+  const queryInput = document.getElementById("cypherQueryInput");
+  if (queryInput) queryInput.value = "";
+
+  const placeholder = document.getElementById("cypherPlaceholder");
+  const errorBanner = document.getElementById("cypherErrorBanner");
+  const table = document.getElementById("cypherResultsTable");
+  const telemetry = document.getElementById("cypherTelemetryBar");
+
+  if (placeholder) {
+    placeholder.classList.remove("hidden");
+    placeholder.innerHTML = `
+      <svg class="w-8 h-8 text-[#c0c4cc]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+      <div class="text-[13px] font-medium text-[#4b5563]">Select a curated preset or type an OpenCypher query above</div>
+      <div class="text-[11.5px]">Read operations only. Destructive statements (DELETE, DROP, MERGE, SET) are guarded.</div>
+    `;
+  }
+  if (errorBanner) errorBanner.classList.add("hidden");
+  if (table) table.classList.add("hidden");
+  if (telemetry) telemetry.classList.add("hidden");
+
+  activePresetId = null;
+  highlightActivePreset();
+}
+
+async function loadCypherPresets() {
+  const listEl = document.getElementById("cypherPresetsList");
+  if (!listEl) return;
+
+  try {
+    const res = await fetch("/api/cypher/presets");
+    const data = await res.json();
+    cypherPresets = data.presets || [];
+  } catch (err) {
+    console.warn("Failed to fetch presets, using fallback presets:", err);
+    cypherPresets = [
+      { id: "call_topology", title: "Call Topology", query: "MATCH (p:Program)-[:CONTAINS]->(f:Function) OPTIONAL MATCH (f)-[:CALLS]->(callee:Function) RETURN f.name AS function, f.address AS address, collect(DISTINCT callee.name) AS callees" },
+      { id: "memory_provenance", title: "Memory Provenance", query: "MATCH (m:GlobalMemory)<-[:WRITES]-(initializer:Function) OPTIONAL MATCH (caller:Function)-[:CALLS]->(initializer) RETURN m.address AS address, m.label AS label, initializer.name AS producer, caller.name AS parent_caller" },
+      { id: "pagerank_algorithms", title: "PageRank Centrality", query: "CALL algo.pageRank('Function', 'CALLS') YIELD node, score RETURN node.name AS function, score ORDER BY score DESC LIMIT 5" },
+      { id: "shortest_call_paths", title: "Shortest Call Paths", query: "MATCH (f1:Function), (f2:Function) WHERE f1 <> f2 MATCH p = shortestPath((f1)-[:CALLS*1..5]->(f2)) RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS call_chain LIMIT 5" },
+      { id: "struct_definitions", title: "Struct Definitions", query: "MATCH (s:Struct)-[:HAS_FIELD]->(f:StructField) RETURN s.name AS struct_name, s.size AS size, f.name AS field_name, f.offset AS offset, f.type AS field_type ORDER BY s.name, f.offset" },
+      { id: "episodic_memory", title: "Episodic Failure Memory", query: "MATCH (c:Candidate)-[r:FAILED_ON]->(t:TestCase) RETURN c.id AS candidate, c.version AS version, t.id AS test, r.diff AS observed_error" }
+    ];
+  }
+
+  renderPresetButtons();
+  if (cypherPresets.length > 0) {
+    const queryInput = document.getElementById("cypherQueryInput");
+    if (queryInput && !queryInput.value.trim()) {
+      selectCypherPreset(cypherPresets[0].id);
+    }
+  }
+}
+
+function renderPresetButtons() {
+  const listEl = document.getElementById("cypherPresetsList");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+
+  cypherPresets.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.id = `preset_btn_${p.id}`;
+    btn.className = "px-3 py-1 rounded-full text-[11px] font-medium transition-all bg-[#f3f4f6] text-[#4b5563] hover:bg-[#e5e7eb] hover:text-[#0b0b0e] border border-[#e5e7eb]";
+    btn.innerText = p.title;
+    btn.title = p.description || p.query;
+    btn.onclick = () => selectCypherPreset(p.id);
+    listEl.appendChild(btn);
+  });
+}
+
+function highlightActivePreset() {
+  cypherPresets.forEach((p) => {
+    const btn = document.getElementById(`preset_btn_${p.id}`);
+    if (btn) {
+      if (p.id === activePresetId) {
+        btn.className = "px-3 py-1 rounded-full text-[11px] font-semibold transition-all bg-[#0b0b0e] text-white border border-[#0b0b0e] shadow-xs";
+      } else {
+        btn.className = "px-3 py-1 rounded-full text-[11px] font-medium transition-all bg-[#f3f4f6] text-[#4b5563] hover:bg-[#e5e7eb] hover:text-[#0b0b0e] border border-[#e5e7eb]";
+      }
+    }
+  });
+}
+
+function selectCypherPreset(presetId) {
+  activePresetId = presetId;
+  highlightActivePreset();
+  const preset = cypherPresets.find((p) => p.id === presetId);
+  if (preset) {
+    const queryInput = document.getElementById("cypherQueryInput");
+    if (queryInput) {
+      queryInput.value = preset.query;
+    }
+  }
+}
+
+async function runConsoleCypher() {
+  const queryInput = document.getElementById("cypherQueryInput");
+  const query = queryInput ? queryInput.value.trim() : "";
+  if (!query) return;
+
+  const btnRun = document.getElementById("btnRunCypher");
+  const placeholder = document.getElementById("cypherPlaceholder");
+  const errorBanner = document.getElementById("cypherErrorBanner");
+  const errorTitle = document.getElementById("cypherErrorTitle");
+  const errorMessage = document.getElementById("cypherErrorMessage");
+  const table = document.getElementById("cypherResultsTable");
+  const thead = document.getElementById("cypherTableHead");
+  const tbody = document.getElementById("cypherTableBody");
+  const telemetry = document.getElementById("cypherTelemetryBar");
+  const latencyBadge = document.getElementById("cypherLatencyBadge");
+  const countBadge = document.getElementById("cypherCountBadge");
+  const statusBadge = document.getElementById("cypherStatusBadge");
+  const engineText = document.getElementById("cypherEngineText");
+  const engineDot = document.getElementById("cypherEngineDot");
+
+  if (btnRun) {
+    btnRun.disabled = true;
+    btnRun.innerHTML = `<span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span><span>Running...</span>`;
+  }
+
+  if (placeholder) placeholder.classList.add("hidden");
+  if (errorBanner) errorBanner.classList.add("hidden");
+  if (table) table.classList.add("hidden");
+  if (telemetry) telemetry.classList.remove("hidden");
+
+  try {
+    const res = await fetch("/api/cypher", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+
+    const data = await res.json();
+
+    if (engineText && data.mode) {
+      engineText.innerText = data.mode;
+      if (engineDot) {
+        engineDot.className = data.mode.includes("Cloud") ? "w-1.5 h-1.5 rounded-full bg-[#16a34a]" : "w-1.5 h-1.5 rounded-full bg-[#d97706]";
+      }
+    }
+
+    if (latencyBadge) latencyBadge.innerText = `Latency: ${data.latency_ms ?? 0} ms`;
+    if (countBadge) countBadge.innerText = `${data.count ?? (data.records ? data.records.length : 0)} records`;
+
+    if (!res.ok || data.status === "GUARDRAIL_BLOCKED" || data.status === "ERROR") {
+      if (statusBadge) {
+        statusBadge.innerText = data.status === "GUARDRAIL_BLOCKED" ? "BLOCKED (MUTATION SAFEGUARD)" : "ERROR";
+        statusBadge.className = "font-semibold text-[#dc2626]";
+      }
+      if (errorBanner) {
+        errorBanner.classList.remove("hidden");
+        errorTitle.innerText = data.status === "GUARDRAIL_BLOCKED" ? "Mutation Safeguard Triggered" : "Cypher Error";
+        errorMessage.innerText = data.message || "An error occurred executing this Cypher query.";
+      }
+      return;
+    }
+
+    // Success
+    if (statusBadge) {
+      statusBadge.innerText = "SUCCESS";
+      statusBadge.className = "font-semibold text-[#16a34a]";
+    }
+
+    const records = data.records || [];
+    if (records.length === 0) {
+      if (placeholder) {
+        placeholder.classList.remove("hidden");
+        placeholder.innerHTML = `
+          <div class="text-[13px] font-medium text-[#4b5563]">0 records returned</div>
+          <div class="text-[11.5px] text-[#888c94]">Query executed successfully in ${data.latency_ms} ms with no matching graph patterns.</div>
+        `;
+      }
+      return;
+    }
+
+    // Build Table
+    const columns = data.columns && data.columns.length > 0 ? data.columns : Object.keys(records[0]);
+    thead.innerHTML = `<tr>${columns.map((c) => `<th class="p-2 font-semibold tracking-wider text-[11px] uppercase">${c}</th>`).join("")}</tr>`;
+
+    tbody.innerHTML = records.map((row) => {
+      return `<tr>${columns.map((c) => {
+        let val = row[c];
+        if (typeof val === "object" && val !== null) {
+          val = JSON.stringify(val);
+        }
+        return `<td class="p-2 border-t border-[#eceef2] max-w-[280px] truncate" title="${String(val).replace(/"/g, '&quot;')}">${val !== undefined ? val : ""}</td>`;
+      }).join("")}</tr>`;
+    }).join("");
+
+    table.classList.remove("hidden");
+
+  } catch (err) {
+    if (errorBanner) {
+      errorBanner.classList.remove("hidden");
+      errorTitle.innerText = "Network Error";
+      errorMessage.innerText = String(err);
+    }
+    if (statusBadge) {
+      statusBadge.innerText = "NETWORK FAIL";
+      statusBadge.className = "font-semibold text-[#dc2626]";
+    }
+  } finally {
+    if (btnRun) {
+      btnRun.disabled = false;
+      btnRun.innerHTML = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span>Execute Cypher</span>`;
+    }
+  }
+}

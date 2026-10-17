@@ -10,6 +10,8 @@ Exposes REST and Server-Sent Event (SSE) endpoints for:
 """
 
 import os
+import re
+import time
 import json
 import math
 import random
@@ -220,19 +222,106 @@ async def get_graph(target_id: Optional[str] = None):
     graph_data = topology_agent.get_topology_graph()
     return JSONResponse(graph_data)
 
+@app.get("/api/cypher/presets")
+async def get_cypher_presets():
+    """Returns curated OpenCypher queries for interactive graph exploration (Bug #10)."""
+    return JSONResponse({
+        "presets": [
+            {
+                "id": "call_topology",
+                "title": "Call Topology & Subroutines",
+                "description": "Inspect all functions, their addresses, and outgoing call relationships in the active multigraph.",
+                "query": "MATCH (p:Program)-[:CONTAINS]->(f:Function) OPTIONAL MATCH (f)-[:CALLS]->(callee:Function) RETURN f.name AS function, f.address AS address, collect(DISTINCT callee.name) AS callees LIMIT 20"
+            },
+            {
+                "id": "memory_provenance",
+                "title": "Multi-Hop Memory Provenance (Track 01)",
+                "description": "Trace which subroutines initialize and write to detached global memory addresses.",
+                "query": "MATCH (m:GlobalMemory)<-[:WRITES]-(initializer:Function) OPTIONAL MATCH (caller:Function)-[:CALLS]->(initializer) RETURN m.address AS address, m.label AS label, initializer.name AS producer, caller.name AS parent_caller"
+            },
+            {
+                "id": "pagerank_algorithms",
+                "title": "Native PageRank Load-Bearing Subroutines",
+                "description": "Calculate centrality scores across the call topology to identify critical software hubs.",
+                "query": "CALL algo.pageRank('Function', 'CALLS') YIELD node, score RETURN node.name AS function, score ORDER BY score DESC LIMIT 5"
+            },
+            {
+                "id": "shortest_call_paths",
+                "title": "Multi-Hop Call Execution Chains",
+                "description": "Traverse the shortest call path between interacting subroutines.",
+                "query": "MATCH (f1:Function), (f2:Function) WHERE f1 <> f2 MATCH p = shortestPath((f1)-[:CALLS*1..5]->(f2)) RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS call_chain LIMIT 5"
+            },
+            {
+                "id": "struct_definitions",
+                "title": "Struct Field Layouts & Types",
+                "description": "Inspect complex struct memory mappings and field byte offsets discovered by the swarm.",
+                "query": "MATCH (s:Struct)-[:HAS_FIELD]->(f:StructField) RETURN s.name AS struct_name, s.size AS size, f.name AS field_name, f.offset AS offset, f.type AS field_type ORDER BY s.name, f.offset"
+            },
+            {
+                "id": "episodic_memory",
+                "title": "Episodic Failure Memory (Track 02)",
+                "description": "Retrieve candidate failure memories and test case error diffs stored in FalkorDB working memory.",
+                "query": "MATCH (c:Candidate)-[r:FAILED_ON]->(t:TestCase) RETURN c.id AS candidate, c.version AS version, t.id AS test, r.diff AS observed_error"
+            }
+        ]
+    })
+
 @app.post("/api/cypher")
 async def execute_custom_cypher(request: Request):
-    """Executes arbitrary or preset OpenCypher queries directly on FalkorDB."""
+    """
+    Executes auditable read-only OpenCypher queries on FalkorDB with schema safeguards (Bug #10).
+    Blocks destructive mutations (DELETE, DROP, DETACH) from the exploration console.
+    """
     body = await request.json()
     query = body.get("query", "").strip()
     if not query:
         raise HTTPException(status_code=400, detail="Empty query provided.")
 
+    # Guardrail: Check for mutating/destructive operations
+    query_upper = query.upper()
+    tokens = re.findall(r"\b[A-Z]+\b", query_upper)
+    blocked_keywords = {"DELETE", "DROP", "DETACH", "REMOVE"}
+    mutation_keywords = {"CREATE", "MERGE", "SET"}
+
+    found_blocked = [k for k in tokens if k in blocked_keywords]
+    found_mutations = [k for k in tokens if k in mutation_keywords]
+
+    if found_blocked or found_mutations:
+        blocked_word = (found_blocked + found_mutations)[0]
+        return JSONResponse({
+            "status": "GUARDRAIL_BLOCKED",
+            "message": f"Mutation safeguard triggered: '{blocked_word}' operations are restricted in the interactive Cypher exploration console to prevent corrupting graph state. Please use read queries (MATCH, RETURN, CALL algo...).",
+            "query": query,
+            "latency_ms": 0.0,
+            "count": 0,
+            "records": []
+        }, status_code=403)
+
     try:
-        records = falkor_client.query(query)
-        return JSONResponse({"status": "SUCCESS", "query": query, "count": len(records), "records": records[:50]})
+        start_t = time.perf_counter()
+        records = falkor_client.ro_query(query)
+        latency_ms = (time.perf_counter() - start_t) * 1000.0
+
+        columns = []
+        if records:
+            columns = list(records[0].keys())
+
+        return JSONResponse({
+            "status": "SUCCESS",
+            "query": query,
+            "count": len(records),
+            "latency_ms": round(latency_ms, 2),
+            "columns": columns,
+            "records": records[:50],
+            "graph_name": falkor_client.graph_name,
+            "mode": "FalkorDB Cloud" if falkor_client.is_connected else "In-Memory Simulation"
+        })
     except Exception as e:
-        return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=400)
+        return JSONResponse({
+            "status": "ERROR",
+            "message": f"Cypher execution error: {str(e)}",
+            "query": query
+        }, status_code=400)
 
 @app.get("/api/reconstruct/stream")
 async def stream_reconstruction(

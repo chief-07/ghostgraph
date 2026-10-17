@@ -55,6 +55,10 @@
           <button onclick="openTargetSelectorModal()" class="hover:text-[#6b7280] transition-colors">Targets</button>
           <button onclick="selectTarget(currentTargetId || 'space_invaders')" class="hover:text-[#6b7280] transition-colors">Studio</button>
           <button onclick="showDuelScreen()" class="hover:text-[#6b7280] transition-colors">Live Duel</button>
+          <button onclick="openCypherModal()" class="hover:text-[#6b7280] transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-[#6b7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            <span>Cypher Console</span>
+          </button>
           <button onclick="openGuideModal()" class="hover:text-[#6b7280] transition-colors flex items-center gap-1.5 text-[#4b5563]">
             <span class="w-4 h-4 rounded-full bg-[#f3f4f6] text-[#141417] text-[10px] font-bold inline-flex items-center justify-center">?</span>
             <span>Guide</span>
@@ -180,6 +184,10 @@
             <span id="studioFalkorDot" class="w-2 h-2 rounded-full bg-[#16a34a]"></span>
             <span id="studioFalkorLabel">FalkorDB Connected</span>
           </div>
+          <button onclick="openCypherModal()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-[#0b0b0e]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            <span>Cypher</span>
+          </button>
           <button onclick="exportReconstructedProject()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
             Export Project
           </button>
@@ -611,6 +619,112 @@
           <button onclick="closeExportModal()" class="btn-tactile-black px-6 py-2.5 text-[13px] font-medium">Close</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- FALKORDB CYPHER EXPLORATION CONSOLE MODAL (Bug #10)                   -->
+  <!-- ==================================================================== -->
+  <div id="cypherModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white border border-[#e5e7eb] rounded-3xl max-w-4xl w-full max-h-[92vh] p-6 sm:p-7 flex flex-col space-y-4 shadow-2xl overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-[#f0f0f2] pb-3.5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-[#0b0b0e] text-white flex items-center justify-center font-mono text-[14px] font-bold shadow-sm">
+            &gt;_
+          </div>
+          <div>
+            <div class="text-[17px] font-bold text-[#0b0b0e] flex items-center gap-2">
+              <span>FalkorDB Cypher Exploration Console</span>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]">
+                Read-Only Safeguards Active
+              </span>
+            </div>
+            <div class="text-[12px] text-[#686c75]">
+              Directly query function call topologies, multi-hop memory provenance, and Track 02 episodic failure memories.
+            </div>
+          </div>
+        </div>
+        <button onclick="closeCypherModal()" class="w-8 h-8 rounded-full bg-[#f3f4f6] hover:bg-[#e5e7eb] flex items-center justify-center text-[#141417] transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <!-- Curated Presets Strip -->
+      <div class="space-y-1.5">
+        <div class="text-[11px] font-bold tracking-wider uppercase text-[#888c94] flex items-center gap-1.5">
+          <span>Curated Hackathon Rubric Presets</span>
+        </div>
+        <div id="cypherPresetsList" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto py-1">
+          <!-- Dynamically populated from /api/cypher/presets -->
+        </div>
+      </div>
+
+      <!-- Query Editor & Action Bar -->
+      <div class="space-y-2">
+        <div class="relative">
+          <textarea
+            id="cypherQueryInput"
+            rows="3"
+            class="w-full bg-[#0d1117] text-[#e6edf3] font-mono text-[12.5px] leading-relaxed p-3.5 rounded-2xl border border-[#30363d] focus:outline-none focus:border-[#58a6ff] resize-none shadow-inner"
+            placeholder="MATCH (p:Program)-[:CONTAINS]->(f:Function) RETURN f.name, f.address LIMIT 10"
+            spellcheck="false"
+          ></textarea>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div class="flex items-center gap-2.5 text-[12px] text-[#6b7280]">
+            <span class="inline-flex items-center gap-1 text-[11px] bg-[#f3f4f6] px-2.5 py-1 rounded-full border border-[#e5e7eb] font-mono">
+              <span>Shortcut:</span> <kbd class="font-semibold text-[#141417]">Ctrl + Enter</kbd>
+            </span>
+            <span id="cypherEngineBadge" class="inline-flex items-center gap-1 text-[11px] bg-[#f3f4f6] px-2.5 py-1 rounded-full border border-[#e5e7eb]">
+              <span id="cypherEngineDot" class="w-1.5 h-1.5 rounded-full bg-[#16a34a]"></span>
+              <span id="cypherEngineText">FalkorDB Engine</span>
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="clearCypherConsole()" class="px-3.5 py-1.5 bg-white hover:bg-[#f3f4f6] text-[#5e626a] hover:text-[#0b0b0e] font-medium text-[12px] rounded-full border border-[#e4e5e9] transition-colors">
+              Clear
+            </button>
+            <button id="btnRunCypher" onclick="runConsoleCypher()" class="btn-tactile-black px-5 py-1.5 text-[12.5px] font-semibold flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <span>Execute Cypher</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Telemetry Strip & Status -->
+      <div id="cypherTelemetryBar" class="hidden flex items-center justify-between px-3 py-1.5 bg-[#f8f9fa] rounded-xl border border-[#eceef2] text-[11.5px] text-[#4b5563]">
+        <div class="flex items-center gap-4">
+          <span id="cypherLatencyBadge" class="font-mono font-medium text-[#0b0b0e]">Latency: -- ms</span>
+          <span id="cypherCountBadge" class="font-mono text-[#4b5563]">0 records</span>
+        </div>
+        <div id="cypherStatusBadge" class="font-semibold text-[#16a34a]">SUCCESS</div>
+      </div>
+
+      <!-- Results View / Error View -->
+      <div id="cypherResultsContainer" class="flex-1 min-h-[160px] max-h-[260px] overflow-auto bg-[#f8f9fa] border border-[#eceef2] rounded-2xl p-3">
+        <div id="cypherPlaceholder" class="h-full flex flex-col items-center justify-center text-center py-8 text-[#888c94] space-y-1">
+          <svg class="w-8 h-8 text-[#c0c4cc]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+          <div class="text-[13px] font-medium text-[#4b5563]">Select a curated preset or type an OpenCypher query above</div>
+          <div class="text-[11.5px]">Read operations only. Destructive statements (DELETE, DROP, MERGE, SET) are guarded.</div>
+        </div>
+        <div id="cypherErrorBanner" class="hidden p-3.5 bg-[#fef2f2] border border-[#fecaca] rounded-xl text-[#b91c1c] text-[12px] space-y-1">
+          <div class="font-bold flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-[#ef4444]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd"/></svg>
+            <span id="cypherErrorTitle">Query Blocked</span>
+          </div>
+          <div id="cypherErrorMessage" class="font-mono text-[11px] leading-relaxed"></div>
+        </div>
+        <table id="cypherResultsTable" class="hidden w-full text-left font-mono text-[11.5px] border-collapse">
+          <thead id="cypherTableHead" class="bg-[#edf0f5] text-[#141417] sticky top-0 border-b border-[#d8dce3]"></thead>
+          <tbody id="cypherTableBody" class="divide-y divide-[#eceef2] text-[#1f2937]"></tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 

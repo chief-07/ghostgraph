@@ -317,14 +317,15 @@ class FalkorClient:
                 "writes": writes
             }]
 
-        # 5b. List All Functions & Call Graph for Supervisor Stream
-        if "RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees" in cypher:
+        # 5b. List All Functions & Call Graph for Supervisor Stream / Console Preset
+        if "RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees" in cypher or "MATCH (p:Program)-[:CONTAINS]->(f:Function)" in cypher:
             results = []
             for node in self._nodes.values():
                 if node.get("type") == "Function":
                     fname = node.get("name", "")
                     callees = [e["target"] for e in self._edges if e["source"] == fname and e["type"] == "CALLS"]
                     results.append({
+                        "function": fname,
                         "name": fname,
                         "address": node.get("address", ""),
                         "callees": callees
@@ -374,8 +375,85 @@ class FalkorClient:
                 })
             return results
 
+        # 6b. Multi-Hop Memory Provenance preset (all global memory)
+        if "MATCH (m:GlobalMemory)<-[:WRITES]-(initializer:Function)" in cypher:
+            results = []
+            for e in self._edges:
+                if e.get("type") == "WRITES":
+                    fn_name = e.get("source")
+                    addr = e.get("target")
+                    mem_node = self._nodes.get(f"mem_{addr}", {})
+                    callers = [ed["source"] for ed in self._edges if ed.get("target") == fn_name and ed.get("type") == "CALLS"]
+                    results.append({
+                        "address": addr,
+                        "label": mem_node.get("label", addr),
+                        "producer": fn_name,
+                        "parent_caller": callers[0] if callers else "main"
+                    })
+            return results
+
+        # 6c. PageRank Simulation
+        if "CALL algo.pageRank" in cypher or "pageRank" in cypher:
+            ranks = []
+            for node in self._nodes.values():
+                if node.get("type") == "Function":
+                    fname = node.get("name", "")
+                    callers = len([e for e in self._edges if e["target"] == fname and e["type"] == "CALLS"])
+                    callees = len([e for e in self._edges if e["source"] == fname and e["type"] == "CALLS"])
+                    score = round(callers * 1.5 + callees + 0.15, 3)
+                    ranks.append({"function": fname, "score": score, "node": {"name": fname}})
+            ranks.sort(key=lambda x: x["score"], reverse=True)
+            return ranks[:10]
+
+        # 6d. Shortest Call Paths Simulation
+        if "shortestPath" in cypher:
+            call_edges = [e for e in self._edges if e.get("type") == "CALLS"]
+            if call_edges:
+                paths = [[e["source"], e["target"]] for e in call_edges[:5]]
+                return [{"call_chain": p, "path_nodes": p} for p in paths]
+            return [{"call_chain": ["sub_main", "sub_401180"], "path_nodes": ["sub_main", "sub_401180"]}]
+
         # 7. Struct Definitions
-        if "MATCH (s:Struct {name: $name})" in cypher:
+        if "MATCH (s:Struct" in cypher:
+            sname = params.get("name", "")
+            if sname:
+                struct_node = self._nodes.get(f"struct_{sname}", {})
+                if struct_node:
+                    fields = []
+                    for e in self._edges:
+                        if e.get("source") == sname and e.get("type") == "HAS_FIELD":
+                            fid = e.get("target")
+                            f_node = self._nodes.get(f"field_{fid}", {})
+                            fields.append({
+                                "name": f_node.get("name", fid),
+                                "offset": f_node.get("offset", 0),
+                                "type": f_node.get("type", "void*")
+                            })
+                    fields.sort(key=lambda x: x.get("offset", 0))
+                    return [{
+                        "struct_name": sname,
+                        "total_size": struct_node.get("size", 0),
+                        "fields": fields
+                    }]
+                return [{"struct_name": sname, "total_size": 0, "fields": []}]
+            else:
+                # Return all struct fields
+                res = []
+                for k, st_node in self._nodes.items():
+                    if st_node.get("type") == "Struct":
+                        st_name = st_node.get("name", "")
+                        for e in self._edges:
+                            if e.get("source") == st_name and e.get("type") == "HAS_FIELD":
+                                fid = e.get("target")
+                                f_node = self._nodes.get(f"field_{fid}", {})
+                                res.append({
+                                    "struct_name": st_name,
+                                    "size": st_node.get("size", 0),
+                                    "field_name": f_node.get("name", fid),
+                                    "offset": f_node.get("offset", 0),
+                                    "field_type": f_node.get("type", "void*")
+                                })
+                return res
             sname = params.get("name", "")
             struct_node = self._nodes.get(f"struct_{sname}", {})
             if struct_node:
@@ -468,10 +546,13 @@ class FalkorClient:
                     if fname and props.get("fname") and props.get("fname") != fname and fname not in cid:
                         continue
                     failures.append({
+                        "candidate": cid,
+                        "candidate_id": cid,
+                        "version": props.get("version", 1),
+                        "test": e.get("target", ""),
                         "test_id": e.get("target", ""),
                         "description": f"Failed differential test {e.get('target', '')}",
                         "observed_error": e.get("diff", ""),
-                        "candidate_id": cid,
                         "target_function": props.get("fname", fname or "")
                     })
             return failures
@@ -515,6 +596,32 @@ class FalkorClient:
             cid = params.get("cid", "")
             failed_edges = [e for e in self._edges if e.get("source") == cid and e.get("type") == "FAILED_ON"]
             return [{"failed_count": len(failed_edges), "count(t)": len(failed_edges)}]
+
+        # Console Fallback: MATCH (f:Function) RETURN ...
+        if "MATCH (f:Function)" in cypher and "RETURN" in cypher:
+            results = []
+            for node in self._nodes.values():
+                if node.get("type") == "Function":
+                    fname = node.get("name", "")
+                    results.append({
+                        "name": fname,
+                        "function": fname,
+                        "address": node.get("address", ""),
+                        "signature": node.get("signature", "")
+                    })
+            return results
+
+        # Console Fallback: MATCH (m:GlobalMemory) RETURN ...
+        if "MATCH (m:GlobalMemory)" in cypher and "RETURN" in cypher:
+            results = []
+            for node in self._nodes.values():
+                if node.get("type") == "GlobalMemory":
+                    results.append({
+                        "address": node.get("address", ""),
+                        "label": node.get("label", ""),
+                        "size": node.get("size", 0)
+                    })
+            return results
 
         # Default fallback: return empty list
         return []
