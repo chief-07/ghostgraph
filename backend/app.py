@@ -972,7 +972,7 @@ async def upload_custom_binary(file: UploadFile = File(...)):
     """
     Sub-second disassembler endpoint for custom binary uploads (<2MB).
     Disassembles binary using Capstone, extracts call targets and memory dereferences,
-    and dynamically registers the specimen into TARGETS and TARGET_CONFIGS for live reconstruction.
+    and ingests directly into an isolated FalkorDB multigraph via TopologyAgent.
     """
     if file.size and file.size > 2 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 2MB).")
@@ -980,83 +980,63 @@ async def upload_custom_binary(file: UploadFile = File(...)):
     contents = await file.read()
     filename = file.filename or "uploaded.bin"
 
-    disasm_lines = []
-    inferred_calls = []
-    inferred_mems = set()
-    instructions_count = 0
+    import hashlib
+    upload_hash = hashlib.sha256(contents).hexdigest()[:8]
+    target_id = f"upload_{upload_hash}"
 
-    try:
-        import capstone
-        # Try x86-64 first
-        md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
-        instructions = list(md.disasm(contents[:8192], 0x00401000))
-        if len(instructions) < 5:
-            # Fallback to x86-32
-            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
-            instructions = list(md.disasm(contents[:8192], 0x00401000))
+    # Ingest directly into FalkorDB multigraph via TopologyAgent (Problem 4 fix)
+    from backend.agents.topology_agent import topology_agent
+    ing_res = topology_agent.ingest_binary(
+        binary_data=contents,
+        program_name=filename,
+        target_id=target_id
+    )
 
-        instructions_count = len(instructions)
-        for instr in instructions[:120]:
-            hex_bytes = " ".join(f"{b:02x}" for b in instr.bytes)
-            line = f"0x{instr.address:08x}:  {hex_bytes:<18} {instr.mnemonic:<7} {instr.op_str}"
-            disasm_lines.append(line)
-            if instr.mnemonic.startswith("call"):
-                inferred_calls.append(instr.op_str)
-            if "0x" in instr.op_str and ("[" in instr.op_str or "rip" in instr.op_str):
-                m = re.search(r"0x[0-9a-fA-F]+", instr.op_str)
-                if m:
-                    inferred_mems.add(m.group(0))
-    except Exception as e:
-        logger.warning(f"Capstone disassembly exception: {e}")
+    primary_fn = ing_res.get("primary_fn") or "main_entry"
+    crit_mem = ing_res.get("critical_mem") or "0x00403000"
+    producer_fn = "init_subroutine"
 
-    if not disasm_lines:
-        disasm_lines = [
-            f"// Stripped raw binary upload: {filename} ({len(contents)} bytes)",
-            "0x00401000:  55                 push    rbp",
-            "0x00401001:  48 89 e5           mov     rbp, rsp",
-            "0x00401004:  48 83 ec 20        sub     rsp, 0x20",
-            "0x00401008:  48 8b 05 51 0f 00  mov     rax, qword ptr [rip + 0x0f51]",
-            "0x0040100f:  e8 4c 01 00 00     call    0x00401160",
-            "0x00401014:  c9                 leave",
-            "0x00401015:  c3                 ret"
-        ]
-        instructions_count = 12
-
-    disasm_text = "\n".join(disasm_lines)
-    mem_list = list(inferred_mems) or ["0x00403000"]
-    primary_fn = f"entry_{filename.split('.')[0]}" if filename else "entry_main"
-
-    TARGETS["custom_upload"] = {
-        "id": "custom_upload",
+    target_entry = {
+        "id": target_id,
         "name": f"User Upload: {filename}",
         "badge": "LIVE UPLOADED SPECIMEN",
         "category": "Uploaded Stripped Binary",
         "arch": "x86_64 stripped binary",
         "path": "",
         "vectors_path": "",
-        "critical_symbol": f"{mem_list[0]} (DETACHED_BUFFER)",
-        "producer_fn": "init_subroutine",
+        "critical_symbol": f"{crit_mem} (DETACHED_BUFFER)",
+        "producer_fn": producer_fn,
         "consumer_fn": primary_fn,
-        "description": f"User-uploaded stripped binary '{filename}' ({len(contents)} bytes). Disassembled {instructions_count} instructions with Capstone. FalkorDB multi-agent swarm maps detached memory references and reconstructs source code."
+        "description": f"User-uploaded stripped binary '{filename}' ({len(contents)} bytes). Disassembled {ing_res.get('total_instructions', 0)} instructions and {ing_res.get('functions_count', 0)} functions with Capstone directly into FalkorDB multigraph '{target_id}'."
     }
 
-    TARGET_CONFIGS["custom_upload"] = {
+    target_cfg = {
         "name": f"User Upload: {filename}",
         "primary_fn": primary_fn,
-        "critical_mem": mem_list[0],
+        "critical_mem": crit_mem,
         "mem_label": "DETACHED_BUFFER",
-        "producer_fn": "init_subroutine",
-        "decompiled_snippet": disasm_text
+        "producer_fn": producer_fn,
+        "decompiled_snippet": ing_res.get("decompiled_snippet", "// Disassembled binary instructions"),
+        "is_custom_upload": True
     }
+
+    # Register for both the unique hashed ID and the generic custom_upload alias
+    TARGETS[target_id] = target_entry
+    TARGET_CONFIGS[target_id] = target_cfg
+    TARGETS["custom_upload"] = dict(target_entry, id="custom_upload")
+    TARGET_CONFIGS["custom_upload"] = dict(target_cfg)
 
     return JSONResponse({
         "status": "INGESTED",
-        "target_id": "custom_upload",
+        "target_id": target_id,
         "filename": filename,
         "file_size_bytes": len(contents),
-        "disassembled_instructions": instructions_count,
-        "inferred_functions": max(4, len(inferred_calls) + 2),
-        "message": f"Successfully disassembled and indexed {filename} into FalkorDB in 120ms."
+        "disassembled_instructions": ing_res.get("total_instructions", 0),
+        "inferred_functions": ing_res.get("functions_count", 0),
+        "call_edges": ing_res.get("call_edges_count", 0),
+        "memory_nodes": ing_res.get("memory_nodes_count", 0),
+        "multigraph": f"ghostgraph_{target_id}",
+        "message": f"Successfully disassembled and indexed {filename} into FalkorDB multigraph '{target_id}'."
     })
 
 # ============================================================================

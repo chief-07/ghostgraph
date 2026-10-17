@@ -32,16 +32,20 @@ class TopologyAgent:
         self,
         binary_data: bytes,
         program_name: str = "binary_target",
-        base_address: int = 0x00401000
+        base_address: int = 0x00401000,
+        target_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Genuinely disassembles machine code bytes using Capstone,
         extracts function boundaries, call graphs, and RIP-relative memory references,
-        and persists the topological graph directly into FalkorDB Cloud.
+        and persists the topological graph directly into FalkorDB Cloud (multigraph isolated).
         """
         import struct
         import capstone
         from capstone import x86
+
+        if target_id:
+            self.client.select_target_graph(target_id)
 
         # Step 1: Detect ELF headers if present to find code offset & entrypoint
         code_bytes = binary_data
@@ -225,16 +229,25 @@ class TopologyAgent:
             RETURN count(*)
             """, {"writes": write_edges})
 
+        primary_fn = functions[0]["name"] if functions else "main_entry"
+        critical_mem = list(global_memory.keys())[0] if global_memory else "0x00403000"
+        decompiled_snippet = "\n".join(f["asm_text"] for f in functions[:5]) if functions else "// Disassembled binary instructions"
+
         return {
             "status": "INGESTED",
+            "target_id": target_id or program_name,
             "program_name": program_name,
+            "primary_fn": primary_fn,
+            "critical_mem": critical_mem,
             "total_instructions": len(instructions),
             "functions_count": len(functions),
+            "functions": [f["name"] for f in functions],
             "call_edges_count": len(call_edges),
             "memory_nodes_count": len(global_memory),
             "read_edges_count": len(read_edges),
             "write_edges_count": len(write_edges),
-            "entry_point": f"0x{load_addr:08X}"
+            "entry_point": f"0x{load_addr:08X}",
+            "decompiled_snippet": decompiled_snippet
         }
 
     def ingest_target(

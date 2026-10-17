@@ -258,13 +258,20 @@ class SupervisorAgent:
                 "action": "CAPSTONE_DISASSEMBLY",
                 "message": f"Disassembling {len(binary_bytes)} machine code bytes with Capstone (x86_64 detail mode)..."
             }
-            ingest_res = self.topology.ingest_binary(binary_bytes, program_name=target_name)
+            ingest_res = self.topology.ingest_binary(binary_bytes, program_name=target_name, target_id=target_name)
             total_fns = ingest_res.get("functions_count", 0)
             yield {
                 "type": "AGENT_STEP",
                 "agent": "TopologyAgent",
                 "action": "FALKORDB_INGESTION",
                 "message": f"Ingested {total_fns} subroutines and {ingest_res.get('memory_nodes_count', 0)} memory buffers into FalkorDB Cloud."
+            }
+        elif (target_name in TARGET_CONFIGS and TARGET_CONFIGS[target_name].get("is_custom_upload")) or target_name.startswith("upload_") or target_name == "custom_upload":
+            yield {
+                "type": "AGENT_STEP",
+                "agent": "TopologyAgent",
+                "action": "CUSTOM_BINARY_GRAPH_ENGAGED",
+                "message": f"Target '{target_name}' is an uploaded binary specimen; engaging dedicated FalkorDB multigraph directly without overwriting."
             }
         else:
             target_json_map = {
@@ -274,8 +281,8 @@ class SupervisorAgent:
                 "keygen": "backend/data/targets/keygen_decompiled.json",
                 "space_invaders": "backend/data/targets/space_invaders_decompiled.json"
             }
-            json_path = target_json_map.get(target_name, "backend/data/targets/lunar_lander_decompiled.json")
-            if Path(json_path).exists():
+            json_path = target_json_map.get(target_name)
+            if json_path and Path(json_path).exists():
                 self.topology.ingest_target(json_path, test_vectors_path=cfg.get("vectors_path"), target_id=target_name)
 
         # Stream Function Nodes and Call Graph from FalkorDB (Scoped to isolated multigraph)
@@ -396,12 +403,24 @@ class SupervisorAgent:
                     "target": crit_mem,
                     "label": "WRITES"
                 }
-                yield {
-                    "type": "EDGE_DISCOVERED",
-                    "source": fn_to_reconstruct,
-                    "target": crit_mem,
-                    "label": "READS"
-                }
+                # Problem 5 Fix: Verify via FalkorDB query whether fn_to_reconstruct actually reads crit_mem
+                reads_check_cypher = """
+                MATCH (f:Function)-[r:READS]->(m:GlobalMemory {address: $addr})
+                WHERE f.name = $fn OR f.address = $fn
+                RETURN count(r) > 0 AS does_read
+                """
+                read_check_res = falkor_client.ro_query(reads_check_cypher, {"fn": fn_to_reconstruct, "addr": crit_mem})
+                does_read = read_check_res[0].get("does_read", False) if read_check_res else False
+
+                if does_read:
+                    yield {
+                        "type": "EDGE_DISCOVERED",
+                        "source": fn_to_reconstruct,
+                        "target": crit_mem,
+                        "label": "READS"
+                    }
+                else:
+                    logger.info(f"FalkorDB verified that {fn_to_reconstruct} does not have a direct READS edge to {crit_mem}; skipping unverified edge.")
             else:
                 yield {
                     "type": "MEMORY_UNRESOLVED",

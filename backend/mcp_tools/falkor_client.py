@@ -366,6 +366,18 @@ class FalkorClient:
                     })
             return results
 
+        # 5e. Verify Direct Function READS Edge (Problem 5 Fix)
+        if ("MATCH (f:Function)-[r:READS]->(m:GlobalMemory" in cypher) or ("does_read" in cypher):
+            fn = params.get("fn", "") if params else ""
+            addr = params.get("addr", "") if params else ""
+            reads_found = [
+                e for e in self._edges
+                if (e.get("source") == fn or self._nodes.get(f"fn_{e.get('source')}", {}).get("address") == fn or e.get("source") in fn)
+                and e.get("target") == addr
+                and e.get("type") == "READS"
+            ]
+            return [{"does_read": len(reads_found) > 0}]
+
         # 6. Multi-Hop Memory Provenance: MATCH (mem:GlobalMemory)<-[:WRITES]-(initializer)
         if "MATCH (mem:GlobalMemory {address: $addr})<-[:WRITES]-(initializer:Function)" in cypher:
             addr = params.get("addr", "")
