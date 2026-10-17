@@ -46,12 +46,12 @@ class CCompiler:
             f.write(source_code)
 
         if not self.compiler_cmd:
-            logger.warning("No C compiler detected on host. Operating in compiler simulation mode.")
+            logger.warning("No C compiler detected on host PATH (gcc, clang, cl, tcc).")
             return {
-                "success": True,
-                "binary_path": str(out_path),
-                "compiler_used": "simulation",
-                "output": "Simulated compilation successful (no local GCC detected)."
+                "success": False,
+                "binary_path": None,
+                "compiler_used": "none",
+                "output": "No native C compiler (gcc, clang, cl, tcc) detected in host PATH. Cannot compile C binary directly."
             }
 
         cmd = [self.compiler_cmd, "-O1", str(source_file), "-o", str(out_path)]

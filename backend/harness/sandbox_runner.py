@@ -31,6 +31,7 @@ def main():
         from backend.harness.differential import (
             evaluate_billing_test,
             evaluate_lunar_lander_test,
+            evaluate_space_invaders_test,
             evaluate_snake_test,
             evaluate_telemetry_test,
             evaluate_pacman_test,

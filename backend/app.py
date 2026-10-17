@@ -76,7 +76,7 @@ TARGETS = {
         "category": "Classic Embedded Arcade Architecture",
         "arch": "x86_64 stripped binary",
         "path": "backend/data/targets/space_invaders_decompiled.json",
-        "vectors_path": "",
+        "vectors_path": "ground_truth/space_invaders_test_vectors.json",
         "critical_symbol": "0x00405100 (ALIEN_BLOCK_GRID) & 0x00405240 (BUNKER_EROSION_GRID)",
         "producer_fn": "aliensReset",
         "consumer_fn": "aliensMissileMove",
@@ -94,45 +94,6 @@ TARGETS = {
         "producer_fn": "BURN_BABY_BURN_MASTER_IGNITION",
         "consumer_fn": "THROTTLE_CONTROL_ROUTINES",
         "description": "Authentic MIT Instrumentation Laboratory Apollo 11 Luminary 099 guidance computer. Transcribed rope-core memory ROM bank 31 decouples descent engine non-linear throttle bounds (10% LOWCRIT, 60% HIGHCRIT cavitation deadband) and P66 touchdown equations from the lunar landing guidance step. FalkorDB multi-agent swarm maps erasable memory provenance into verified, flight-ready control logic."
-    },
-    "snake": {
-        "id": "snake",
-        "name": "1980 Retro Snake Engine",
-        "badge": "FLAGSHIP PLAYABLE REVERSE-ENGINEERING",
-        "category": "Complete Playable Game Engine",
-        "arch": "x86_64 stripped binary",
-        "path": "backend/data/targets/snake_decompiled.json",
-        "vectors_path": "ground_truth/snake_test_vectors.json",
-        "critical_symbol": "0x00404100 (DIR_DELTAS) & 0x00404000 (SNAKE_BODY_X)",
-        "producer_fn": "init_snake_game",
-        "consumer_fn": "step_snake_tick",
-        "description": "Complete 7-function retro arcade game engine. Ring buffer coordinate tables (0x00404000) and 2D direction vectors (0x00404100) detached from the physics loop. Reconstructs into a 100% playable game."
-    },
-    "pacman": {
-        "id": "pacman",
-        "name": "1980 Pac-Man Ghost AI & Maze Engine",
-        "badge": "STATE MACHINE BENCHMARK",
-        "category": "Deterministic Embedded AI",
-        "arch": "Z80 / x86_64 stripped binary",
-        "path": "backend/data/targets/pacman_decompiled.json",
-        "vectors_path": "ground_truth/test_vectors.json",
-        "critical_symbol": "0x00406080 (DIR_OFFSETS)",
-        "producer_fn": "init_game_tables",
-        "consumer_fn": "update_blinky_ai",
-        "description": "Authentic Toru Iwatani 4-ghost targeting vector algorithms & maze collision. Direction step vector 0x00406080 initialized in boot table."
-    },
-    "keygen": {
-        "id": "keygen",
-        "name": "Enterprise License Keygen CrackMe",
-        "badge": "CYBERSECURITY BENCHMARK",
-        "category": "Cryptanalysis & Software Protection",
-        "arch": "x86_64 stripped ELF",
-        "path": "backend/data/targets/keygen_decompiled.json",
-        "vectors_path": "ground_truth/keygen_test_vectors.json",
-        "critical_symbol": "0x00405100 (SBOX_SUBSTITUTION_TABLE)",
-        "producer_fn": "init_crypto_sbox",
-        "consumer_fn": "validate_license_tier",
-        "description": "Obfuscated commercial software licensing verification with rolling substitution S-Box and modular hash checks."
     }
 }
 
@@ -351,142 +312,6 @@ async def stream_reconstruction(
 
     return EventSourceResponse(event_generator())
 
-@app.get("/api/telemetry/downlink")
-async def get_telemetry_downlink(is_reconstructed: bool = True):
-    """
-    Returns simulated live orbital satellite downlink frames and telemetry readings.
-    If not reconstructed, demonstrates CRC checksum corruption and frame drop.
-    """
-    # Orbital parameters (ISS-like 418km orbit)
-    altitude = round(418.2 + random.uniform(-0.4, 0.4), 2)
-    bus_voltage = round(28.4 + random.uniform(-0.2, 0.2), 2)
-    solar_temp = round(24.5 + random.uniform(-1.0, 1.0), 1)
-
-    raw_hex = f"1ACFFC1D 0001 010A {int(altitude*1000):08X} {int(bus_voltage*100):04X} {int(solar_temp*10):04X}"
-    calculated_crc = "0x29B1" if is_reconstructed else "0x0000"
-
-    return JSONResponse({
-        "status": "NOMINAL" if is_reconstructed else "CORRUPTED",
-        "downlink_active": True,
-        "is_reconstructed": is_reconstructed,
-        "sync_word": "0x1ACFFC1D",
-        "frame_seq": random.randint(1024, 1040),
-        "altitude_km": altitude if is_reconstructed else 0.0,
-        "bus_voltage_v": bus_voltage if is_reconstructed else 0.0,
-        "solar_temp_c": solar_temp if is_reconstructed else -999.0,
-        "crc_status": "VALID" if is_reconstructed else "CHECKSUM_ERROR",
-        "expected_crc": "0x29B1",
-        "computed_crc": calculated_crc,
-        "raw_frame_hex": raw_hex,
-        "dropped_packets": 0 if is_reconstructed else 15
-    })
-
-# ============================================================================
-# Retro Snake Continuous Arcade Game State Engine
-# ============================================================================
-class SnakeGameEngine:
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.score = 0
-        self.length = 3
-        self.is_alive = True
-        self.tick_count = 0
-        self.current_dir = 1  # 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
-        self.body = [{"x": 10, "y": 10}, {"x": 9, "y": 10}, {"x": 8, "y": 10}]
-        self.food = {"x": 15, "y": 10}
-        self.dir_deltas = {
-            0: (0, -1),
-            1: (1, 0),
-            2: (0, 1),
-            3: (-1, 0)
-        }
-
-    def set_direction(self, new_dir: int):
-        opposites = {0: 2, 2: 0, 1: 3, 3: 1}
-        if new_dir in self.dir_deltas and opposites.get(new_dir) != self.current_dir:
-            self.current_dir = new_dir
-
-    def step(self, is_broken_mode: bool = False):
-        if not self.is_alive:
-            return self.get_state()
-        self.tick_count += 1
-
-        if is_broken_mode:
-            # Baseline Mode: Unresolved DIR_DELTAS pointer (0x00404100) causes snake to glitch and fail
-            self.is_alive = False
-            return {
-                "score": self.score,
-                "length": self.length,
-                "alive": False,
-                "food": self.food,
-                "dir": self.current_dir,
-                "body": self.body,
-                "error": "MEMORY DESYNC: 0x00404100 (DIR_DELTAS) ungrounded. Ring buffer 0x00404000 unshifted."
-            }
-
-        dx, dy = self.dir_deltas[self.current_dir]
-        head = self.body[0]
-        next_x = head["x"] + dx
-        next_y = head["y"] + dy
-
-        # Wall check
-        if next_x < 0 or next_x >= 20 or next_y < 0 or next_y >= 20:
-            self.is_alive = False
-            return self.get_state()
-
-        # Body collision
-        for seg in self.body[:-1]:
-            if seg["x"] == next_x and seg["y"] == next_y:
-                self.is_alive = False
-                return self.get_state()
-
-        new_body = [{"x": next_x, "y": next_y}] + [dict(s) for s in self.body[:-1]]
-
-        # Food interception
-        if next_x == self.food["x"] and next_y == self.food["y"]:
-            self.score += 10
-            self.length += 1
-            new_body.append(dict(self.body[-1]))
-            fx = (self.tick_count * 7 + 13) % 20
-            fy = (self.tick_count * 11 + 5) % 20
-            self.food = {"x": fx, "y": fy}
-
-        self.body = new_body
-        return self.get_state()
-
-    def get_state(self):
-        return {
-            "score": self.score,
-            "length": self.length,
-            "alive": self.is_alive,
-            "food": self.food,
-            "dir": self.current_dir,
-            "body": self.body,
-            "error": None if self.is_alive else "COLLISION_IMPACT"
-        }
-
-active_snake = SnakeGameEngine()
-
-@app.get("/api/snake/state")
-async def get_snake_state():
-    return JSONResponse(active_snake.get_state())
-
-@app.post("/api/snake/step")
-async def step_snake(request: Request):
-    body = await request.json()
-    new_dir = body.get("dir")
-    if new_dir is not None:
-        active_snake.set_direction(int(new_dir))
-    is_broken_mode = body.get("is_broken_mode", False)
-    state = active_snake.step(is_broken_mode=is_broken_mode)
-    return JSONResponse(state)
-
-@app.post("/api/snake/reset")
-async def reset_snake():
-    active_snake.reset()
-    return JSONResponse(active_snake.get_state())
 
 # ============================================================================
 # 1978 Space Invaders Continuous Arcade Game State Engine
@@ -897,7 +722,7 @@ async def export_reconstructed_project(target_id: str = "lunar_lander"):
     else:
         cert_status = "PARITY_MISMATCH"
 
-    is_python = "def " in source_code or "import " in source_code or target_id in ("space_invaders", "snake")
+    is_python = "def " in source_code or "import " in source_code or target_id == "space_invaders"
     ext = "py" if is_python else "c"
     filename = f"{target_id}_reconstructed.{ext}"
 
@@ -920,7 +745,7 @@ async def export_reconstructed_project(target_id: str = "lunar_lander"):
         "test_vectors_passed": passed_tests,
         "test_vectors_total": total_tests,
         "graph_engine": falkor_client.graph_name,
-        "database_mode": "FalkorDB Cloud" if falkor_client.is_connected else "In-Memory Resilient Simulation",
+        "database_mode": "FalkorDB Cloud" if falkor_client.is_connected else "In-Memory Simulation",
         "verification_agent": "GhostGraph Differential AST Verification Engine",
         "timestamp": time.time(),
         "verified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

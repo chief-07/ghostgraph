@@ -108,5 +108,115 @@
     "expected_hit": 0,
     "mock_bunker_hit": 1,
     "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_11",
+    "name": "Sparse Multi-Slot Stepping",
+    "category": "Missile Trajectory",
+    "description": "Verifies interleaved active slots advance accurately while inactive slots remain untouched.",
+    "initial_missiles": [5, 10, 0, 0, 15, 12, 0, 0, 25, 14],
+    "expected_missiles": [5, 11, 0, 0, 15, 13, 0, 0, 25, 15],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_12",
+    "name": "Terminal Lower Border Clearance",
+    "category": "Boundary Mechanics",
+    "description": "Verifies multiple missiles reaching lower boundary y=24 are extinguished in unison.",
+    "initial_missiles": [14, 23, 28, 23, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 24, 0, 24, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_13",
+    "name": "High-Altitude Spawn Invariant",
+    "category": "Missile Trajectory",
+    "description": "Verifies newly spawned missile at screen top y=1 advances cleanly to y=2.",
+    "initial_missiles": [12, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [12, 2, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_14",
+    "name": "Player Defense Cannon Impact with Trailing Missiles",
+    "category": "Collision Mechanics",
+    "description": "Verifies cannon direct impact triggers player hit while trailing missiles continue stepping.",
+    "initial_missiles": [38, 21, 10, 5, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 22, 10, 6, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 1,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 1
+  },
+  {
+    "id": "TC_INV_15",
+    "name": "Mid-Screen Independent Drop Triad",
+    "category": "Missile Trajectory",
+    "description": "Verifies three missiles across distinct columns maintain synchronous vertical drop.",
+    "initial_missiles": [20, 10, 30, 12, 40, 14, 0, 0, 0, 0],
+    "expected_missiles": [20, 11, 30, 13, 40, 15, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_16",
+    "name": "Full Boundary Saturation Deallocation",
+    "category": "Boundary Mechanics",
+    "description": "Verifies all 5 missile slots simultaneously reaching threshold y=24 are deallocated.",
+    "initial_missiles": [10, 23, 20, 23, 30, 23, 40, 23, 50, 23],
+    "expected_missiles": [0, 24, 0, 24, 0, 24, 0, 24, 0, 24],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_17",
+    "name": "Shield Absorption on Secondary Slot",
+    "category": "Collision Mechanics",
+    "description": "Verifies slot 1 bunker absorption while slot 0 continues unobstructed descent.",
+    "initial_missiles": [10, 5, 20, 18, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [10, 6, 0, 18, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 1,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_18",
+    "name": "Quiescent Screen Invariant",
+    "category": "State Machine",
+    "description": "Verifies empty missile hardware register remains empty with zero hits.",
+    "initial_missiles": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_19",
+    "name": "Isolated Player Destruction in Non-Zero Slot",
+    "category": "Collision Mechanics",
+    "description": "Verifies player destruction signaled correctly when collision occurs in missile slot 1.",
+    "initial_missiles": [0, 0, 39, 21, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 0, 0, 22, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 1,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 1
+  },
+  {
+    "id": "TC_INV_20",
+    "name": "Complex Multi-Subsystem Interaction Invariant",
+    "category": "State Machine",
+    "description": "Verifies simultaneous free-flight drop, bunker absorption, and player cannon collision across 3 slots.",
+    "initial_missiles": [10, 5, 20, 18, 38, 21, 0, 0, 0, 0],
+    "expected_missiles": [10, 6, 0, 18, 0, 22, 0, 0, 0, 0],
+    "expected_hit": 1,
+    "mock_bunker_hit": 1,
+    "mock_player_hit": 1
   }
 ]

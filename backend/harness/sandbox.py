@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("ghostgraph.sandbox")
 
-DEFAULT_SANDBOX_TIMEOUT_SECONDS = 3.0
+DEFAULT_SANDBOX_TIMEOUT_SECONDS = 5.0
 
 
 def run_sandboxed_evaluation(

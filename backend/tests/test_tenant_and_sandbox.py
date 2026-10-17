@@ -106,8 +106,8 @@ def compute_progressive_tax(taxable_amount):
     )
     elapsed = time.perf_counter() - start_t
 
-    # Must complete around the 3.0s timeout limit and not hang indefinitely
-    assert elapsed < 6.0, f"Execution took {elapsed:.2f}s; sandbox failed to terminate runaway loop!"
+    # Must complete around the timeout limit and not hang indefinitely
+    assert elapsed < 8.0, f"Execution took {elapsed:.2f}s; sandbox failed to terminate runaway loop!"
     assert summary["passed"] == 0
     assert summary["failed"] == summary["total_vectors"]
     assert summary["parity_percentage"] == 0.0

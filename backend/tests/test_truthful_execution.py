@@ -106,6 +106,48 @@ def THROTTLE_CONTROL_ROUTINES(desired_accel):
 
     print("\n>>> ALL LUNAR LANDER TESTS PASSED: Truthful execution verified! <<<")
 
+
+def test_truthful_space_invaders_execution():
+    # 1. Syntax error
+    syntax_code = "def aliens_missile_move(missiles): return missiles +"
+    res_syntax = differential_tester.run_tests(target_name="space_invaders", candidate_code=syntax_code)
+    assert res_syntax["parity_percentage"] == 0.0
+
+    # 2. Broken candidate: freezes missiles in place
+    broken_code = """
+def aliens_missile_move(missiles, bunker_check=None, player_check=None):
+    return 0
+"""
+    res_broken = differential_tester.run_tests(target_name="space_invaders", candidate_code=broken_code)
+    assert res_broken["parity_percentage"] < 30.0
+
+    # 3. Grounded candidate: authentic Space Invaders missile stepping with bunker and player collision
+    grounded_code = """
+def aliens_missile_move(missiles, bunker_check=None, player_check=None):
+    hit = 0
+    for i in range(5):
+        sx = missiles[i * 2]
+        sy = missiles[i * 2 + 1]
+        if sx != 0:
+            if bunker_check and bunker_check(sx, sy):
+                missiles[i * 2] = 0
+                continue
+            sy += 1
+            missiles[i * 2 + 1] = sy
+            if player_check and player_check(sx, sy):
+                missiles[i * 2] = 0
+                hit = 1
+            elif sy >= 24:
+                missiles[i * 2] = 0
+    return hit
+"""
+    res_grounded = differential_tester.run_tests(target_name="space_invaders", candidate_code=grounded_code)
+    assert res_grounded["parity_percentage"] == 100.0, f"Expected 100.0%, got {res_grounded['parity_percentage']}%"
+    assert res_grounded["passed"] == 20
+
+
 if __name__ == "__main__":
     test_truthful_candidate_execution()
     test_truthful_lunar_lander_execution()
+    test_truthful_space_invaders_execution()
+

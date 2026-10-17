@@ -139,42 +139,6 @@ double compute_progressive_tax(double taxable_amount) {
 0031,0431:  030370          CA    FP
 0031,0432:  001450          TCF   FLATOUT1      # Command 100% full throttle override"""
     },
-    "telemetry": {
-        "name": "Aerospace Satellite Telemetry Decoder",
-        "primary_fn": "verify_crc16_checksum",
-        "critical_mem": "0x00402010",
-        "mem_label": "CRC16_LOOKUP_TABLE",
-        "producer_fn": "init_crc16_poly",
-        "ref_binary": "ground_truth/telemetry.c",
-        "vectors_path": "ground_truth/telemetry_test_vectors.json",
-        "decompiled_snippet": """int verify_crc16_checksum(const uint8_t *payload, int length, uint16_t expected_crc) {
-    uint16_t *crc_table = (uint16_t *)0x00402010;
-    uint16_t crc = 0xFFFF;
-    for (int i = 0; i < length; i++) {
-        uint8_t index = (uint8_t)((crc >> 8) ^ payload[i]);
-        crc = (uint16_t)((crc << 8) ^ crc_table[index]);
-    }
-    return (crc == expected_crc);
-}"""
-    },
-    "keygen": {
-        "name": "Enterprise License Keygen CrackMe",
-        "primary_fn": "hash_fnv1a_block",
-        "critical_mem": "0x00405100",
-        "mem_label": "SBOX_SUBSTITUTION_TABLE",
-        "producer_fn": "init_crypto_sbox",
-        "ref_binary": "ground_truth/keygen.c",
-        "vectors_path": "",
-        "decompiled_snippet": """uint32_t hash_fnv1a_block(const uint8_t *serial, int length) {
-    uint8_t *sbox = (uint8_t *)0x00405100;
-    uint32_t hash = 0x811C9DC5;
-    for (int i = 0; i < length; i++) {
-        uint8_t sub = sbox[serial[i]];
-        hash = ((hash ^ sub) * 0x01000193) & 0xFFFFFFFF;
-    }
-    return hash;
-}"""
-    },
     "space_invaders": {
         "name": "1978 Space Invaders Arcade Subsystem (nInvaders)",
         "primary_fn": "aliensMissileMove",
@@ -182,7 +146,7 @@ double compute_progressive_tax(double taxable_amount) {
         "mem_label": "ALIEN_BLOCK_GRID",
         "producer_fn": "aliensReset",
         "ref_binary": "backend/data/targets/space_invaders_decompiled.json",
-        "vectors_path": "",
+        "vectors_path": "ground_truth/space_invaders_test_vectors.json",
         "decompiled_snippet": """int aliensMissileMove(void) {
     int *missiles = (int *)0x00405400;
     int fPlayerHit = 0;
@@ -276,10 +240,8 @@ class SupervisorAgent:
         else:
             target_json_map = {
                 "billing": "backend/data/targets/billing_decompiled.json",
-                "lunar_lander": "backend/data/targets/lunar_lander_decompiled.json",
-                "telemetry": "backend/data/targets/telemetry_decompiled.json",
-                "keygen": "backend/data/targets/keygen_decompiled.json",
-                "space_invaders": "backend/data/targets/space_invaders_decompiled.json"
+                "space_invaders": "backend/data/targets/space_invaders_decompiled.json",
+                "lunar_lander": "backend/data/targets/lunar_lander_decompiled.json"
             }
             json_path = target_json_map.get(target_name)
             if json_path and Path(json_path).exists():

@@ -448,7 +448,7 @@ class FalkorClient:
                     })
             return results
 
-        # 6c. PageRank Simulation
+        # 6c. In-Memory PageRank Centrality Algorithm (Fallback)
         if "CALL algo.pageRank" in cypher or "pageRank" in cypher:
             ranks = []
             for node in self._nodes.values():
@@ -461,7 +461,7 @@ class FalkorClient:
             ranks.sort(key=lambda x: x["score"], reverse=True)
             return ranks[:10]
 
-        # 6d. Shortest Call Paths Simulation
+        # 6d. In-Memory Shortest Call Path Graph Traversal (Fallback)
         if "shortestPath" in cypher:
             call_edges = [e for e in self._edges if e.get("type") == "CALLS"]
             if call_edges:
