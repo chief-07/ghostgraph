@@ -36,6 +36,10 @@ class FalkorClient:
         self.graph = None
         self.is_connected = False
 
+        # Session & Multigraph Cache (Problem 7 Tenant Isolation)
+        self._graphs: Dict[str, Any] = {}
+        self._sessions: Dict[str, Any] = {}
+
         # In-Memory Graph Store (Fully resilient topological engine)
         self._target_graphs: Dict[str, Dict[str, Any]] = {}
         self._nodes: Dict[str, Dict[str, Any]] = {}
@@ -43,6 +47,27 @@ class FalkorClient:
 
         self.last_query_trace: Dict[str, Any] = {}
         self._connect()
+
+    def get_graph_instance(self, target_or_graph_name: Optional[str] = None) -> Any:
+        """
+        Thread-safe, non-mutating multigraph retrieval (Problem 7: Multi-Tenant Isolation).
+        Returns the isolated FalkorDB graph instance without mutating the default singleton state.
+        """
+        if not target_or_graph_name:
+            return self.graph
+
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_or_graph_name)
+        isolated_name = clean_name if clean_name.startswith("ghostgraph_") else f"ghostgraph_{clean_name}"
+
+        if self.is_connected and self.client:
+            if isolated_name not in self._graphs:
+                try:
+                    self._graphs[isolated_name] = self.client.select_graph(isolated_name)
+                except Exception as e:
+                    logger.warning(f"Could not select graph '{isolated_name}': {e}")
+                    return self.graph
+            return self._graphs[isolated_name]
+        return None
 
     def select_target_graph(self, target_name: str) -> None:
         """
@@ -62,29 +87,32 @@ class FalkorClient:
 
         if self.is_connected and self.client:
             try:
-                self.graph = self.client.select_graph(self.graph_name)
+                self.graph = self.get_graph_instance(self.graph_name)
                 logger.info(f"Switched to isolated FalkorDB multigraph: '{self.graph_name}'")
             except Exception as e:
                 logger.warning(f"Could not select isolated graph {self.graph_name}: {e}")
 
-    def ro_query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def ro_query(self, cypher: str, params: Optional[Dict[str, Any]] = None, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Read-Only Query (Hackathon Blueprint Feature 2):
+        Read-Only Query (Hackathon Blueprint Feature 2 & Problem 7 Isolation):
         Uses graph.ro_query() on FalkorDB for lightning-fast concurrent reads and
         auditable agent execution traces (tool, latency_ms, rows).
+        Supports explicit non-mutating `graph_name` parameter for per-tenant / per-session isolation.
         """
         import time
         start_t = time.perf_counter()
         params = params or {}
         records: List[Dict[str, Any]] = []
 
-        if self.is_connected and self.graph:
+        target_graph = self.get_graph_instance(graph_name) if graph_name else self.graph
+
+        if self.is_connected and target_graph:
             try:
                 # Attempt native read-only query if supported by falkordb client
-                if hasattr(self.graph, "ro_query"):
-                    res = self.graph.ro_query(cypher, params)
+                if hasattr(target_graph, "ro_query"):
+                    res = target_graph.ro_query(cypher, params)
                 else:
-                    res = self.graph.query(cypher, params)
+                    res = target_graph.query(cypher, params)
 
                 if hasattr(res, "result_set") and res.result_set:
                     raw_headers = res.header if hasattr(res, "header") and res.header else []
@@ -116,6 +144,10 @@ class FalkorClient:
 
     def _connect(self) -> None:
         """Attempts connection to real FalkorDB instance with retry resilience."""
+        if os.getenv("FALKORDB_OFFLINE") == "1":
+            self.is_connected = False
+            return
+
         import time
         last_err = None
         for attempt in range(1, 4):
@@ -144,16 +176,17 @@ class FalkorClient:
         self.is_connected = False
         logger.warning(f"Could not connect to FalkorDB Cloud ({last_err}) after 3 attempts.")
 
-    def query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def query(self, cypher: str, params: Optional[Dict[str, Any]] = None, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Executes an OpenCypher query and returns list of record dictionaries.
-        Falls back seamlessly to in-memory graph on socket/network failure.
+        Supports explicit non-mutating `graph_name` parameter for per-tenant / per-session isolation.
         """
         params = params or {}
+        target_graph = self.get_graph_instance(graph_name) if graph_name else self.graph
 
-        if self.is_connected and self.graph:
+        if self.is_connected and target_graph:
             try:
-                res = self.graph.query(cypher, params)
+                res = target_graph.query(cypher, params)
                 records = []
                 if hasattr(res, "result_set") and res.result_set:
                     raw_headers = res.header if hasattr(res, "header") and res.header else []
@@ -649,19 +682,42 @@ class FalkorClient:
         # Default fallback: return empty list
         return []
 
-    def clear_graph(self) -> None:
-        """Clears all nodes and relationships in the current graph."""
-        if not self.is_connected or not self.graph:
+    def clear_graph(self, graph_name: Optional[str] = None) -> None:
+        """Clears all nodes and relationships in the specified graph or active graph."""
+        target_graph = self.get_graph_instance(graph_name) if graph_name else self.graph
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", graph_name) if graph_name else self.graph_name
+        isolated_name = clean_name if clean_name.startswith("ghostgraph_") else f"ghostgraph_{clean_name}"
+
+        if not self.is_connected or not target_graph:
             self._connect()
-            if not self.is_connected or not self.graph:
+            target_graph = self.get_graph_instance(graph_name) if graph_name else self.graph
+            if not self.is_connected or not target_graph:
                 raise ConnectionError(f"FalkorDB Cloud is not connected! (Target host: {self.host}:{self.port})")
         try:
-            self.graph.query("MATCH (n) DETACH DELETE n")
+            target_graph.query("MATCH (n) DETACH DELETE n")
         except Exception as e:
-            logger.warning(f"Error resetting FalkorDB graph: {e}")
+            logger.warning(f"Error resetting FalkorDB graph {isolated_name}: {e}")
             raise
-        self._nodes.clear()
-        self._edges.clear()
+        if isolated_name in self._target_graphs:
+            self._target_graphs[isolated_name] = {"nodes": {}, "edges": []}
+        if isolated_name == self.graph_name:
+            self._nodes.clear()
+            self._edges.clear()
+
+    def for_tenant(self, tenant_id: str) -> "FalkorTenantSession":
+        """
+        Multi-Tenant Session (Problem 7 Fix):
+        Returns an isolated session object that executes all queries in this tenant's
+        dedicated multigraph without mutating the global singleton client state.
+        """
+        clean = re.sub(r"[^a-zA-Z0-9_]", "_", tenant_id)
+        if clean not in self._sessions:
+            self._sessions[clean] = FalkorTenantSession(self, clean)
+        return self._sessions[clean]
+
+    def for_target(self, target_name: str) -> "FalkorTenantSession":
+        """Returns an isolated target session without mutating the global singleton client state."""
+        return self.for_tenant(target_name)
 
     def get_status(self) -> Dict[str, Any]:
         """Returns connection status, mode, and graph metrics for transparency (Bug #8)."""
@@ -687,6 +743,29 @@ class FalkorClient:
             "nodes_count": node_count,
             "edges_count": edge_count
         }
+
+
+class FalkorTenantSession:
+    """
+    Tenant/Session Graph Proxy (Problem 7 Fix).
+    Encapsulates a tenant, user, or session ID and routes all queries to that tenant's
+    dedicated multigraph without mutating the global FalkorClient singleton state.
+    """
+    def __init__(self, client: FalkorClient, tenant_id: str):
+        self.client = client
+        self.tenant_id = tenant_id
+        clean = re.sub(r"[^a-zA-Z0-9_]", "_", tenant_id)
+        self.graph_name = clean if clean.startswith("ghostgraph_") else f"ghostgraph_{clean}"
+
+    def query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        return self.client.query(cypher, params, graph_name=self.graph_name)
+
+    def ro_query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        return self.client.ro_query(cypher, params, graph_name=self.graph_name)
+
+    def clear_graph(self) -> None:
+        self.client.clear_graph(graph_name=self.graph_name)
+
 
 # Global singleton instance
 falkor_client = FalkorClient()

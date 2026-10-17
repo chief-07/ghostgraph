@@ -877,128 +877,95 @@ class DifferentialTester:
         else:
             vectors = self.vectors
 
-        # Dynamically compile candidate code if provided
-        candidate_callable = None
-        compilation_error = None
-        if candidate_code:
-            try:
-                cleaned_code = candidate_code
-                if "```" in cleaned_code:
-                    m = re.search(r"```(?:python)?\s*([\s\S]*?)```", cleaned_code)
-                    if m:
-                        cleaned_code = m.group(1)
-
-                local_scope = {"math": math}
-                compiled = compile(cleaned_code, f"<{candidate_id or 'candidate_eval'}>", "exec")
-                exec(compiled, local_scope)
-
-                target_fn_names = {
-                    "billing": ["compute_progressive_tax", "process_invoice"],
-                    "lunar_lander": ["THROTTLE_CONTROL_ROUTINES", "calculate_throttle", "update_newtonian_physics", "apply_thrust_vector"],
-                    "snake": ["step_snake_tick", "step"],
-                    "space_invaders": ["aliens_missile_move", "handle_missiles"],
-                    "telemetry": ["verify_crc16_checksum"],
-                    "pacman": ["update_blinky_ai"],
-                    "keygen": ["hash_fnv1a_block", "validate_license_tier"]
-                }
-                candidates_to_try = target_fn_names.get(target_name, ["compute_progressive_tax"])
-                for fn_name in candidates_to_try:
-                    for k, v in local_scope.items():
-                        if callable(v) and (k == fn_name or fn_name.lower() in k.lower()):
-                            candidate_callable = v
-                            break
-                    if candidate_callable:
-                        break
-
-                if not candidate_callable:
-                    user_funcs = [v for k, v in local_scope.items() if callable(v) and not k.startswith("__")]
-                    if user_funcs:
-                        candidate_callable = user_funcs[0]
-                    else:
-                        compilation_error = "No executable candidate function found in synthesized code"
-            except Exception as e:
-                compilation_error = str(e)
-                logger.warning(f"Candidate code failed to compile for execution: {e}")
-
         results = []
         passed_count = 0
         failed_count = 0
         has_graph = not is_flat_llm_mode
 
-        for idx, tc in enumerate(vectors):
-            tid = tc.get("id", f"TC_{idx+1:02d}")
-            name = tc.get("name", tid)
-            desc = tc.get("description", "")
-            cat = tc.get("category", "General")
+        if candidate_code:
+            # Problem 8: Execute candidate verification inside isolated child process with 3.0s timeout
+            from backend.harness.sandbox import run_sandboxed_evaluation
+            sandbox_out = run_sandboxed_evaluation(
+                candidate_code=candidate_code,
+                target_name=target_name,
+                test_vectors=vectors,
+                has_graph_memory=has_graph,
+                timeout=3.0
+            )
+            raw_results = sandbox_out.get("results", [])
+            for res_item in raw_results:
+                tid = res_item.get("id") or res_item.get("test_id", "")
+                passed = res_item.get("passed", False)
+                diff = res_item.get("diff", "")
+                name = res_item.get("name", tid)
+                desc = res_item.get("description", "")
+                cat = res_item.get("category", "General")
 
-            # Execute authentic domain evaluation
-            if target_name == "billing":
-                passed, diff = evaluate_billing_test(
-                    tc,
-                    candidate_callable=candidate_callable,
-                    compilation_error=compilation_error,
-                    has_graph_memory=has_graph
-                )
-            elif target_name == "lunar_lander":
-                passed, diff = evaluate_lunar_lander_test(
-                    tc,
-                    candidate_callable=candidate_callable,
-                    compilation_error=compilation_error,
-                    has_graph_memory=has_graph
-                )
-            elif target_name == "snake":
-                passed, diff = evaluate_snake_test(
-                    tc,
-                    candidate_fn=candidate_callable,
-                    compilation_error=compilation_error,
-                    has_graph_memory=has_graph
-                )
-            elif target_name == "telemetry":
-                passed, diff = evaluate_telemetry_test(
-                    tc,
-                    candidate_fn=candidate_callable,
-                    compilation_error=compilation_error,
-                    has_graph_memory=has_graph
-                )
-            elif target_name == "pacman":
-                passed, diff = evaluate_pacman_test(
-                    tc,
-                    candidate_fn=candidate_callable,
-                    compilation_error=compilation_error,
-                    has_graph_memory=has_graph
-                )
-            elif target_name == "keygen":
-                passed, diff = evaluate_keygen_test(
-                    tc,
-                    candidate_fn=candidate_callable,
-                    compilation_error=compilation_error,
-                    has_graph_memory=has_graph
-                )
-            else:
-                passed, diff = True, ""
+                if passed:
+                    passed_count += 1
+                    status = "PASSED"
+                else:
+                    failed_count += 1
+                    status = "FAILED"
 
-            if passed:
-                passed_count += 1
-                status = "PASSED"
-            else:
-                failed_count += 1
-                status = "FAILED"
+                if candidate_id:
+                    try:
+                        record_test_outcome(candidate_id, tid, passed, diff or "")
+                    except Exception as e:
+                        logger.debug(f"Graph commit notice: {e}")
 
-            # Persist outcome into FalkorDB episodic memory if candidate_id provided
-            if candidate_id:
-                try:
-                    record_test_outcome(candidate_id, tid, passed, diff)
-                except Exception as e:
-                    logger.debug(f"Graph commit notice: {e}")
+                results.append({
+                    "test_id": tid,
+                    "name": name,
+                    "category": cat,
+                    "description": desc,
+                    "status": status,
+                    "diff": diff if not passed else None
+                })
+        else:
+            # Baseline evaluation when no candidate code is supplied
+            for idx, tc in enumerate(vectors):
+                tid = tc.get("id", f"TC_{idx+1:02d}")
+                name = tc.get("name", tid)
+                desc = tc.get("description", "")
+                cat = tc.get("category", "General")
 
-            results.append({
-                "test_id": tid,
-                "name": name,
-                "category": cat,
-                "description": desc,
-                "status": status,
-                "diff": diff if not passed else None
-            })
+                if target_name == "billing":
+                    passed, diff = evaluate_billing_test(tc, candidate_callable=None, compilation_error=None, has_graph_memory=has_graph)
+                elif target_name == "lunar_lander":
+                    passed, diff = evaluate_lunar_lander_test(tc, candidate_callable=None, compilation_error=None, has_graph_memory=has_graph)
+                elif target_name == "snake":
+                    passed, diff = evaluate_snake_test(tc, candidate_fn=None, compilation_error=None, has_graph_memory=has_graph)
+                elif target_name == "telemetry":
+                    passed, diff = evaluate_telemetry_test(tc, candidate_fn=None, compilation_error=None, has_graph_memory=has_graph)
+                elif target_name == "pacman":
+                    passed, diff = evaluate_pacman_test(tc, candidate_fn=None, compilation_error=None, has_graph_memory=has_graph)
+                elif target_name == "keygen":
+                    passed, diff = evaluate_keygen_test(tc, candidate_fn=None, compilation_error=None, has_graph_memory=has_graph)
+                else:
+                    passed, diff = True, ""
+
+                if passed:
+                    passed_count += 1
+                    status = "PASSED"
+                else:
+                    failed_count += 1
+                    status = "FAILED"
+
+                if candidate_id:
+                    try:
+                        record_test_outcome(candidate_id, tid, passed, diff or "")
+                    except Exception as e:
+                        logger.debug(f"Graph commit notice: {e}")
+
+                results.append({
+                    "test_id": tid,
+                    "name": name,
+                    "category": cat,
+                    "description": desc,
+                    "status": status,
+                    "diff": diff if not passed else None
+                })
 
         total = len(vectors) or 1
         parity_pct = round((passed_count / total) * 100, 1)
