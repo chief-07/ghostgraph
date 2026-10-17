@@ -36,6 +36,7 @@ class FalkorClient:
         self.is_connected = False
 
         # In-Memory Graph Store (Fully resilient topological engine)
+        self._target_graphs: Dict[str, Dict[str, Any]] = {}
         self._nodes: Dict[str, Dict[str, Any]] = {}
         self._edges: List[Dict[str, Any]] = []
 
@@ -51,6 +52,13 @@ class FalkorClient:
         clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
         isolated_name = f"ghostgraph_{clean_name}"
         self.graph_name = isolated_name
+
+        # Isolate In-Memory graph per target
+        if isolated_name not in self._target_graphs:
+            self._target_graphs[isolated_name] = {"nodes": {}, "edges": []}
+        self._nodes = self._target_graphs[isolated_name]["nodes"]
+        self._edges = self._target_graphs[isolated_name]["edges"]
+
         if self.is_connected and self.client:
             try:
                 self.graph = self.client.select_graph(self.graph_name)
@@ -208,6 +216,48 @@ class FalkorClient:
                 self._edges.append({"source": w["fn"], "target": w["addr"], "type": "WRITES"})
             return [{"count(r)": len(writes)}]
 
+        # 3b. Batch UNWIND Structs & Fields (Bug #4)
+        if "UNWIND $structs AS s" in cypher:
+            structs = params.get("structs", [])
+            for s in structs:
+                sname = s.get("name", "")
+                self._nodes[f"struct_{sname}"] = {
+                    "type": "Struct",
+                    "name": sname,
+                    "size": s.get("size", 0)
+                }
+            return [{"count(st)": len(structs)}]
+
+        if "UNWIND $fields AS f" in cypher:
+            fields = params.get("fields", [])
+            for f in fields:
+                sname = f.get("struct_name", "")
+                fname = f.get("name", "")
+                fid = f"{sname}_{fname}"
+                self._nodes[f"field_{fid}"] = {
+                    "type": "StructField",
+                    "name": fname,
+                    "offset": f.get("offset", 0),
+                    "type": f.get("type", "void*")
+                }
+                self._edges.append({"source": sname, "target": fid, "type": "HAS_FIELD"})
+            return [{"count(sf)": len(fields)}]
+
+        if "MAPS_TO_STRUCT" in cypher:
+            for mem_k, mem_node in list(self._nodes.items()):
+                if mem_node.get("type") == "GlobalMemory":
+                    dtype = mem_node.get("data_type", "")
+                    for st_k, st_node in list(self._nodes.items()):
+                        if st_node.get("type") == "Struct":
+                            st_name = st_node.get("name", "")
+                            if st_name and st_name in dtype:
+                                self._edges.append({
+                                    "source": mem_node.get("address", mem_k),
+                                    "target": st_name,
+                                    "type": "MAPS_TO_STRUCT"
+                                })
+            return [{"count(*)": 1}]
+
         # 4. Program MERGE
         if "MERGE (p:Program" in cypher:
             pname = params.get("name", "Program")
@@ -314,6 +364,24 @@ class FalkorClient:
         # 7. Struct Definitions
         if "MATCH (s:Struct {name: $name})" in cypher:
             sname = params.get("name", "")
+            struct_node = self._nodes.get(f"struct_{sname}", {})
+            if struct_node:
+                fields = []
+                for e in self._edges:
+                    if e.get("source") == sname and e.get("type") == "HAS_FIELD":
+                        fid = e.get("target")
+                        f_node = self._nodes.get(f"field_{fid}", {})
+                        fields.append({
+                            "name": f_node.get("name", fid),
+                            "offset": f_node.get("offset", 0),
+                            "type": f_node.get("type", "void*")
+                        })
+                fields.sort(key=lambda x: x.get("offset", 0))
+                return [{
+                    "struct_name": sname,
+                    "total_size": struct_node.get("size", 0),
+                    "fields": fields
+                }]
             if sname == "FlightTelemetry":
                 return [{
                     "struct_name": "FlightTelemetry",
@@ -333,6 +401,31 @@ class FalkorClient:
                     ]
                 }]
             return [{"struct_name": sname, "total_size": 0, "fields": []}]
+
+        # 7b. Cytoscape Export Support in In-Memory Engine
+        if "RETURN id(n) AS id, labels(n)[0] AS label" in cypher:
+            results = []
+            for k, node in self._nodes.items():
+                ntype = node.get("type", "Node")
+                name = node.get("name") or node.get("address") or node.get("id") or k
+                results.append({
+                    "id": k,
+                    "label": ntype,
+                    "name": name,
+                    "props": node
+                })
+            return results
+
+        if "RETURN id(source) AS source, id(target) AS target, type(r) AS type" in cypher:
+            results = []
+            for e in self._edges:
+                results.append({
+                    "source": e.get("source"),
+                    "target": e.get("target"),
+                    "type": e.get("type", "RELATES_TO"),
+                    "props": e
+                })
+            return results
 
         # 8. Record Candidate & Test Outcomes
         if "PASSED" in cypher and ("MERGE (t:TestCase" in cypher or ":PASSED" in cypher):

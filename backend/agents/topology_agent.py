@@ -237,7 +237,7 @@ class TopologyAgent:
             "entry_point": f"0x{load_addr:08X}"
         }
 
-    def ingest_target(self, target_json_path: str, test_vectors_path: Optional[str] = None) -> Dict[str, Any]:
+    def ingest_target(self, target_json_path: str, test_vectors_path: Optional[str] = None, target_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Batched Ingestion using OpenCypher UNWIND.
         Transforms 60+ individual roundtrip network queries into 4 fast atomic batches.
@@ -255,19 +255,26 @@ class TopologyAgent:
         global_memory = data.get("global_memory", [])
         structs = data.get("structs", [])
 
-        logger.info(f"Batch ingesting {target_name} into FalkorDB Cloud...")
+        # Target Multigraph Isolation (Bug #5)
+        clean_target_id = target_id or target_name
+        self.client.select_target_graph(clean_target_id)
+        self.client.clear_graph()
+
+        logger.info(f"Batch ingesting {target_name} into FalkorDB Cloud (graph: {self.client.graph_name})...")
 
         # 1. Create Program Node
         cypher_prog = """
         MERGE (p:Program {name: $name})
         SET p.arch = $arch,
-            p.description = $desc
+            p.description = $desc,
+            p.target_id = $tid
         RETURN p.name
         """
         self.client.query(cypher_prog, {
             "name": target_name,
             "arch": arch,
-            "desc": data.get("description", "")
+            "desc": data.get("description", ""),
+            "tid": clean_target_id
         })
 
         # 2. Batch Ingest Global Memory Buffers (UNWIND)
@@ -345,6 +352,54 @@ class TopologyAgent:
                 """
                 self.client.query(cypher_writes, {"writes": write_edges})
 
+        # 3b. Batch Ingest Struct Definitions & Fields (Bug #4)
+        if structs:
+            struct_payload = []
+            field_payload = []
+            for s in structs:
+                sname = s.get("name")
+                ssize = s.get("size", 0)
+                struct_payload.append({"name": sname, "size": ssize})
+                for fld in s.get("fields", []):
+                    field_payload.append({
+                        "struct_name": sname,
+                        "name": fld.get("name"),
+                        "offset": fld.get("offset", 0),
+                        "type": fld.get("type", "void*")
+                    })
+
+            cypher_structs = """
+            MATCH (p:Program {name: $pname})
+            UNWIND $structs AS s
+            MERGE (st:Struct {name: s.name})
+            SET st.size = s.size
+            MERGE (p)-[:DEFINES_STRUCT]->(st)
+            RETURN count(st)
+            """
+            self.client.query(cypher_structs, {"pname": target_name, "structs": struct_payload})
+
+            if field_payload:
+                cypher_fields = """
+                UNWIND $fields AS f
+                MATCH (st:Struct {name: f.struct_name})
+                MERGE (sf:StructField {id: f.struct_name + "_" + f.name})
+                SET sf.name = f.name,
+                    sf.offset = f.offset,
+                    sf.type = f.type
+                MERGE (st)-[:HAS_FIELD]->(sf)
+                RETURN count(sf)
+                """
+                self.client.query(cypher_fields, {"fields": field_payload})
+
+            # Link GlobalMemory buffers to structs if data_type maps to struct
+            cypher_map_mem = """
+            MATCH (m:GlobalMemory), (st:Struct)
+            WHERE m.data_type CONTAINS st.name
+            MERGE (m)-[:MAPS_TO_STRUCT]->(st)
+            RETURN count(*)
+            """
+            self.client.query(cypher_map_mem)
+
         # 4. Batch Ingest Test Vectors if provided
         test_count = 0
         if test_vectors_path and Path(test_vectors_path).exists():
@@ -355,25 +410,30 @@ class TopologyAgent:
             tc_payload = []
             for v in vectors:
                 cat = v.get("category", "")
-                target_fn = "update_newtonian_physics"
-                if "blinky" in cat:
-                    target_fn = "update_blinky_ai"
-                elif "pinky" in cat:
-                    target_fn = "update_pinky_ai"
-                elif "inky" in cat:
-                    target_fn = "update_inky_ai"
-                elif "clyde" in cat:
-                    target_fn = "update_clyde_ai"
-                elif "Architecture" in cat:
-                    target_fn = "init_flight_computer"
-                elif "Propulsion" in cat or "Attitude" in cat:
-                    target_fn = "apply_thrust_vector"
-                elif "Terrain" in cat:
-                    target_fn = "check_altitude_raycast"
-                elif "Touchdown" in cat:
-                    target_fn = "evaluate_touchdown_dynamics"
-                elif "Snake" in cat or "General" in cat:
-                    target_fn = "step_snake_tick"
+                target_fn = v.get("target_fn", "")
+                if not target_fn:
+                    if "billing" in target_name.lower() or "tax" in cat.lower() or "tariff" in cat.lower() or "billing" in cat.lower():
+                        target_fn = "compute_progressive_tax"
+                    elif "blinky" in cat:
+                        target_fn = "update_blinky_ai"
+                    elif "pinky" in cat:
+                        target_fn = "update_pinky_ai"
+                    elif "inky" in cat:
+                        target_fn = "update_inky_ai"
+                    elif "clyde" in cat:
+                        target_fn = "update_clyde_ai"
+                    elif "Architecture" in cat:
+                        target_fn = "init_flight_computer"
+                    elif "Propulsion" in cat or "Attitude" in cat:
+                        target_fn = "apply_thrust_vector"
+                    elif "Terrain" in cat:
+                        target_fn = "check_altitude_raycast"
+                    elif "Touchdown" in cat:
+                        target_fn = "evaluate_touchdown_dynamics"
+                    elif "Snake" in cat or "General" in cat:
+                        target_fn = "step_snake_tick"
+                    else:
+                        target_fn = "update_newtonian_physics"
 
                 tc_payload.append({
                     "id": v["id"],
@@ -414,15 +474,15 @@ class TopologyAgent:
         """
         cypher_nodes = """
         MATCH (n)
-        WHERE n:Program OR n:Function OR n:GlobalMemory OR n:TestCase OR n:Candidate
+        WHERE n:Program OR n:Function OR n:GlobalMemory OR n:TestCase OR n:Candidate OR n:Struct OR n:StructField
         RETURN id(n) AS id, labels(n)[0] AS label,
                coalesce(n.name, n.address, n.id, 'Node') AS name,
                properties(n) AS props
         """
         cypher_edges = """
         MATCH (source)-[r]->(target)
-        WHERE (source:Program OR source:Function OR source:GlobalMemory OR source:TestCase OR source:Candidate)
-          AND (target:Program OR target:Function OR target:GlobalMemory OR target:TestCase OR target:Candidate)
+        WHERE (source:Program OR source:Function OR source:GlobalMemory OR source:TestCase OR source:Candidate OR source:Struct OR source:StructField)
+          AND (target:Program OR target:Function OR target:GlobalMemory OR target:TestCase OR target:Candidate OR target:Struct OR target:StructField)
         RETURN id(source) AS source, id(target) AS target, type(r) AS type, properties(r) AS props
         """
         raw_nodes = self.client.query(cypher_nodes)

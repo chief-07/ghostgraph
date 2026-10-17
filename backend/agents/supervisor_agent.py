@@ -28,6 +28,7 @@ TARGET_CONFIGS = {
         "mem_label": "TAX_BRACKET_TABLE",
         "producer_fn": "init_tariff_tables",
         "ref_binary": "ground_truth/billing_engine.c",
+        "vectors_path": "ground_truth/billing_test_vectors.json",
         "raw_disassembly": """; Target: billing_engine.exe (x86_64 stripped binary)
 ; Symbol: sub_401180 (compute_progressive_tax)
 00401180:  55                      push   rbp
@@ -102,6 +103,7 @@ double compute_progressive_tax(double taxable_amount) {
         "mem_label": "THROTTLE_LIMITS_ERASABLE_MEM",
         "producer_fn": "BURN_BABY_BURN_MASTER_IGNITION",
         "ref_binary": "Luminary099/THROTTLE_CONTROL_ROUTINES.agc",
+        "vectors_path": "ground_truth/lunar_test_vectors.json",
         "decompiled_snippet": """// MIT INSTRUMENTATION LAB - APOLLO GUIDANCE COMPUTER (AGC)
 // LUMINARY 1A BUILD 099 - JULY 14, 1969
 // BANK 31, SETLOC FTHROT, EBANK=PIF
@@ -144,6 +146,7 @@ double compute_progressive_tax(double taxable_amount) {
         "mem_label": "CRC16_LOOKUP_TABLE",
         "producer_fn": "init_crc16_poly",
         "ref_binary": "ground_truth/telemetry.c",
+        "vectors_path": "ground_truth/telemetry_test_vectors.json",
         "decompiled_snippet": """int verify_crc16_checksum(const uint8_t *payload, int length, uint16_t expected_crc) {
     uint16_t *crc_table = (uint16_t *)0x00402010;
     uint16_t crc = 0xFFFF;
@@ -161,6 +164,7 @@ double compute_progressive_tax(double taxable_amount) {
         "mem_label": "SBOX_SUBSTITUTION_TABLE",
         "producer_fn": "init_crypto_sbox",
         "ref_binary": "ground_truth/keygen.c",
+        "vectors_path": "",
         "decompiled_snippet": """uint32_t hash_fnv1a_block(const uint8_t *serial, int length) {
     uint8_t *sbox = (uint8_t *)0x00405100;
     uint32_t hash = 0x811C9DC5;
@@ -178,6 +182,7 @@ double compute_progressive_tax(double taxable_amount) {
         "mem_label": "ALIEN_BLOCK_GRID",
         "producer_fn": "aliensReset",
         "ref_binary": "backend/data/targets/space_invaders_decompiled.json",
+        "vectors_path": "",
         "decompiled_snippet": """int aliensMissileMove(void) {
     int *missiles = (int *)0x00405400;
     int fPlayerHit = 0;
@@ -243,6 +248,9 @@ class SupervisorAgent:
         }
 
         # Step 1: Real Ingestion into FalkorDB
+        # Select isolated target graph first so no cross-target function/memory bleed occurs (Bug #5)
+        falkor_client.select_target_graph(target_name)
+
         if binary_bytes:
             yield {
                 "type": "AGENT_STEP",
@@ -268,19 +276,21 @@ class SupervisorAgent:
             }
             json_path = target_json_map.get(target_name, "backend/data/targets/lunar_lander_decompiled.json")
             if Path(json_path).exists():
-                self.topology.ingest_target(json_path)
+                self.topology.ingest_target(json_path, test_vectors_path=cfg.get("vectors_path"), target_id=target_name)
 
-        # Stream Function Nodes and Call Graph from FalkorDB
+        # Stream Function Nodes and Call Graph from FalkorDB (Scoped to isolated multigraph)
         cypher_nodes = """
-        MATCH (p:Program {name: $pname})-[:CONTAINS]->(f:Function)
+        MATCH (p:Program)-[:CONTAINS]->(f:Function)
         OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
         RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees
         """
-        fn_records = falkor_client.query(cypher_nodes, {"pname": target_name})
-        
-        # If querying specific target yielded empty (e.g. from prior runs), fallback query all functions
+        fn_records = falkor_client.query(cypher_nodes)
         if not fn_records:
-            fn_records = falkor_client.query("MATCH (f:Function) OPTIONAL MATCH (f)-[:CALLS]->(callee:Function) RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees LIMIT 25")
+            fn_records = falkor_client.query("""
+            MATCH (f:Function)
+            OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
+            RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees
+            """)
 
         for fn in fn_records:
             fn_id = fn.get("name") or fn.get("address")
@@ -300,8 +310,21 @@ class SupervisorAgent:
                         "label": "CALLS"
                     }
 
-        # Stream Memory Buffers Discovered
-        mem_records = falkor_client.query("MATCH (m:GlobalMemory) RETURN m.address AS address, m.label AS label LIMIT 25")
+        # Stream Struct Definitions Discovered (Bug #4)
+        struct_records = falkor_client.query("MATCH (s:Struct) RETURN s.name AS name, s.size AS size")
+        for st in struct_records:
+            sname = st.get("name")
+            if sname:
+                yield {
+                    "type": "NODE_DISCOVERED",
+                    "id": f"struct_{sname}",
+                    "label": sname,
+                    "node_type": "struct",
+                    "size": st.get("size", 0)
+                }
+
+        # Stream Memory Buffers Discovered (Scoped to isolated multigraph)
+        mem_records = falkor_client.query("MATCH (m:GlobalMemory) RETURN m.address AS address, m.label AS label")
         for mem in mem_records:
             addr = mem.get("address")
             if addr:
@@ -315,7 +338,6 @@ class SupervisorAgent:
 
         # Step 2: Multigraph Isolation & Blueprint Tool Trace (Organizer Blueprint Features 2 & 3)
         if use_graph_context:
-            falkor_client.select_target_graph(target_name)
 
             # Feature 1: Load-Bearing Subroutines via Graph Algorithm (PageRank)
             pagerank_ranks = cypher_tools.compute_function_pagerank(limit=3)

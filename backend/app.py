@@ -207,13 +207,16 @@ async def ingest_target(request: Request, target_id: Optional[str] = None):
 
     res = topology_agent.ingest_target(
         target_json_path=target["path"],
-        test_vectors_path=target["vectors_path"]
+        test_vectors_path=target["vectors_path"],
+        target_id=target_id
     )
     return JSONResponse(res)
 
 @app.get("/api/graph")
-async def get_graph():
+async def get_graph(target_id: Optional[str] = None):
     """Returns Cytoscape.js nodes and edges from FalkorDB."""
+    if target_id:
+        falkor_client.select_target_graph(target_id)
     graph_data = topology_agent.get_topology_graph()
     return JSONResponse(graph_data)
 
