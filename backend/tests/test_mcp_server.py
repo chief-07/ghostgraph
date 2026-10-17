@@ -7,6 +7,10 @@ Proves that:
 4. Resources (status, targets, schema) return valid JSON structures.
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import pytest
 import json
 from backend.mcp_server import mcp

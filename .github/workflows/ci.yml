@@ -48,8 +48,9 @@ jobs:
 
       - name: Run Pytest Test Suite
         env:
+          PYTHONPATH: .
           FALKORDB_HOST: localhost
           FALKORDB_PORT: 6379
           GEMINI_API_KEY: ""
         run: |
-          pytest backend/tests/ -v --durations=10
+          python -m pytest backend/tests/ -v --durations=10

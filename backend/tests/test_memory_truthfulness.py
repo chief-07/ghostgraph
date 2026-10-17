@@ -4,6 +4,10 @@ Unit tests for Bug #6 and Bug #7:
 - Bug #7: Elimination of synthetic READS edges; streaming authentic FalkorDB READS/WRITES edges.
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import pytest
 from backend.mcp_tools.falkor_client import falkor_client
 from backend.mcp_tools import cypher_tools
