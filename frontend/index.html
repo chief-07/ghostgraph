@@ -79,7 +79,7 @@
 
         <div class="w-full max-w-[1060px] mx-auto grid grid-cols-1 lg:grid-cols-12 items-center gap-6">
 
-          <!-- LEFT 3D ICON (Unboxed, No Shadow, No Tag) -->
+          <!-- LEFT 3D ICON (Ghost with tactile soft drop shadow) -->
           <div class="hidden lg:flex lg:col-span-2 items-center justify-center select-none -mt-8">
             <img
               src="/static/assets/icon_ghost_3d.png"
@@ -89,7 +89,7 @@
             />
           </div>
 
-          <!-- CENTER HERO TEXT & CTA (8 Cols) -->
+          <!-- CENTER HERO TEXT & CTA (10 Cols or 8 Cols) -->
           <div class="lg:col-span-8 flex flex-col items-center text-center">
 
             <!-- Main Two-Line Display Headline in Outfit Sans -->
@@ -113,23 +113,15 @@
               <div id="uploadStatusMessage" class="hidden text-xs font-mono text-[#16a34a] pt-1"></div>
             </div>
 
-            <!-- Mobile / Tablet 3D Icons Row -->
-            <div class="flex lg:hidden items-center justify-center gap-10 mt-8">
+            <!-- Mobile / Tablet 3D Ghost Icon -->
+            <div class="flex lg:hidden items-center justify-center mt-8">
               <img src="/static/assets/icon_ghost_3d.png" alt="GhostGraph 3D" onclick="selectTarget('space_invaders')" class="hero-3d-left cursor-pointer"/>
-              <img src="/static/assets/icon_graph_3d.png" alt="FalkorDB Graph 3D" onclick="selectTarget('lunar_lander')" class="hero-3d-right cursor-pointer"/>
             </div>
 
           </div>
 
-          <!-- RIGHT 3D ICON (Unboxed, No Shadow, No Tag) -->
-          <div class="hidden lg:flex lg:col-span-2 items-center justify-center select-none mt-8">
-            <img
-              src="/static/assets/icon_graph_3d.png"
-              alt="FalkorDB Graph 3D"
-              onclick="selectTarget('lunar_lander')"
-              class="hero-3d-right cursor-pointer"
-            />
-          </div>
+          <!-- Empty 2-column spacer for balanced grid without graph icon -->
+          <div class="hidden lg:block lg:col-span-2"></div>
 
         </div>
 

@@ -85,29 +85,19 @@ html, body {
   transform: translateY(0.5px);
 }
 
-/* Clean Unboxed 3D Hero Icons (No Box, No Shadow) */
+/* Hero 3D Ghost Icon with tactile soft drop shadow */
 .hero-3d-left {
   width: 112px;
   height: 112px;
   object-fit: contain;
   transform: rotate(-8deg);
-  transition: transform 0.25s ease;
+  filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.16)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.08));
+  transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 .hero-3d-left:hover {
-  transform: rotate(-4deg) scale(1.04);
-}
-
-.hero-3d-right {
-  width: 112px;
-  height: 112px;
-  object-fit: contain;
-  transform: rotate(8deg);
-  transition: transform 0.25s ease;
-}
-
-.hero-3d-right:hover {
-  transform: rotate(4deg) scale(1.04);
+  transform: rotate(-4deg) scale(1.05);
+  filter: drop-shadow(0 24px 30px rgba(0, 0, 0, 0.22)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.1));
 }
 
 /* Bottom Feature Outlined Pill Icon Container */
