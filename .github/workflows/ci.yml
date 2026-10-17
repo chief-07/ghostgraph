@@ -1,0 +1,55 @@
+name: GhostGraph Continuous Integration
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    name: Pytest Verification & FalkorDB Integration
+    runs-on: ubuntu-latest
+
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools gcc
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify FalkorDB Service Connection
+        run: |
+          redis-cli -h localhost -p 6379 ping
+
+      - name: Run Pytest Test Suite
+        env:
+          FALKORDB_HOST: localhost
+          FALKORDB_PORT: 6379
+          GEMINI_API_KEY: ""
+        run: |
+          pytest backend/tests/ -v --durations=10
