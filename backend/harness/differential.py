@@ -13,7 +13,7 @@ import math
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from backend.mcp_tools.cypher_tools import record_test_outcome
 
 logger = logging.getLogger("ghostgraph.differential")
@@ -37,12 +37,20 @@ def generate_reference_crc16_table() -> List[int]:
 
 REFERENCE_CRC16_TABLE = generate_reference_crc16_table()
 
-def evaluate_telemetry_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_fn: Optional[Any] = None) -> tuple[bool, str]:
+def evaluate_telemetry_test(
+    tc: Dict[str, Any],
+    has_graph_memory: bool,
+    candidate_fn: Optional[Any] = None,
+    compilation_error: Optional[str] = None
+) -> tuple[bool, str]:
     """
     Executes actual CRC16 calculation and telemetry calibration on packet bytes.
     If candidate_fn is provided, executes the synthesized candidate function directly against
     the reference frame and expected CRC.
     """
+    if compilation_error:
+        return False, f"Candidate Compilation/Syntax Error: {compilation_error}"
+
     category = tc.get("category", "")
     tid = tc.get("id", "")
 
@@ -123,11 +131,19 @@ def evaluate_telemetry_test(tc: Dict[str, Any], has_graph_memory: bool, candidat
     return True, ""
 
 
-def evaluate_pacman_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_fn: Optional[Any] = None) -> tuple[bool, str]:
+def evaluate_pacman_test(
+    tc: Dict[str, Any],
+    has_graph_memory: bool,
+    candidate_fn: Optional[Any] = None,
+    compilation_error: Optional[str] = None
+) -> tuple[bool, str]:
     """
     Executes actual Toru Iwatani direction stepping vectors on maze grid.
     If candidate_fn is supplied, tests candidate direction stepping logic.
     """
+    if compilation_error:
+        return False, f"Candidate Compilation/Syntax Error: {compilation_error}"
+
     tid = tc.get("id", "")
     args = tc.get("args", [])
 
@@ -158,11 +174,19 @@ def evaluate_pacman_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_f
     return True, ""
 
 
-def evaluate_snake_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_fn: Optional[Any] = None) -> tuple[bool, str]:
+def evaluate_snake_test(
+    tc: Dict[str, Any],
+    has_graph_memory: bool,
+    candidate_fn: Optional[Any] = None,
+    compilation_error: Optional[str] = None
+) -> tuple[bool, str]:
     """
     Executes actual Retro Snake game physics state machine.
     If candidate_fn is supplied, runs candidate physics step logic.
     """
+    if compilation_error:
+        return False, f"Candidate Compilation/Syntax Error: {compilation_error}"
+
     tid = tc.get("id", "")
     action = tc.get("action", "")
 
@@ -175,9 +199,12 @@ def evaluate_snake_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_fn
             import inspect
             sig = inspect.signature(candidate_fn)
             if len(sig.parameters) >= 1:
-                candidate_fn(sample_state)
+                res = candidate_fn(sample_state)
             else:
-                candidate_fn()
+                res = candidate_fn()
+            head = res["head"] if isinstance(res, dict) and "head" in res else sample_state.get("head")
+            if action == "STEP" and head == [10, 10]:
+                return False, f"Snake candidate step failed to advance head coordinate: {head}"
             return True, ""
         except Exception as e:
             return False, f"Snake candidate execution error: {e}"
@@ -188,11 +215,19 @@ def evaluate_snake_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_fn
     return True, ""
 
 
-def evaluate_keygen_test(tc: Dict[str, Any], has_graph_memory: bool, candidate_fn: Optional[Any] = None) -> tuple[bool, str]:
+def evaluate_keygen_test(
+    tc: Dict[str, Any],
+    has_graph_memory: bool,
+    candidate_fn: Optional[Any] = None,
+    compilation_error: Optional[str] = None
+) -> tuple[bool, str]:
     """
     Executes actual FNV-1a block hash with non-linear substitution S-Box.
     Compares candidate output directly against reference mathematical hash.
     """
+    if compilation_error:
+        return False, f"Candidate Compilation/Syntax Error: {compilation_error}"
+
     tid = tc.get("id", "")
     sbox = [((i * 31) ^ 0x5A) % 256 for i in range(256)]
     serial = b"ABCD-EFGH-1234-99B1"
@@ -376,7 +411,15 @@ class LunarSimEngine:
             self.evaluate_touchdown()
 
 
-def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tuple[bool, str]:
+def evaluate_lunar_lander_test(
+    tc: Dict[str, Any],
+    has_graph_memory: bool,
+    candidate_callable: Optional[Callable] = None,
+    compilation_error: Optional[str] = None
+) -> tuple[bool, str]:
+    if compilation_error:
+        return False, f"Candidate Compilation/Syntax Error: {compilation_error}"
+
     action = tc.get("action", "")
     sim = LunarSimEngine(use_ground_truth=has_graph_memory)
 
@@ -397,9 +440,18 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
         return False, f"Freefall diverged: expected dv={expected_dv:.2f}, actual={actual_dv:.2f}"
 
     elif action == "HOVER":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                hover_throttle = float(candidate_callable(LUNAR_GRAVITY)) if len(sig.parameters) >= 1 else float(candidate_callable())
+            except Exception as e:
+                return False, f"Candidate execution error on HOVER: {e}"
+        elif not has_graph_memory:
             return False, "Throttle table 0x00403000 ungrounded. Thrust coefficient is 0.0; lander fell into freefall."
-        hover_throttle = (sim.total_mass * LUNAR_GRAVITY) / MAX_THRUST
+        else:
+            hover_throttle = (sim.total_mass * LUNAR_GRAVITY) / MAX_THRUST
+
         initial_vy = sim.vy
         for _ in range(tc.get("ticks", 10)):
             sim.apply_thrust(hover_throttle, 0.0)
@@ -407,26 +459,46 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
         actual_dv = abs(sim.vy - initial_vy)
         if actual_dv < 0.5:
             return True, ""
-        return False, f"Hover equilibrium drift: dv={actual_dv:.2f}"
+        return False, f"Hover equilibrium drift: dv={actual_dv:.2f} (throttle={hover_throttle:.3f})"
 
     elif action == "MAX_CLIMB":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                throttle_cmd = float(candidate_callable(5.0)) if len(sig.parameters) >= 1 else float(candidate_callable())
+            except Exception as e:
+                return False, f"Candidate execution error on MAX_CLIMB: {e}"
+        elif not has_graph_memory:
             return False, "Throttle table 0x00403000 ungrounded. Max climb failed to generate upward force."
+        else:
+            throttle_cmd = 1.0
+
         sim.pitch = 0.0
         initial_vy = sim.vy
         for _ in range(tc.get("ticks", 10)):
-            sim.apply_thrust(1.0, 0.0)
+            sim.apply_thrust(throttle_cmd, 0.0)
             sim.step()
         if sim.vy > initial_vy:
             return True, ""
         return False, f"Climb failed: vy={sim.vy:.2f} <= initial={initial_vy:.2f}"
 
     elif action == "FUEL_BURN":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                burn_throttle = float(candidate_callable(5.0)) if len(sig.parameters) >= 1 else float(candidate_callable())
+            except Exception as e:
+                return False, f"Candidate execution error on FUEL_BURN: {e}"
+        elif not has_graph_memory:
             return False, "Exhaust velocity and throttle curve ungrounded. Fuel mass remained static."
+        else:
+            burn_throttle = 1.0
+
         initial_fuel = sim.fuel_mass
         for _ in range(tc.get("ticks", 50)):
-            sim.apply_thrust(1.0, 0.0)
+            sim.apply_thrust(burn_throttle, 0.0)
             sim.step()
         burned = initial_fuel - sim.fuel_mass
         if burned > 50.0:
@@ -444,24 +516,44 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
         return False, f"Starvation check failed: fuel={sim.fuel_mass}, code={sim.status_code}"
 
     elif action == "PITCH_POS":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                throttle_cmd = float(candidate_callable(3.0)) if len(sig.parameters) >= 1 else float(candidate_callable())
+            except Exception as e:
+                return False, f"Candidate execution error on PITCH_POS: {e}"
+        elif not has_graph_memory:
             return False, "Vector thrust decomposition failed: lateral force is 0.0."
+        else:
+            throttle_cmd = 0.8
+
         sim.pitch = 0.5236
         initial_vx = sim.vx
         for _ in range(tc.get("ticks", 10)):
-            sim.apply_thrust(0.8, 0.0)
+            sim.apply_thrust(throttle_cmd, 0.0)
             sim.step()
         if sim.vx > initial_vx:
             return True, ""
         return False, f"Lateral vectoring failed: vx={sim.vx:.2f} <= {initial_vx:.2f}"
 
     elif action == "PITCH_NEG":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                throttle_cmd = float(candidate_callable(3.0)) if len(sig.parameters) >= 1 else float(candidate_callable())
+            except Exception as e:
+                return False, f"Candidate execution error on PITCH_NEG: {e}"
+        elif not has_graph_memory:
             return False, "Vector thrust decomposition failed: lateral braking force is 0.0."
+        else:
+            throttle_cmd = 0.8
+
         sim.pitch = -0.5236
         initial_vx = sim.vx
         for _ in range(tc.get("ticks", 10)):
-            sim.apply_thrust(0.8, 0.0)
+            sim.apply_thrust(throttle_cmd, 0.0)
             sim.step()
         if sim.vx < initial_vx:
             return True, ""
@@ -558,7 +650,21 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
         return True, ""
 
     elif action == "THROTTLE_CURVE":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                if len(sig.parameters) >= 1:
+                    step_low = float(candidate_callable(0.5))
+                    step_high = float(candidate_callable(2.5))
+                    if step_high > 1.2 * step_low and step_high <= 1.0 and step_low >= 0.05:
+                        return True, ""
+                    return False, f"Throttle curve non-linearity check failed: t(2.5)={step_high:.2f} vs t(0.5)={step_low:.2f}"
+                else:
+                    return True, ""
+            except Exception as e:
+                return False, f"Candidate execution error on THROTTLE_CURVE: {e}"
+        elif not has_graph_memory:
             return False, "Throttle response table 0x00403000 ungrounded."
         step5 = THRUST_THROTTLE_CURVE[5]
         step7 = THRUST_THROTTLE_CURVE[7]
@@ -567,13 +673,23 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
         return False, "Non-linear throttle step verification failed."
 
     elif action == "BRAKING_BURN":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            try:
+                import inspect
+                sig = inspect.signature(candidate_callable)
+                brake_throttle = float(candidate_callable(4.0)) if len(sig.parameters) >= 1 else float(candidate_callable())
+            except Exception as e:
+                return False, f"Candidate execution error on BRAKING_BURN: {e}"
+        elif not has_graph_memory:
             return False, "Braking burn failed: lander accelerated downwards due to ungrounded thrust table."
+        else:
+            brake_throttle = 1.0
+
         sim.vy = -25.0
         sim.pitch = 0.0
         initial_speed = abs(sim.vy)
         for _ in range(tc.get("ticks", 50)):
-            sim.apply_thrust(1.0, 0.0)
+            sim.apply_thrust(brake_throttle, 0.0)
             sim.step()
         final_speed = abs(sim.vy)
         if final_speed < initial_speed:
@@ -581,8 +697,13 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
         return False, f"Braking burn failed: speed {initial_speed:.1f} -> {final_speed:.1f}"
 
     elif action == "FULL_MISSION":
-        if not has_graph_memory:
+        if candidate_callable is not None:
+            import inspect
+            sig = inspect.signature(candidate_callable)
+            takes_param = len(sig.parameters) >= 1
+        elif not has_graph_memory:
             return False, "Full mission crashed at 28.4 m/s. Flat LLM omitted terrain and throttle tables."
+
         sim.x = 420.0
         sim.y = 70.0
         sim.vx = 0.4
@@ -596,7 +717,18 @@ def evaluate_lunar_lander_test(tc: Dict[str, Any], has_graph_memory: bool) -> tu
                 sim.evaluate_touchdown()
                 break
             target_vy = -max(1.0, min(4.0, radar * 0.08))
-            thrust_cmd = 0.65 if sim.vy < target_vy else 0.42
+            desired_accel = 1.62 + ((target_vy - sim.vy) * 0.8)
+            if candidate_callable is not None:
+                try:
+                    if takes_param:
+                        thrust_cmd = float(candidate_callable(desired_accel))
+                    else:
+                        thrust_cmd = float(candidate_callable())
+                except Exception as e:
+                    return False, f"Candidate execution error during full mission: {e}"
+            else:
+                thrust_cmd = 0.65 if sim.vy < target_vy else 0.42
+
             if radar < 15.0:
                 pitch_cmd = -sim.pitch * 1.5
             else:
@@ -762,7 +894,7 @@ class DifferentialTester:
 
                 target_fn_names = {
                     "billing": ["compute_progressive_tax", "process_invoice"],
-                    "lunar_lander": ["update_newtonian_physics", "apply_thrust_vector", "THROTTLE_CONTROL_ROUTINES"],
+                    "lunar_lander": ["THROTTLE_CONTROL_ROUTINES", "calculate_throttle", "update_newtonian_physics", "apply_thrust_vector"],
                     "snake": ["step_snake_tick", "step"],
                     "space_invaders": ["aliens_missile_move", "handle_missiles"],
                     "telemetry": ["verify_crc16_checksum"],
@@ -772,7 +904,7 @@ class DifferentialTester:
                 candidates_to_try = target_fn_names.get(target_name, ["compute_progressive_tax"])
                 for fn_name in candidates_to_try:
                     for k, v in local_scope.items():
-                        if callable(v) and (k == fn_name or fn_name in k.lower()):
+                        if callable(v) and (k == fn_name or fn_name.lower() in k.lower()):
                             candidate_callable = v
                             break
                     if candidate_callable:
@@ -782,6 +914,8 @@ class DifferentialTester:
                     user_funcs = [v for k, v in local_scope.items() if callable(v) and not k.startswith("__")]
                     if user_funcs:
                         candidate_callable = user_funcs[0]
+                    else:
+                        compilation_error = "No executable candidate function found in synthesized code"
             except Exception as e:
                 compilation_error = str(e)
                 logger.warning(f"Candidate code failed to compile for execution: {e}")
@@ -806,15 +940,40 @@ class DifferentialTester:
                     has_graph_memory=has_graph
                 )
             elif target_name == "lunar_lander":
-                passed, diff = evaluate_lunar_lander_test(tc, has_graph_memory=has_graph)
+                passed, diff = evaluate_lunar_lander_test(
+                    tc,
+                    candidate_callable=candidate_callable,
+                    compilation_error=compilation_error,
+                    has_graph_memory=has_graph
+                )
             elif target_name == "snake":
-                passed, diff = evaluate_snake_test(tc, has_graph_memory=has_graph)
+                passed, diff = evaluate_snake_test(
+                    tc,
+                    candidate_fn=candidate_callable,
+                    compilation_error=compilation_error,
+                    has_graph_memory=has_graph
+                )
             elif target_name == "telemetry":
-                passed, diff = evaluate_telemetry_test(tc, has_graph_memory=has_graph)
+                passed, diff = evaluate_telemetry_test(
+                    tc,
+                    candidate_fn=candidate_callable,
+                    compilation_error=compilation_error,
+                    has_graph_memory=has_graph
+                )
             elif target_name == "pacman":
-                passed, diff = evaluate_pacman_test(tc, has_graph_memory=has_graph)
+                passed, diff = evaluate_pacman_test(
+                    tc,
+                    candidate_fn=candidate_callable,
+                    compilation_error=compilation_error,
+                    has_graph_memory=has_graph
+                )
             elif target_name == "keygen":
-                passed, diff = evaluate_keygen_test(tc, has_graph_memory=has_graph)
+                passed, diff = evaluate_keygen_test(
+                    tc,
+                    candidate_fn=candidate_callable,
+                    compilation_error=compilation_error,
+                    has_graph_memory=has_graph
+                )
             else:
                 passed, diff = True, ""
 

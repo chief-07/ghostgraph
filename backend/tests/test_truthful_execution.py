@@ -56,7 +56,56 @@ def compute_progressive_tax(taxable_amount):
     print(f"Syntax error message: {res_syntax['results'][0]['diff']}")
     assert res_syntax["parity_percentage"] == 0.0, "Syntax error candidate must score 0.0%!"
 
-    print("\n>>> ALL TESTS PASSED: Truthful execution verified! <<<")
+    print("\n>>> ALL BILLING TESTS PASSED: Truthful execution verified! <<<")
+
+def test_truthful_lunar_lander_execution():
+    # 1. Syntax error candidate on lunar_lander
+    syntax_error_code = "def THROTTLE_CONTROL_ROUTINES(desired_accel): return desired_accel +"
+    res_syntax = differential_tester.run_tests(target_name="lunar_lander", candidate_code=syntax_error_code)
+    print("\n--- TEST 4: LUNAR SYNTAX ERROR CANDIDATE ---")
+    print(f"Parity: {res_syntax['parity_percentage']}% (Passed: {res_syntax['passed']}/{res_syntax['total_vectors']})")
+    assert res_syntax["parity_percentage"] == 0.0, "Syntax error candidate must score 0.0%!"
+    assert "Candidate Compilation/Syntax Error" in res_syntax["results"][0]["diff"]
+
+    # 2. Broken candidate (returns 0 throttle everywhere)
+    broken_code = """
+def THROTTLE_CONTROL_ROUTINES(desired_accel):
+    return 0.0
+"""
+    res_broken = differential_tester.run_tests(target_name="lunar_lander", candidate_code=broken_code)
+    print("\n--- TEST 5: LUNAR BROKEN THROTTLE CANDIDATE ---")
+    print(f"Parity: {res_broken['parity_percentage']}% (Passed: {res_broken['passed']}/{res_broken['total_vectors']})")
+    assert res_broken["parity_percentage"] == 60.0, "Broken throttle candidate must fail all propulsion/trajectory tests!"
+    failed_tests = [r["name"] for r in res_broken["results"] if r["status"] == "FAILED"]
+    assert "Hover Equilibrium Threshold" in failed_tests
+    assert "Maximum Rate Climb Vector" in failed_tests
+    assert "Tsiolkovsky Propellant Depletion Rate" in failed_tests
+    assert "Positive Pitch Gimbal Vectoring" in failed_tests
+    assert "Negative Pitch Deceleration Vectoring" in failed_tests
+    assert "Throttle Table 0x00403000 Non-Linearity" in failed_tests
+    assert "Deceleration Burn Trajectory" in failed_tests
+    assert "End-to-End Guided Lunar Descent" in failed_tests
+
+    # 3. Grounded candidate (authentic Apollo guidance routine)
+    grounded_code = """
+def THROTTLE_CONTROL_ROUTINES(desired_accel):
+    lowcrit = 0.10
+    highcrit = 0.60
+    fc = desired_accel * 15103.0
+    throttle = fc / 45000.0
+    if throttle <= lowcrit:
+        return lowcrit
+    elif throttle > highcrit:
+        return 1.00
+    return throttle
+"""
+    res_grounded = differential_tester.run_tests(target_name="lunar_lander", candidate_code=grounded_code)
+    print("\n--- TEST 6: LUNAR GROUNDED APOLLO GUIDANCE CANDIDATE ---")
+    print(f"Parity: {res_grounded['parity_percentage']}% (Passed: {res_grounded['passed']}/{res_grounded['total_vectors']})")
+    assert res_grounded["parity_percentage"] == 100.0, f"Grounded candidate must achieve 100% parity, got {res_grounded['parity_percentage']}%"
+
+    print("\n>>> ALL LUNAR LANDER TESTS PASSED: Truthful execution verified! <<<")
 
 if __name__ == "__main__":
     test_truthful_candidate_execution()
+    test_truthful_lunar_lander_execution()
