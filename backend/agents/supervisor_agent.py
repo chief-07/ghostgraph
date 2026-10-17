@@ -427,10 +427,11 @@ class SupervisorAgent:
             except SyntaxError as e:
                 logger.warning(f"Syntax check notice on {candidate_id}: {e}")
 
-        # Execute full 20-vector Differential Test Suite
+        # Execute full 20-vector Differential Test Suite on actual candidate code
         diff_summary = differential_tester.run_tests(
             candidate_binary_path=None,
             candidate_id=candidate_id,
+            candidate_code=synthesized_code,
             is_flat_llm_mode=not use_graph_context,
             target_name=target_name
         )

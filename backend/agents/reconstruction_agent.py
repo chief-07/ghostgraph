@@ -68,15 +68,27 @@ class ReconstructionAgent:
                     if provenance:
                         resolved_memory.extend(provenance)
 
-            # Retrieve any struct definition if available
-            struct_name = "GameState" if "space" in target_name.lower() or "invader" in target_name.lower() else "FlightTelemetry"
-            struct_info = get_struct_definition(struct_name)
+            # Retrieve target-specific struct definition if available
+            if "billing" in target_name.lower():
+                struct_name = "TaxBracket"
+            elif "space" in target_name.lower() or "invader" in target_name.lower():
+                struct_name = "GameState"
+            elif "lunar" in target_name.lower() or "apollo" in target_name.lower():
+                struct_name = "ApolloGuidanceState"
+            else:
+                struct_name = None
+
+            struct_info = get_struct_definition(struct_name) if struct_name else {}
 
             if version > 1:
                 failure_memory = fetch_failure_memory(target_name, version - 1)
 
         # 3. Live Code Generation via Gemini 3.1 Flash-Lite
-        code_input = pseudocode if pseudocode and not pseudocode.startswith("// Function not found") else raw_asm
+        if not pseudocode or pseudocode.startswith("// Function not found"):
+            from backend.agents.supervisor_agent import TARGET_CONFIGS
+            code_input = TARGET_CONFIGS.get(target_name, {}).get("decompiled_snippet", raw_asm)
+        else:
+            code_input = pseudocode
         prompt = self._build_prompt(
             target_name=target_name,
             function_name=function_name,
