@@ -51,6 +51,14 @@ def test_endpoints():
     assert "body" in step_data and "food" in step_data
     print(f"  -> OK (Snake head: {step_data['body'][0]}, Score: {step_data.get('score')})")
 
+    print("Testing POST /api/invaders/step (Dual Simultaneous Simulation) ...")
+    res = client.post("/api/invaders/step", json={"action": "none"})
+    assert res.status_code == 200
+    invaders_data = res.json()
+    assert "ghostgraph" in invaders_data and "flat_llm" in invaders_data
+    assert "alien_grid" in invaders_data["ghostgraph"] and "alien_grid" in invaders_data["flat_llm"]
+    print(f"  -> OK (Dual Invaders: GhostGraph alive={invaders_data['ghostgraph']['alive']}, Flat alive={invaders_data['flat_llm']['alive']})")
+
     print("\n" + "="*50)
     print(">>> ALL FASTAPI ENDPOINTS VERIFIED & WORKING <<<")
     print("="*50 + "\n")

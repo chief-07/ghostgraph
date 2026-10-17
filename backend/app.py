@@ -598,6 +598,18 @@ class SpaceInvadersGameEngine:
                     if missile_state[i*2] != 0:
                         missile_state[i*2+1] += 1
             # In flat mode, bunker_flat is ungrounded -> zero erosion occurs!
+            # Check player collision or out of bounds for missiles in broken mode
+            for i in range(5):
+                sx = missile_state[i * 2]
+                sy = missile_state[i * 2 + 1]
+                if sx != 0:
+                    if sy == 22 and (self.player_x <= sx <= self.player_x + 3):
+                        self.lives -= 1
+                        missile_state[i * 2] = 0
+                        if self.lives <= 0:
+                            self.is_alive = False
+                    elif sy >= 24:
+                        missile_state[i * 2] = 0
         else:
             # Execute LIVE GHOSTGRAPH FUNCTION (synthesized via FalkorDB topology)
             if self.live_ghost_missile_fn:
@@ -675,39 +687,39 @@ class SpaceInvadersGameEngine:
             "live_ghost_code": self.live_ghost_candidate_code,
             "live_flat_code": self.live_flat_candidate_code
         }
-        return {
-            "score": self.score,
-            "highscore": self.highscore,
-            "lives": self.lives,
-            "alive": self.is_alive,
-            "player_x": self.player_x,
-            "alien_grid": self.alien_grid,
-            "alien_x": self.alien_x,
-            "alien_y": self.alien_y,
-            "remaining_aliens": remaining_aliens,
-            "bunkers": self.bunkers,
-            "player_bullets": self.player_bullets,
-            "alien_missiles": self.alien_missiles,
-            "tick_count": self.tick_count
-        }
 
 active_invaders = SpaceInvadersGameEngine()
+active_flat_invaders = SpaceInvadersGameEngine()
 
 @app.get("/api/invaders/state")
 async def get_invaders_state():
-    return JSONResponse(active_invaders.get_state())
+    return JSONResponse({
+        "ghostgraph": active_invaders.get_state(),
+        "flat_llm": active_flat_invaders.get_state(),
+        **active_invaders.get_state()
+    })
 
 @app.post("/api/invaders/reset")
 async def reset_invaders():
     active_invaders.reset()
-    return JSONResponse(active_invaders.get_state())
+    active_flat_invaders.reset()
+    return JSONResponse({
+        "ghostgraph": active_invaders.get_state(),
+        "flat_llm": active_flat_invaders.get_state(),
+        **active_invaders.get_state()
+    })
 
 @app.post("/api/invaders/step")
 async def step_invaders(request: Request):
     body = await request.json()
     action = str(body.get("action", "none"))
-    is_broken = bool(body.get("is_broken_mode", False))
-    return JSONResponse(active_invaders.step(action=action, is_broken_mode=is_broken))
+    ghost_state = active_invaders.step(action=action, is_broken_mode=False)
+    flat_state = active_flat_invaders.step(action=action, is_broken_mode=True)
+    return JSONResponse({
+        "ghostgraph": ghost_state,
+        "flat_llm": flat_state,
+        **ghost_state
+    })
 
 @app.get("/api/export")
 async def export_reconstructed_project(target_id: str = "lunar_lander"):
