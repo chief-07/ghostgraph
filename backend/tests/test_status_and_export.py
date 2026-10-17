@@ -108,3 +108,77 @@ def THROTTLE_CONTROL_ROUTINES(desired_accel):
     assert "MATCH (mem:GlobalMemory" in trail
     assert "shortestPath" in trail
     assert "PASSED" in trail
+
+def test_export_broken_candidate_truthfully_fails_without_fabrication():
+    """Verify /api/export does NOT fabricate 100% parity on broken candidates (Problem 2)."""
+    falkor_client.select_target_graph("billing")
+    falkor_client.clear_graph()
+
+    broken_code = """
+def compute_progressive_tax(taxable_amount):
+    return 0.0
+"""
+    # Record Candidate in FalkorDB WITHOUT pre-recording passing test outcomes
+    cand_id = cypher_tools.record_candidate(
+        function_name="compute_progressive_tax",
+        source_code=broken_code,
+        version=1,
+        status="UNVERIFIED",
+        target_name="billing"
+    )
+
+    response = client.get("/api/export?target_id=billing")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["is_candidate"] is True
+    assert data["candidate_id"] == cand_id
+
+    cert = data["certificate"]
+    # Candidate returns 0.0 tax; it fails progressive tax calculations.
+    # Must NOT report 100.0% or VERIFIED_MATHEMATICAL_PARITY!
+    assert cert["status"] == "PARITY_MISMATCH"
+    assert cert["parity_percentage"] < 50.0
+    assert cert["test_vectors_passed"] < 10
+    assert cert["test_vectors_total"] == 20
+
+def test_export_grounded_candidate_auto_evaluates_real_parity():
+    """Verify /api/export dynamically executes grounded candidate when no tests pre-recorded."""
+    falkor_client.select_target_graph("billing")
+    falkor_client.clear_graph()
+
+    grounded_code = """
+def compute_progressive_tax(taxable_amount):
+    if taxable_amount <= 0.0:
+        return 0.0
+    brackets = [(100.0, 0.0), (500.0, 0.05), (2000.0, 0.12), (1e12, 0.20)]
+    total_tax = 0.0
+    prev_threshold = 0.0
+    for threshold, rate in brackets:
+        if taxable_amount > prev_threshold:
+            in_bracket = min(taxable_amount, threshold) - prev_threshold
+            total_tax += in_bracket * rate
+        else:
+            break
+        prev_threshold = threshold
+    return round(total_tax, 2)
+"""
+    cand_id = cypher_tools.record_candidate(
+        function_name="compute_progressive_tax",
+        source_code=grounded_code,
+        version=1,
+        status="UNVERIFIED",
+        target_name="billing"
+    )
+
+    response = client.get("/api/export?target_id=billing")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["is_candidate"] is True
+    cert = data["certificate"]
+    assert cert["status"] == "VERIFIED_MATHEMATICAL_PARITY"
+    assert cert["parity_percentage"] == 100.0
+    assert cert["test_vectors_passed"] == 20
+    assert cert["test_vectors_total"] == 20
+

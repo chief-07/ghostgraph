@@ -15,9 +15,12 @@ import time
 import json
 import math
 import random
+import logging
 import asyncio
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger("ghostgraph.app")
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -863,10 +866,32 @@ async def export_reconstructed_project(target_id: str = "lunar_lander"):
     passed_tests = passed_records[0].get("passed_count", 0) if passed_records else 0
     failed_tests = failed_records[0].get("failed_count", 0) if failed_records else 0
     total_tests = passed_tests + failed_tests
-    parity = round((passed_tests / total_tests) * 100.0, 1) if total_tests > 0 else (100.0 if is_candidate else 0.0)
-    if total_tests == 0 and is_candidate:
-        total_tests = 20
-        passed_tests = 20
+
+    # If this is a candidate but test outcomes have not been evaluated or persisted yet,
+    # execute truthful differential verification right now rather than fabricating mock values!
+    if is_candidate and total_tests == 0 and source_code:
+        try:
+            diff_summary = differential_tester.run_tests(
+                target_name=target_id,
+                candidate_id=candidate_id,
+                candidate_code=source_code
+            )
+            passed_tests = diff_summary.get("passed", 0)
+            failed_tests = diff_summary.get("failed", 0)
+            total_tests = diff_summary.get("total_vectors", passed_tests + failed_tests)
+        except Exception as e:
+            logger.warning(f"Differential verification execution during export: {e}")
+
+    parity = round((passed_tests / total_tests) * 100.0, 1) if total_tests > 0 else 0.0
+
+    if not is_candidate:
+        cert_status = "BASELINE_UNVERIFIED"
+    elif total_tests == 0:
+        cert_status = "CANDIDATE_UNVERIFIED"
+    elif parity >= 95.0:
+        cert_status = "VERIFIED_MATHEMATICAL_PARITY"
+    else:
+        cert_status = "PARITY_MISMATCH"
 
     is_python = "def " in source_code or "import " in source_code or target_id in ("space_invaders", "snake")
     ext = "py" if is_python else "c"
@@ -886,7 +911,7 @@ async def export_reconstructed_project(target_id: str = "lunar_lander"):
         "primary_subroutine": primary_fn,
         "candidate_id": candidate_id,
         "candidate_version": version,
-        "status": "VERIFIED_MATHEMATICAL_PARITY" if parity >= 95.0 else ("BASELINE_UNVERIFIED" if not is_candidate else "PARITY_MISMATCH"),
+        "status": cert_status,
         "parity_percentage": parity,
         "test_vectors_passed": passed_tests,
         "test_vectors_total": total_tests,
