@@ -1,4 +1,4 @@
-# 👻 GhostGraph: Autonomous Graph-Guided Binary Reconstruction & Self-Healing Swarm
+# GhostGraph: Autonomous Graph-Guided Binary Reconstruction & Self-Healing Swarm
 
 [![FalkorDB Cloud](https://img.shields.io/badge/Graph_Database-FalkorDB_Cloud-8B5CF6?style=for-the-badge&logo=redis&logoColor=white)](https://falkordb.com/)
 [![OpenCypher](https://img.shields.io/badge/Query_Language-OpenCypher-009688?style=for-the-badge)](https://opencypher.org/)
@@ -9,14 +9,14 @@
 
 > **Built for the WeMakeDevs & FalkorDB Hackathon ("Graph Hacks: Context for AI Agents")**  
 > **Official Track Declarations (Rule #5 & #10):**  
-> 🕵️ **Primary:** **Track 01 — *Agents That Act on Connected Data*** (Prize: iPhone 18 Pro)  
-> 🤖 **Co-Primary (Dual Entry):** **Track 02 — *Agent Memory and Coordination*** (Prize: PlayStation 5 + GTA VI)
+> **Primary Track:** **Track 01 — *Agents That Act on Connected Data*** (Prize: iPhone 18 Pro)  
+> **Co-Primary Track (Dual Entry):** **Track 02 — *Agent Memory and Coordination*** (Prize: PlayStation 5 + GTA VI)
 
 ---
 
-## 🏛️ Executive Summary: Why GhostGraph Was Built
+## Executive Summary: Why GhostGraph Was Built
 
-Across defense networks, aerospace telemetry cores, global financial clearinghouses, and classic gaming architectures, hundreds of billions of dollars in critical infrastructure run on **compiled machine binaries (`.exe`, ELF, firmware ROMs) whose original source code has been permanently lost**, whose original authors retired decades ago, and whose build environments are dead.
+Across defense networks, aerospace telemetry cores, global financial clearinghouses, and classic gaming architectures, hundreds of billions of dollars in critical infrastructure run on **compiled machine binaries (.exe, ELF, firmware ROMs) whose original source code has been permanently lost**, whose original authors retired decades ago, and whose build environments are dead.
 
 When reverse engineers pass these stripped binaries into decompilers (NSA Ghidra, IDA Pro), they do not receive clean source code. They receive **fragmented, uncompilable C pseudocode** riddled with detached raw memory offsets (`DAT_00405000`), ungrounded call chains, and missing struct layouts.
 
@@ -47,7 +47,7 @@ When prompted with these isolated functions, **frontier LLMs hallucinate and fai
 
 ---
 
-## 🏆 The "Rule #3" Benchmark: FalkorDB is Load-Bearing, Not Decorative
+## The "Rule #3" Benchmark: FalkorDB is Load-Bearing, Not Decorative
 
 In the official *Graph Hacks* rules, WeMakeDevs and FalkorDB established the **Golden Rule (Rule #3)**:
 > *"The graph has to do real work. A visualization drawn on top of ordinary storage does not qualify: if the product still works once FalkorDB is taken out, the graph is decoration rather than the thing the product runs on."*
@@ -57,17 +57,17 @@ GhostGraph does not merely store logs or draw passive nodes in FalkorDB. **If yo
 | Evaluation Dimension | Mode A: Flat LLM (No Graph / Isolated) | Mode B: GhostGraph (FalkorDB Cloud Swarm) | Why FalkorDB is Irreplaceable |
 | :--- | :---: | :---: | :--- |
 | **Context Strategy** | Raw isolated Ghidra pseudocode | 2-hop caller topology + global memory provenance | Resolves multi-hop dependencies across call boundaries |
-| **Detached Memory (`0x00405000`)** | Hallucinates flat 10% rate or zero buffer | Resolves exact progressive brackets `(100, 0%), (500, 5%), (2000, 12%)` from `init_tariff_tables` | Graph traversal links producer subroutines to consumer offsets |
-| **Apollo Gravity & Thrust Tables** | Guesses earth gravity $9.81\text{ m/s}^2$ | Extracts true lunar constant $g=1.62\text{ m/s}^2$ & dry mass ratios from `0x00403000` | Reconstructed physics accurately land the Lunar Module |
-| **Space Invaders Missile Grid** | Missing bunker grid & player state | Binds `ALIEN_MISSILE_STATE` (0x00405400) & `BUNKER_EROSION_GRID` (0x00405500) | Full game loop runs with authentic 1978 collision physics |
+| **Detached Memory (0x00405000)** | Hallucinates flat 10% rate or zero buffer | Resolves exact progressive brackets `(100, 0%), (500, 5%), (2000, 12%)` from `init_tariff_tables` | Graph traversal links producer subroutines to consumer offsets |
+| **Apollo Gravity & Thrust Tables** | Guesses earth gravity 9.81 m/s² | Extracts true lunar constant g = 1.62 m/s² and dry mass ratios from `0x00403000` | Reconstructed physics accurately land the Lunar Module |
+| **Space Invaders Missile Grid** | Missing bunker grid & player state | Binds `ALIEN_MISSILE_STATE` (0x00405400) and `BUNKER_EROSION_GRID` (0x00405500) | Full game loop runs with authentic 1978 collision physics |
 | **Episodic Failure Memory** | Repeats identical compile errors in loop | Reads `(:Candidate)-[:FAILED_ON]->(:TestCase)` to correct edge cases | Agents self-heal based on past error telemetry |
-| **Differential Test Parity** | **35.0% – 40.0% (FAIL)** | **100.0% (20/20 PASS)** | **Mathematical proof that the graph produces the solution** |
+| **Differential Test Parity** | **35.0% - 40.0% (FAIL)** | **100.0% (20/20 PASS)** | **Mathematical proof that the graph produces the solution** |
 
 ---
 
-## 🎯 Official Hackathon Track Alignment
+## Official Hackathon Track Alignment
 
-### 🕵️ Track 01: Agents That Act on Connected Data (Primary Entry)
+### Track 01: Agents That Act on Connected Data (Primary Entry)
 GhostGraph is the archetype of Track 01 because compiled binaries are pure connected topologies (Call Graphs, Dataflow Graphs, Memory Maps):
 - **Multi-Hop Reasoning:** When reconstructing `compute_progressive_tax`, GhostGraph traverses `(consumer:Function)-[:READS]->(mem:GlobalMemory)<-[:WRITES]-(producer:Function)` across 2 hops to discover data definitions that do not exist anywhere in the consumer function's code.
 - **Graph Queries & Algorithms as Agent Tools:** The Reconstruction Agent does not receive static text context. It dynamically calls FalkorDB tools:
@@ -78,7 +78,7 @@ GhostGraph is the archetype of Track 01 because compiled binaries are pure conne
 - **Tool Selection via Model Context Protocol (MCP):** All Cypher graph actions are exposed as standards-compliant MCP tools in `backend/mcp_tools/`.
 - **Explainable Decisions & Audit Trails:** Every synthesized candidate exports a signed verification certificate containing the complete OpenCypher path sequence that justified its types, memory bindings, and constants.
 
-### 🤖 Track 02: Agent Memory and Coordination (Co-Primary Dual Entry)
+### Track 02: Agent Memory and Coordination (Co-Primary Dual Entry)
 GhostGraph deploys a multi-agent swarm that coordinates through FalkorDB as shared working memory:
 - **Specialized 4-Agent Swarm:**
   1. **Topology Agent:** Disassembles binaries via Capstone and ingests call edges, memory buffers, and struct layouts into FalkorDB.
@@ -97,7 +97,7 @@ GhostGraph deploys a multi-agent swarm that coordinates through FalkorDB as shar
 
 ---
 
-## 🕹️ The 3 Curated Flagship Showcases
+## The 3 Curated Flagship Showcases
 
 GhostGraph includes 3 live, end-to-end benchmark targets spanning business systems, aerospace guidance, and classic gaming:
 
@@ -121,7 +121,7 @@ Plus a **Live Custom Binary Upload Engine** powered by the **Capstone Disassembl
 
 ---
 
-## 📐 FalkorDB Graph Schema
+## FalkorDB Graph Schema
 
 ```mermaid
 erDiagram
@@ -159,7 +159,7 @@ erDiagram
 
 ---
 
-## ⚡ Core OpenCypher Queries & Graph Algorithms
+## Core OpenCypher Queries & Graph Algorithms
 
 ### 1. Multi-Hop Memory Provenance Resolver (Track 01)
 *Traces backwards from an unlabelled pointer to the subroutine that initialized it:*
@@ -218,7 +218,7 @@ RETURN s.name AS struct_name,
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```mermaid
 flowchart TD
@@ -243,7 +243,7 @@ flowchart TD
         OUTCOME -->|Failures Detected| LOG_FAIL["Log FAILED_ON + Diff to FalkorDB"]
         LOG_FAIL --> FDB
         LOG_FAIL -->|Self-Healing Loop| SUPERVISOR
-        OUTCOME -->|20/20 Pass (100%)| VERIFIED["Verified Mathematical Parity"]
+        OUTCOME -->|20 of 20 Pass - 100% Parity| VERIFIED["Verified Mathematical Parity"]
     end
 
     subgraph DASHBOARD["4. Interactive Live Dashboard"]
@@ -255,7 +255,7 @@ flowchart TD
 
 ---
 
-## 🚀 Quickstart & Local Setup
+## Quickstart & Local Setup
 
 ### Prerequisites
 - Python 3.10+ (Tested on Python 3.14)
@@ -264,12 +264,12 @@ flowchart TD
 
 ### 1. Clone Repository & Install Dependencies
 ```bash
-git clone https://github.com/your-username/ghostgraph.git
+git clone https://github.com/chief-07/ghostgraph.git
 cd ghostgraph
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment (`.env`)
+### 2. Configure Environment (.env)
 Create a `.env` file in the root directory:
 ```ini
 # Google Gemini API Key
@@ -300,7 +300,7 @@ Open **`http://127.0.0.1:8000`** in your browser.
 
 ---
 
-## 📜 AI Assistant & Human Technical Ownership Disclosure (Rule #11)
+## AI Assistant & Human Technical Ownership Disclosure (Rule #11)
 
 In strict compliance with **Hackathon Rule #11**, we transparently disclose our development methodology:
 
@@ -316,5 +316,5 @@ In strict compliance with **Hackathon Rule #11**, we transparently disclose our 
 
 ---
 
-## 📄 License
+## License
 This project is open-source software licensed under the **[MIT License](LICENSE)**.
