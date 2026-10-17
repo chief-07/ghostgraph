@@ -1004,3 +1004,13 @@ async function exportReconstructedProject() {
 function closeExportModal() {
   exportModal.classList.add("hidden");
 }
+
+function openGuideModal() {
+  const modal = document.getElementById("guideModal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeGuideModal() {
+  const modal = document.getElementById("guideModal");
+  if (modal) modal.classList.add("hidden");
+}
