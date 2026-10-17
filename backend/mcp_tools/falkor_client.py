@@ -481,6 +481,41 @@ class FalkorClient:
             self._nodes[f"cand_{cid}"] = {"type": "Candidate", "id": cid, "props": params}
             return [{"c.id": cid, "id": cid}]
 
+        # 8c. Fetch Candidate Nodes (Bug #9)
+        if "MATCH (c:Candidate)" in cypher:
+            cands = []
+            for k, node in self._nodes.items():
+                if node.get("type") == "Candidate":
+                    props = node.get("props", {})
+                    cands.append({
+                        "id": node.get("id"),
+                        "function_name": props.get("fname", ""),
+                        "target_name": props.get("tname", ""),
+                        "source_code": props.get("code", ""),
+                        "version": props.get("version", 1),
+                        "status": props.get("status", "SYNTHESIZED"),
+                        "timestamp": props.get("timestamp", 0)
+                    })
+            target = params.get("target") or params.get("target_name")
+            fname = params.get("fn") or params.get("fname") or params.get("function_name")
+            if target:
+                cands = [c for c in cands if c.get("target_name") == target or target in c.get("id", "")]
+            if fname:
+                cands = [c for c in cands if c.get("function_name") == fname or fname in c.get("id", "")]
+            cands.sort(key=lambda x: (x.get("version", 1), x.get("timestamp", 0)), reverse=True)
+            return cands
+
+        # 8d. Test count for Candidate (Bug #9)
+        if "MATCH (c:Candidate" in cypher and ":PASSED" in cypher and "count" in cypher:
+            cid = params.get("cid", "")
+            passed_edges = [e for e in self._edges if e.get("source") == cid and e.get("type") == "PASSED"]
+            return [{"passed_count": len(passed_edges), "count(t)": len(passed_edges)}]
+
+        if "MATCH (c:Candidate" in cypher and ":FAILED_ON" in cypher and "count" in cypher:
+            cid = params.get("cid", "")
+            failed_edges = [e for e in self._edges if e.get("source") == cid and e.get("type") == "FAILED_ON"]
+            return [{"failed_count": len(failed_edges), "count(t)": len(failed_edges)}]
+
         # Default fallback: return empty list
         return []
 
@@ -494,6 +529,31 @@ class FalkorClient:
                 logger.warning(f"Error resetting FalkorDB graph: {e}")
         self._nodes.clear()
         self._edges.clear()
+
+    def get_status(self) -> Dict[str, Any]:
+        """Returns connection status, mode, and graph metrics for transparency (Bug #8)."""
+        node_count = len(self._nodes)
+        edge_count = len(self._edges)
+        if self.is_connected and self.graph:
+            try:
+                n_res = self.graph.query("MATCH (n) RETURN count(n) AS cnt")
+                if n_res and n_res.result_set:
+                    node_count = n_res.result_set[0][0]
+                e_res = self.graph.query("MATCH ()-[r]->() RETURN count(r) AS cnt")
+                if e_res and e_res.result_set:
+                    edge_count = e_res.result_set[0][0]
+            except Exception:
+                pass
+
+        return {
+            "connected": self.is_connected,
+            "mode": "FalkorDB Cloud" if self.is_connected else "In-Memory Simulation",
+            "host": self.host if self.is_connected else "localhost (in-memory)",
+            "port": self.port,
+            "graph_name": self.graph_name,
+            "nodes_count": node_count,
+            "edges_count": edge_count
+        }
 
 # Global singleton instance
 falkor_client = FalkorClient()

@@ -61,13 +61,20 @@
           </button>
         </div>
 
-        <!-- Right Pill Action Button -->
-        <button onclick="triggerBinaryUpload()" class="bg-[#f3f4f6] hover:bg-[#e7e9ee] text-[#0b0b0e] font-semibold text-[13px] px-5 py-2.5 rounded-full transition-colors flex items-center gap-2">
-          <span>Upload Binary</span>
-          <svg class="w-3.5 h-3.5 text-[#0b0b0e]" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M4 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.414A2 2 0 0 0 13.414 4L12 2.586A2 2 0 0 0 10.586 2H4zm4 3.5a.75.75 0 0 1 .75.75v2.69l1.22-1.22a.75.75 0 1 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.22 1.22V6.25A.75.75 0 0 1 8 5.5z"/>
-          </svg>
-        </button>
+        <!-- Right Action Strip: FalkorDB Connection Transparency (Bug #8) + Upload Button -->
+        <div class="flex items-center gap-2.5">
+          <div id="falkorStatusBadge" class="hidden sm:flex items-center gap-2 bg-[#f3f4f6] px-3.5 py-2 rounded-full text-[12px] font-medium text-[#374151] border border-[#e5e7eb] cursor-default" title="FalkorDB Connection Status">
+            <span id="falkorStatusDot" class="w-2 h-2 rounded-full bg-[#d97706] animate-pulse"></span>
+            <span id="falkorStatusLabel">FalkorDB: Checking...</span>
+          </div>
+
+          <button onclick="triggerBinaryUpload()" class="bg-[#f3f4f6] hover:bg-[#e7e9ee] text-[#0b0b0e] font-semibold text-[13px] px-5 py-2.5 rounded-full transition-colors flex items-center gap-2">
+            <span>Upload Binary</span>
+            <svg class="w-3.5 h-3.5 text-[#0b0b0e]" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M4 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.414A2 2 0 0 0 13.414 4L12 2.586A2 2 0 0 0 10.586 2H4zm4 3.5a.75.75 0 0 1 .75.75v2.69l1.22-1.22a.75.75 0 1 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.22 1.22V6.25A.75.75 0 0 1 8 5.5z"/>
+            </svg>
+          </button>
+        </div>
 
       </nav>
     </header>
@@ -169,6 +176,13 @@
         </div>
 
         <div class="flex items-center gap-2.5">
+          <div id="studioFalkorBadge" class="hidden sm:flex items-center gap-2 bg-white px-3.5 py-2 rounded-full border border-[#e5e7eb] text-[12px] font-medium text-[#374151]" title="FalkorDB Engine Status">
+            <span id="studioFalkorDot" class="w-2 h-2 rounded-full bg-[#16a34a]"></span>
+            <span id="studioFalkorLabel">FalkorDB Connected</span>
+          </div>
+          <button onclick="exportReconstructedProject()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
+            Export Project
+          </button>
           <button onclick="openTargetSelectorModal()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
             Switch Binary
           </button>
@@ -552,24 +566,50 @@
   </div>
 
   <!-- ==================================================================== -->
-  <!-- STANDALONE C PROJECT EXPORT MODAL                                    -->
+  <!-- STANDALONE RECONSTRUCTED ARTIFACT & AUDIT EXPORT MODAL (Bug #9)      -->
   <!-- ==================================================================== -->
   <div id="exportModal" class="hidden fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white border border-[#e5e7eb] rounded-3xl max-w-2xl w-full p-7 space-y-4 shadow-2xl">
+    <div class="bg-white border border-[#e5e7eb] rounded-3xl max-w-3xl w-full p-7 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-[#f0f0f2] pb-3.5">
-        <div class="text-[16px] font-bold text-[#0b0b0e]">Standalone Compilable C Project</div>
+        <div>
+          <div class="text-[17px] font-bold text-[#0b0b0e]">Autonomous Reconstruction Deliverable</div>
+          <div id="exportModalSubtitle" class="text-[12px] text-[#686c75]">Verified candidate package with mathematical proof &amp; FalkorDB audit trail</div>
+        </div>
         <button onclick="closeExportModal()" class="w-8 h-8 rounded-full bg-[#f3f4f6] hover:bg-[#e5e7eb] flex items-center justify-center text-[#141417]">
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
-      <div class="text-[13px] text-[#686c75]">
-        Reconstructed project files ready for compilation with GCC or Clang:
+
+      <!-- Tab Switcher for Export Package -->
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0f0f2] pb-2">
+        <div class="flex flex-wrap items-center gap-1.5 bg-[#f3f4f6] p-1 rounded-full text-[12px] font-medium">
+          <button id="btnExportTabCode" onclick="switchExportTab('code')" class="px-3.5 py-1 rounded-full bg-[#0b0b0e] text-white transition-all">Reconstructed Code</button>
+          <button id="btnExportTabMake" onclick="switchExportTab('make')" class="px-3.5 py-1 rounded-full text-[#5e626a] hover:text-[#0b0b0e] transition-all">Makefile</button>
+          <button id="btnExportTabCert" onclick="switchExportTab('cert')" class="px-3.5 py-1 rounded-full text-[#5e626a] hover:text-[#0b0b0e] transition-all">Verification Certificate</button>
+          <button id="btnExportTabCypher" onclick="switchExportTab('cypher')" class="px-3.5 py-1 rounded-full text-[#5e626a] hover:text-[#0b0b0e] transition-all">Cypher Audit Trail</button>
+        </div>
+        <div id="exportStatusBadge" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]">
+          Verified Parity
+        </div>
       </div>
-      <div class="bg-[#f8f9fa] border border-[#eceef2] rounded-xl p-4 text-xs font-mono text-[#0b0b0e] overflow-y-auto max-h-72">
+
+      <!-- Viewer Container -->
+      <div class="bg-[#f8f9fa] border border-[#eceef2] rounded-xl p-4 text-xs font-mono text-[#0b0b0e] overflow-y-auto max-h-80 leading-relaxed">
         <pre id="exportModalContent"></pre>
       </div>
-      <div class="flex justify-end gap-3 pt-2">
-        <button onclick="closeExportModal()" class="btn-tactile-black px-6 py-2.5 text-[13px] font-medium">Close</button>
+
+      <!-- Footer Actions -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+        <button onclick="downloadExportBundle()" class="px-4 py-2.5 bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#0b0b0e] font-semibold text-[13px] rounded-full transition-colors inline-flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span>Download Package (.json)</span>
+        </button>
+        <div class="flex items-center justify-end gap-3">
+          <button onclick="copyExportContent()" class="px-4 py-2.5 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
+            Copy View
+          </button>
+          <button onclick="closeExportModal()" class="btn-tactile-black px-6 py-2.5 text-[13px] font-medium">Close</button>
+        </div>
       </div>
     </div>
   </div>

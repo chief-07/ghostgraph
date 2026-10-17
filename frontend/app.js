@@ -94,6 +94,7 @@ async function selectTarget(targetId) {
     const res = await fetch(`/api/target/details?target_id=${targetId}`);
     currentTargetData = await res.json();
     populateStudioMetadata(currentTargetData);
+    fetchFalkorStatus();
   } catch (err) {
     console.error("Failed to load target details:", err);
   }
@@ -1286,28 +1287,161 @@ function drawLanderViewport(ctx, canvas, state, terrain, primaryColor) {
 }
 
 // ============================================================================
-// 7. Project Export
+// 7. FalkorDB Connection Transparency (Bug #8)
 // ============================================================================
+
+async function fetchFalkorStatus() {
+  try {
+    const res = await fetch("/api/falkordb/status");
+    const data = await res.json();
+    
+    // Update navbar badge
+    const navDot = document.getElementById("falkorStatusDot");
+    const navLabel = document.getElementById("falkorStatusLabel");
+    const navBadge = document.getElementById("falkorStatusBadge");
+    
+    // Update studio badge
+    const studioDot = document.getElementById("studioFalkorDot");
+    const studioLabel = document.getElementById("studioFalkorLabel");
+    const studioBadge = document.getElementById("studioFalkorBadge");
+
+    const isConnected = data.connected === true;
+    const dotColor = isConnected ? "bg-[#16a34a]" : "bg-[#d97706]";
+    const textLabel = isConnected 
+      ? `FalkorDB Cloud [${data.graph_name}]` 
+      : `FalkorDB In-Memory [${data.graph_name}]`;
+    const tooltip = isConnected 
+      ? `Connected to FalkorDB Cloud at ${data.host}:${data.port} (${data.nodes_count} nodes, ${data.edges_count} edges)` 
+      : `Resilient In-Memory Simulation (${data.nodes_count} nodes, ${data.edges_count} edges). Set FALKORDB_HOST in .env for Cloud.`;
+
+    if (navDot) {
+      navDot.className = `w-2 h-2 rounded-full ${dotColor}`;
+    }
+    if (navLabel) {
+      navLabel.innerText = textLabel;
+    }
+    if (navBadge) {
+      navBadge.title = tooltip;
+    }
+
+    if (studioDot) {
+      studioDot.className = `w-2 h-2 rounded-full ${dotColor}`;
+    }
+    if (studioLabel) {
+      studioLabel.innerText = textLabel;
+    }
+    if (studioBadge) {
+      studioBadge.title = tooltip;
+    }
+  } catch (err) {
+    console.debug("FalkorDB status check note:", err);
+  }
+}
+
+// Initial status probe on page load
+if (typeof window !== "undefined") {
+  window.addEventListener("DOMContentLoaded", () => {
+    fetchFalkorStatus();
+  });
+  // Also run immediately in case DOM is already parsed
+  fetchFalkorStatus();
+}
+
+// ============================================================================
+// 8. Project Export Deliverable Packaging (Bug #9)
+// ============================================================================
+
+let currentExportData = null;
+let currentExportTab = "code";
 
 async function exportReconstructedProject() {
   try {
     const res = await fetch(`/api/export?target_id=${currentTargetId}`);
-    const data = await res.json();
-    const content = `// ==========================================\n` +
-      `// GhostGraph Reconstructed Software Artifact\n` +
-      `// Target: ${data.target} (${data.filename})\n` +
-      `// Build: ${data.compile_cmd}\n` +
-      `// ==========================================\n\n` +
-      `/* --- Makefile --- */\n` +
-      `${data.makefile}\n\n` +
-      `/* --- ${data.filename} --- */\n` +
-      `${(liveReconstructedCode || data.source_code).slice(0, 1500)}...\n[Truncated for view]`;
+    currentExportData = await res.json();
 
-    document.getElementById("exportModalContent").innerText = content;
+    const subtitleEl = document.getElementById("exportModalSubtitle");
+    if (subtitleEl) {
+      subtitleEl.innerText = `Target: ${currentExportData.target} • File: ${currentExportData.filename} • ${currentExportData.compile_cmd}`;
+    }
+
+    const badgeEl = document.getElementById("exportStatusBadge");
+    if (badgeEl) {
+      const isVerified = currentExportData.certificate?.parity_percentage >= 95.0;
+      badgeEl.innerText = isVerified ? `${currentExportData.certificate.parity_percentage}% Parity Verified` : "Unverified Baseline";
+      badgeEl.className = isVerified 
+        ? "text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]"
+        : "text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#fef2f2] text-[#dc2626] border border-[#fecaca]";
+    }
+
+    switchExportTab("code");
     exportModal.classList.remove("hidden");
   } catch (err) {
     console.error("Failed to export project:", err);
   }
+}
+
+function switchExportTab(tab) {
+  currentExportTab = tab;
+  if (!currentExportData) return;
+
+  const btnCode = document.getElementById("btnExportTabCode");
+  const btnMake = document.getElementById("btnExportTabMake");
+  const btnCert = document.getElementById("btnExportTabCert");
+  const btnCypher = document.getElementById("btnExportTabCypher");
+  const contentEl = document.getElementById("exportModalContent");
+
+  const activeBtnClass = "px-3.5 py-1 rounded-full bg-[#0b0b0e] text-white transition-all";
+  const inactiveBtnClass = "px-3.5 py-1 rounded-full text-[#5e626a] hover:text-[#0b0b0e] transition-all";
+
+  if (btnCode) btnCode.className = tab === "code" ? activeBtnClass : inactiveBtnClass;
+  if (btnMake) btnMake.className = tab === "make" ? activeBtnClass : inactiveBtnClass;
+  if (btnCert) btnCert.className = tab === "cert" ? activeBtnClass : inactiveBtnClass;
+  if (btnCypher) btnCypher.className = tab === "cypher" ? activeBtnClass : inactiveBtnClass;
+
+  if (tab === "code") {
+    contentEl.innerText = currentExportData.source_code || "// No code available";
+  } else if (tab === "make") {
+    contentEl.innerText = currentExportData.makefile || "# No makefile available";
+  } else if (tab === "cert") {
+    contentEl.innerText = JSON.stringify(currentExportData.certificate, null, 2);
+  } else if (tab === "cypher") {
+    contentEl.innerText = currentExportData.cypher_audit_trail || "// No audit trail available";
+  }
+}
+
+function copyExportContent() {
+  const contentEl = document.getElementById("exportModalContent");
+  if (contentEl) {
+    navigator.clipboard.writeText(contentEl.innerText).then(() => {
+      alert("Artifact copied to clipboard!");
+    }).catch(() => {
+      console.warn("Clipboard access denied.");
+    });
+  }
+}
+
+function downloadExportBundle() {
+  if (!currentExportData) return;
+  const bundle = {
+    deliverable: "GhostGraph Autonomous Reverse Engineering Verification Package",
+    target: currentExportData.target,
+    filename: currentExportData.filename,
+    build_instruction: currentExportData.compile_cmd,
+    reconstructed_source: currentExportData.source_code,
+    makefile: currentExportData.makefile,
+    verification_certificate: currentExportData.certificate,
+    cypher_provenance_audit_trail: currentExportData.cypher_audit_trail
+  };
+
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${currentExportData.target}_reconstruction_deliverable.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function closeExportModal() {
