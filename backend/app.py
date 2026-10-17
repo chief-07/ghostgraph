@@ -50,6 +50,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Standards-Compliant Model Context Protocol (MCP) Server Mount
+from backend.mcp_server import mcp as mcp_server
+app.mount("/mcp", mcp_server.sse_app())
+
 # Benchmark Targets Registry
 TARGETS = {
     "billing": {

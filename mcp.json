@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ghostgraph": {
+      "command": "python",
+      "args": ["-m", "backend.mcp_server"],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
