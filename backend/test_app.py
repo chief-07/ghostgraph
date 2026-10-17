@@ -28,7 +28,7 @@ def test_endpoints():
     res = client.get("/api/targets")
     assert res.status_code == 200
     targets = res.json()
-    assert len(targets) == 3
+    assert len(targets) >= 3
     print(f"  -> OK (Found {len(targets)} targets: {[t['id'] for t in targets]})")
 
     print("Testing POST /api/ingest ...")
@@ -44,12 +44,12 @@ def test_endpoints():
     graph = res.json()
     print(f"  -> OK (Cytoscape graph has {len(graph.get('nodes', []))} nodes, {len(graph.get('edges', []))} edges)")
 
-    print("Testing POST /api/tick ...")
-    res = client.post("/api/tick", json={"px": 14, "py": 26, "pdir": 1, "bx": 14, "by": 11, "bdir": 1})
+    print("Testing POST /api/snake/step ...")
+    res = client.post("/api/snake/step", json={"dir": 1, "is_broken_mode": False})
     assert res.status_code == 200
-    tick_data = res.json()
-    assert "pacman" in tick_data and "blinky" in tick_data
-    print(f"  -> OK (New Pac-Man: {tick_data['pacman']}, Blinky: {tick_data['blinky']})")
+    step_data = res.json()
+    assert "body" in step_data and "food" in step_data
+    print(f"  -> OK (Snake head: {step_data['body'][0]}, Score: {step_data.get('score')})")
 
     print("\n" + "="*50)
     print(">>> ALL FASTAPI ENDPOINTS VERIFIED & WORKING <<<")

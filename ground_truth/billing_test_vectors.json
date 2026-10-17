@@ -1,0 +1,498 @@
+[
+  {
+    "id": "TC_01",
+    "name": "Standard Tier Flat Order",
+    "description": "Basic single item under $100 tax-free allowance",
+    "account_id": 10001,
+    "customer_tier": 0,
+    "items": [
+      {
+        "item_id": 1,
+        "quantity": 2,
+        "unit_price": 40.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 80.0,
+      "loyalty_discount": 0.0,
+      "taxable_amount": 80.0,
+      "tax_amount": 0.0,
+      "final_total": 80.0
+    }
+  },
+  {
+    "id": "TC_02",
+    "name": "Tax Bracket 1 Crossing ($100-$500)",
+    "description": "Exercises 5% marginal tax bracket above $100",
+    "account_id": 10002,
+    "customer_tier": 0,
+    "items": [
+      {
+        "item_id": 1,
+        "quantity": 10,
+        "unit_price": 30.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 300.0,
+      "loyalty_discount": 0.0,
+      "taxable_amount": 300.0,
+      "tax_amount": 10.0,
+      "final_total": 310.0
+    }
+  },
+  {
+    "id": "TC_03",
+    "name": "Tax Bracket 2 Crossing ($500-$2000)",
+    "description": "Exercises 12% marginal tax bracket with Silver tier",
+    "account_id": 10003,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 2,
+        "quantity": 10,
+        "unit_price": 100.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 1000.0,
+      "loyalty_discount": 30.0,
+      "taxable_amount": 970.0,
+      "tax_amount": 76.4,
+      "final_total": 1046.4
+    }
+  },
+  {
+    "id": "TC_04",
+    "name": "High-Bracket Luxury Tax (>$2000)",
+    "description": "Exercises 20% high-bracket tax rate",
+    "account_id": 10004,
+    "customer_tier": 2,
+    "items": [
+      {
+        "item_id": 3,
+        "quantity": 5,
+        "unit_price": 600.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 3000.0,
+      "loyalty_discount": 210.0,
+      "taxable_amount": 2790.0,
+      "tax_amount": 358.0,
+      "final_total": 3148.0
+    }
+  },
+  {
+    "id": "TC_05",
+    "name": "Bulk Order Quantity Rebate (>=100 units)",
+    "description": "Exercises 5% line item bulk discount trigger",
+    "account_id": 10005,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 10,
+        "quantity": 120,
+        "unit_price": 10.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 1140.0,
+      "loyalty_discount": 34.2,
+      "taxable_amount": 1105.8,
+      "tax_amount": 92.7,
+      "final_total": 1198.5
+    }
+  },
+  {
+    "id": "TC_06",
+    "name": "Enterprise Loyalty Tier Max Boost (500+ units)",
+    "description": "Triggers Enterprise 2.0x volume multiplier",
+    "account_id": 10006,
+    "customer_tier": 3,
+    "items": [
+      {
+        "item_id": 12,
+        "quantity": 600,
+        "unit_price": 8.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 4560.0,
+      "loyalty_discount": 1368.0,
+      "taxable_amount": 3192.0,
+      "tax_amount": 438.4,
+      "final_total": 3630.4
+    }
+  },
+  {
+    "id": "TC_07",
+    "name": "Banker's Rounding Half-Cent Even Test",
+    "description": "Critical IEEE 754 round-half-to-even half cent verification",
+    "account_id": 10007,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 15,
+        "quantity": 1,
+        "unit_price": 149.255,
+        "is_tax_exempt": 1
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 149.26,
+      "loyalty_discount": 4.48,
+      "taxable_amount": 0.0,
+      "tax_amount": 0.0,
+      "final_total": 144.78
+    }
+  },
+  {
+    "id": "TC_08",
+    "name": "Banker's Rounding Half-Cent Odd Test",
+    "description": "Rounds half-cent to nearest even number",
+    "account_id": 10008,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 16,
+        "quantity": 1,
+        "unit_price": 149.265,
+        "is_tax_exempt": 1
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 149.26,
+      "loyalty_discount": 4.48,
+      "taxable_amount": 0.0,
+      "tax_amount": 0.0,
+      "final_total": 144.79
+    }
+  },
+  {
+    "id": "TC_09",
+    "name": "100% Tax Exempt Commercial Order",
+    "description": "All line items tax exempt (0 tax payable)",
+    "account_id": 10009,
+    "customer_tier": 2,
+    "items": [
+      {
+        "item_id": 20,
+        "quantity": 20,
+        "unit_price": 50.0,
+        "is_tax_exempt": 1
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 1000.0,
+      "loyalty_discount": 70.0,
+      "taxable_amount": 0.0,
+      "tax_amount": 0.0,
+      "final_total": 930.0
+    }
+  },
+  {
+    "id": "TC_10",
+    "name": "Mixed Taxable and Exempt Basket",
+    "description": "Computes proportional discount against taxable line items",
+    "account_id": 10010,
+    "customer_tier": 2,
+    "items": [
+      {
+        "item_id": 21,
+        "quantity": 10,
+        "unit_price": 40.0,
+        "is_tax_exempt": 0
+      },
+      {
+        "item_id": 22,
+        "quantity": 10,
+        "unit_price": 60.0,
+        "is_tax_exempt": 1
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 1000.0,
+      "loyalty_discount": 70.0,
+      "taxable_amount": 372.0,
+      "tax_amount": 13.6,
+      "final_total": 943.6
+    }
+  },
+  {
+    "id": "TC_11",
+    "name": "Exact Lower Bracket Boundary ($100.00)",
+    "description": "Tests boundary precision where tax switches from 0% to 5%",
+    "account_id": 10011,
+    "customer_tier": 0,
+    "items": [
+      {
+        "item_id": 25,
+        "quantity": 1,
+        "unit_price": 100.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 100.0,
+      "loyalty_discount": 0.0,
+      "taxable_amount": 100.0,
+      "tax_amount": 0.0,
+      "final_total": 100.0
+    }
+  },
+  {
+    "id": "TC_12",
+    "name": "Exact Mid Bracket Boundary ($500.00)",
+    "description": "Tests boundary where marginal tax switches from 5% to 12%",
+    "account_id": 10012,
+    "customer_tier": 0,
+    "items": [
+      {
+        "item_id": 26,
+        "quantity": 5,
+        "unit_price": 100.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 500.0,
+      "loyalty_discount": 0.0,
+      "taxable_amount": 500.0,
+      "tax_amount": 20.0,
+      "final_total": 520.0
+    }
+  },
+  {
+    "id": "TC_13",
+    "name": "Exact High Bracket Boundary ($2000.00)",
+    "description": "Tests boundary where marginal tax switches from 12% to 20%",
+    "account_id": 10013,
+    "customer_tier": 0,
+    "items": [
+      {
+        "item_id": 27,
+        "quantity": 20,
+        "unit_price": 100.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 2000.0,
+      "loyalty_discount": 0.0,
+      "taxable_amount": 2000.0,
+      "tax_amount": 200.0,
+      "final_total": 2200.0
+    }
+  },
+  {
+    "id": "TC_14",
+    "name": "Invalid Account ID Failure Check",
+    "description": "Rejects account_id = 0 with status -1",
+    "account_id": 0,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 1,
+        "quantity": 5,
+        "unit_price": 10.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": -1,
+      "gross": 0.0,
+      "loyalty_discount": 0.0,
+      "taxable": 0.0,
+      "tax": 0.0,
+      "total": 0.0
+    }
+  },
+  {
+    "id": "TC_15",
+    "name": "Invalid Tier Index Out-of-Bounds Check",
+    "description": "Rejects customer_tier = 5 with status -1",
+    "account_id": 10015,
+    "customer_tier": 5,
+    "items": [
+      {
+        "item_id": 1,
+        "quantity": 5,
+        "unit_price": 10.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": -1,
+      "gross": 0.0,
+      "loyalty_discount": 0.0,
+      "taxable": 0.0,
+      "tax": 0.0,
+      "total": 0.0
+    }
+  },
+  {
+    "id": "TC_16",
+    "name": "Multi-Item Enterprise Full Stack Settlement",
+    "description": "Computes 5 line items across multiple tiers and tax classes",
+    "account_id": 10016,
+    "customer_tier": 3,
+    "items": [
+      {
+        "item_id": 31,
+        "quantity": 150,
+        "unit_price": 25.0,
+        "is_tax_exempt": 0
+      },
+      {
+        "item_id": 32,
+        "quantity": 200,
+        "unit_price": 15.0,
+        "is_tax_exempt": 0
+      },
+      {
+        "item_id": 33,
+        "quantity": 50,
+        "unit_price": 100.0,
+        "is_tax_exempt": 1
+      },
+      {
+        "item_id": 34,
+        "quantity": 100,
+        "unit_price": 45.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 15687.5,
+      "loyalty_discount": 4706.25,
+      "taxable_amount": 7481.25,
+      "tax_amount": 1296.25,
+      "final_total": 12277.5
+    }
+  },
+  {
+    "id": "TC_17",
+    "name": "Zero Quantity Line Item Handling",
+    "description": "Safely ignores line items with zero quantity",
+    "account_id": 10017,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 40,
+        "quantity": 0,
+        "unit_price": 500.0,
+        "is_tax_exempt": 0
+      },
+      {
+        "item_id": 41,
+        "quantity": 10,
+        "unit_price": 20.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 200.0,
+      "loyalty_discount": 6.0,
+      "taxable_amount": 194.0,
+      "tax_amount": 4.7,
+      "final_total": 198.7
+    }
+  },
+  {
+    "id": "TC_18",
+    "name": "Loyalty Discount Cap Clamping (30%)",
+    "description": "Ensures extreme volume discounts are capped at 30%",
+    "account_id": 10018,
+    "customer_tier": 3,
+    "items": [
+      {
+        "item_id": 50,
+        "quantity": 800,
+        "unit_price": 50.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 38000.0,
+      "loyalty_discount": 11400.0,
+      "taxable_amount": 26600.0,
+      "tax_amount": 5120.0,
+      "final_total": 31720.0
+    }
+  },
+  {
+    "id": "TC_19",
+    "name": "Fractional Cent Tax Accumulation",
+    "description": "Precision verification of multi-tier tax fractional accumulation",
+    "account_id": 10019,
+    "customer_tier": 1,
+    "items": [
+      {
+        "item_id": 60,
+        "quantity": 33,
+        "unit_price": 33.33,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 1099.89,
+      "loyalty_discount": 33.0,
+      "taxable_amount": 1066.89,
+      "tax_amount": 88.03,
+      "final_total": 1154.92
+    }
+  },
+  {
+    "id": "TC_20",
+    "name": "End-to-End Golden Settlement Vector",
+    "description": "Reference golden corporate settlement vector matching reference binary",
+    "account_id": 10020,
+    "customer_tier": 2,
+    "items": [
+      {
+        "item_id": 71,
+        "quantity": 10,
+        "unit_price": 45.0,
+        "is_tax_exempt": 0
+      },
+      {
+        "item_id": 72,
+        "quantity": 5,
+        "unit_price": 120.0,
+        "is_tax_exempt": 0
+      }
+    ],
+    "expected": {
+      "status_code": 1,
+      "gross_subtotal": 1050.0,
+      "loyalty_discount": 73.5,
+      "taxable_amount": 976.5,
+      "tax_amount": 77.18,
+      "final_total": 1053.68
+    }
+  }
+]

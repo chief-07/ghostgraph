@@ -39,7 +39,71 @@ class FalkorClient:
         self._nodes: Dict[str, Dict[str, Any]] = {}
         self._edges: List[Dict[str, Any]] = []
 
+        self.last_query_trace: Dict[str, Any] = {}
         self._connect()
+
+    def select_target_graph(self, target_name: str) -> None:
+        """
+        Multigraph Isolation (Hackathon Blueprint Feature 3):
+        Leverages FalkorDB's multigraph architecture so each target binary has its
+        own isolated graph (e.g. ghostgraph:space_invaders, ghostgraph:billing).
+        """
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
+        isolated_name = f"ghostgraph_{clean_name}"
+        self.graph_name = isolated_name
+        if self.is_connected and self.client:
+            try:
+                self.graph = self.client.select_graph(self.graph_name)
+                logger.info(f"Switched to isolated FalkorDB multigraph: '{self.graph_name}'")
+            except Exception as e:
+                logger.warning(f"Could not select isolated graph {self.graph_name}: {e}")
+
+    def ro_query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Read-Only Query (Hackathon Blueprint Feature 2):
+        Uses graph.ro_query() on FalkorDB for lightning-fast concurrent reads and
+        auditable agent execution traces (tool, latency_ms, rows).
+        """
+        import time
+        start_t = time.perf_counter()
+        params = params or {}
+        records: List[Dict[str, Any]] = []
+
+        if self.is_connected and self.graph:
+            try:
+                # Attempt native read-only query if supported by falkordb client
+                if hasattr(self.graph, "ro_query"):
+                    res = self.graph.ro_query(cypher, params)
+                else:
+                    res = self.graph.query(cypher, params)
+
+                if hasattr(res, "result_set") and res.result_set:
+                    raw_headers = res.header if hasattr(res, "header") and res.header else []
+                    headers = []
+                    for h in raw_headers:
+                        if isinstance(h, (list, tuple)) and len(h) > 1:
+                            headers.append(str(h[1]))
+                        else:
+                            headers.append(str(h))
+                    if not headers:
+                        headers = [f"col_{i}" for i in range(len(res.result_set[0]))]
+
+                    for row in res.result_set:
+                        records.append({headers[i]: row[i] for i in range(min(len(headers), len(row)))})
+            except Exception as e:
+                logger.warning(f"FalkorDB ro_query notice ({e}). Running in-memory.")
+                records = self._execute_in_memory(cypher, params)
+        else:
+            records = self._execute_in_memory(cypher, params)
+
+        elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+        self.last_query_trace = {
+            "cypher": cypher.strip().splitlines()[0][:60] + "...",
+            "params": params,
+            "latency_ms": elapsed_ms,
+            "row_count": len(records)
+        }
+        return records
 
     def _connect(self) -> None:
         """Attempts connection to real FalkorDB instance."""
@@ -68,8 +132,6 @@ class FalkorClient:
         Falls back seamlessly to in-memory graph on socket/network failure.
         """
         params = params or {}
-        if not self.is_connected:
-            self._connect()
 
         if self.is_connected and self.graph:
             try:
@@ -157,10 +219,17 @@ class FalkorClient:
             }
             return [{"p.name": pname}]
 
-        # 5. Function Context Lookup: MATCH (f:Function {name: $name})
-        if "MATCH (f:Function {name: $name})" in cypher:
-            fname = params.get("name", "")
+        # 5. Function Context Lookup: MATCH (f:Function) by name or address
+        if "MATCH (f:Function {name: $name})" in cypher or "WHERE f.name = $id OR f.address = $id" in cypher:
+            fname = params.get("name") or params.get("id", "")
             fn_node = self._nodes.get(f"fn_{fname}", {})
+            if not fn_node:
+                for node in self._nodes.values():
+                    if node.get("type") == "Function" and (node.get("name") == fname or node.get("address") == fname):
+                        fn_node = node
+                        fname = node.get("name", fname)
+                        break
+
             callers = [e["source"] for e in self._edges if e["target"] == fname and e["type"] == "CALLS"]
             callees = [e["target"] for e in self._edges if e["source"] == fname and e["type"] == "CALLS"]
             
@@ -188,13 +257,40 @@ class FalkorClient:
 
             return [{
                 "name": fname,
+                "address": fn_node.get("address", ""),
                 "signature": fn_node.get("signature", f"void {fname}()"),
                 "pseudocode": fn_node.get("pseudocode", ""),
+                "raw_asm": fn_node.get("raw_asm", ""),
                 "callers": callers,
                 "callees": callees,
                 "reads": reads,
                 "writes": writes
             }]
+
+        # 5b. List All Functions & Call Graph for Supervisor Stream
+        if "RETURN f.name AS name, f.address AS address, collect(DISTINCT callee.name) AS callees" in cypher:
+            results = []
+            for node in self._nodes.values():
+                if node.get("type") == "Function":
+                    fname = node.get("name", "")
+                    callees = [e["target"] for e in self._edges if e["source"] == fname and e["type"] == "CALLS"]
+                    results.append({
+                        "name": fname,
+                        "address": node.get("address", ""),
+                        "callees": callees
+                    })
+            return results
+
+        # 5c. List All GlobalMemory Buffers for Supervisor Stream
+        if "MATCH (m:GlobalMemory) RETURN m.address AS address, m.label AS label" in cypher:
+            results = []
+            for node in self._nodes.values():
+                if node.get("type") == "GlobalMemory":
+                    results.append({
+                        "address": node.get("address", ""),
+                        "label": node.get("label", "")
+                    })
+            return results
 
         # 6. Multi-Hop Memory Provenance: MATCH (mem:GlobalMemory)<-[:WRITES]-(initializer)
         if "MATCH (mem:GlobalMemory {address: $addr})<-[:WRITES]-(initializer:Function)" in cypher:
@@ -209,7 +305,9 @@ class FalkorClient:
                     "label": mem_node.get("label", addr),
                     "data_type": mem_node.get("data_type", "void*"),
                     "producer_function": p,
-                    "initialization_code": init_fn.get("pseudocode", "")
+                    "producer_address": init_fn.get("address", ""),
+                    "initialization_code": init_fn.get("pseudocode", ""),
+                    "producer_asm": init_fn.get("raw_asm", "")
                 })
             return results
 
@@ -237,10 +335,10 @@ class FalkorClient:
             return [{"struct_name": sname, "total_size": 0, "fields": []}]
 
         # 8. Record Candidate & Test Outcomes
-        if "MERGE (c:Candidate" in cypher:
+        if "MERGE (c:Candidate" in cypher or "CREATE (c:Candidate" in cypher:
             cid = params.get("cid", "cand_1")
             self._nodes[f"cand_{cid}"] = {"type": "Candidate", "id": cid, "props": params}
-            return [{"c.id": cid}]
+            return [{"c.id": cid, "id": cid}]
 
         if "MERGE (t:TestCase" in cypher and "PASSED" in cypher:
             tid = params.get("tid", "")

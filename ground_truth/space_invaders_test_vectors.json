@@ -1,0 +1,112 @@
+[
+  {
+    "id": "TC_INV_01",
+    "name": "Missile Downward Step Invariant",
+    "category": "Missile Trajectory",
+    "description": "Verifies that an active missile at (x=10, y=5) moves down to (x=10, y=6) in a single tick.",
+    "initial_missiles": [10, 5, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [10, 6, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_02",
+    "name": "Multi-Missile Independent Stepping",
+    "category": "Missile Trajectory",
+    "description": "Verifies that two simultaneous active missiles advance their y-coordinates independently.",
+    "initial_missiles": [12, 8, 24, 15, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [12, 9, 24, 16, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_03",
+    "name": "Bunker Defensive Shield Collision",
+    "category": "Collision Mechanics",
+    "description": "Verifies that when bunkersHitCheck returns 1, the missile is extinguished (x=0) and does not advance.",
+    "initial_missiles": [15, 12, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 12, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 1,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_04",
+    "name": "Player Defense Cannon Direct Impact",
+    "category": "Collision Mechanics",
+    "description": "Verifies that when playerHitCheck returns 1, missile is cleared and function signals player hit (return 1).",
+    "initial_missiles": [18, 22, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 23, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 1,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 1
+  },
+  {
+    "id": "TC_INV_05",
+    "name": "Screen Lower Boundary Deallocation",
+    "category": "Boundary Mechanics",
+    "description": "Verifies that missiles reaching or exceeding y=24 are removed from the active slot (x=0).",
+    "initial_missiles": [10, 23, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 24, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_06",
+    "name": "Inactive Slot Invariance",
+    "category": "State Machine",
+    "description": "Verifies that unspawned missile slots (x=0) are never modified by the trajectory loop.",
+    "initial_missiles": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_07",
+    "name": "Near-Boundary Preservation",
+    "category": "Boundary Mechanics",
+    "description": "Verifies that a missile at y=22 advances to y=23 without prematurely clearing.",
+    "initial_missiles": [20, 22, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [20, 23, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_08",
+    "name": "Bunker Hit Isolation Invariant",
+    "category": "Collision Mechanics",
+    "description": "Ensures that bunker collisions do NOT signal player destruction (return 0).",
+    "initial_missiles": [14, 18, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 18, 0, 0, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 1,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_09",
+    "name": "Full 5-Missile Saturation Array",
+    "category": "State Machine",
+    "description": "Verifies all 5 hardware missile slots update concurrently across the display matrix.",
+    "initial_missiles": [4, 6, 8, 10, 12, 14, 16, 18, 20, 20],
+    "expected_missiles": [4, 7, 8, 11, 12, 15, 16, 19, 20, 21],
+    "expected_hit": 0,
+    "mock_bunker_hit": 0,
+    "mock_player_hit": 0
+  },
+  {
+    "id": "TC_INV_10",
+    "name": "Simultaneous Bunker Collision and Free Flight",
+    "category": "Collision Mechanics",
+    "description": "Verifies slot 0 hit bunker (cleared) while slot 1 advances freely.",
+    "initial_missiles": [10, 12, 30, 8, 0, 0, 0, 0, 0, 0],
+    "expected_missiles": [0, 12, 30, 9, 0, 0, 0, 0, 0, 0],
+    "expected_hit": 0,
+    "mock_bunker_hit": 1,
+    "mock_player_hit": 0
+  }
+]

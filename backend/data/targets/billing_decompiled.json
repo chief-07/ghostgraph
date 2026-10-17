@@ -1,0 +1,139 @@
+{
+  "target_name": "Legacy Commercial Billing & Tariff Engine",
+  "badge": "FLAGSHIP ENTERPRISE ACCOUNTING BENCHMARK",
+  "category": "Commercial Billing & Progressive Tariffs",
+  "arch": "x86_64 stripped binary",
+  "primary_fn": "process_invoice",
+  "critical_symbol": "0x00405000 (TAX_BRACKET_TABLE) & 0x00405080 (CUSTOMER_TIER_TABLE)",
+  "producer_fn": "init_tariff_tables",
+  "consumer_fn": "compute_progressive_tax",
+  "description": "Legacy enterprise invoicing and marginal tariff settlement engine. Stripped decompilation decouples progressive tax brackets (0x00405000) and customer loyalty tier matrices (0x00405080) from line-item settlement loops. FalkorDB multi-agent swarm maps memory provenance and resolves call topology into compilable, audit-grade modern C.",
+  "global_memory": [
+    {
+      "address": "0x00405000",
+      "label": "TAX_BRACKET_TABLE",
+      "data_type": "TaxBracket[4]",
+      "size": 64,
+      "description": "Progressive marginal tax brackets with thresholds ($100, $500, $2000) and tax rates (0%, 5%, 12%, 20%)"
+    },
+    {
+      "address": "0x00405080",
+      "label": "CUSTOMER_TIER_TABLE",
+      "data_type": "CustomerTierConfig[4]",
+      "size": 64,
+      "description": "Customer loyalty rebate matrix (Standard 0%, Silver 3%, Gold 7%, Enterprise 15%) and volume multipliers"
+    }
+  ],
+  "structs": [
+    {
+      "name": "TaxBracket",
+      "size": 16,
+      "fields": [
+        {"offset": 0, "name": "threshold", "type": "double"},
+        {"offset": 8, "name": "rate", "type": "double"}
+      ]
+    },
+    {
+      "name": "CustomerTierConfig",
+      "size": 24,
+      "fields": [
+        {"offset": 0, "name": "tier_id", "type": "int"},
+        {"offset": 8, "name": "base_discount", "type": "double"},
+        {"offset": 16, "name": "volume_multiplier", "type": "double"}
+      ]
+    },
+    {
+      "name": "InvoiceResult",
+      "size": 56,
+      "fields": [
+        {"offset": 0, "name": "gross_subtotal", "type": "double"},
+        {"offset": 8, "name": "volume_discount", "type": "double"},
+        {"offset": 16, "name": "loyalty_discount", "type": "double"},
+        {"offset": 24, "name": "taxable_amount", "type": "double"},
+        {"offset": 32, "name": "tax_amount", "type": "double"},
+        {"offset": 40, "name": "final_total", "type": "double"},
+        {"offset": 48, "name": "status_code", "type": "int"}
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "init_tariff_tables",
+      "address": "0x00401010",
+      "signature": "void init_tariff_tables(void)",
+      "decompiled_c": "void init_tariff_tables(void) {\n    /* Initialize progressive tax brackets at 0x00405000 */\n    *(double *)(0x00405000 + 0) = 100.0;\n    *(double *)(0x00405000 + 8) = 0.00;\n    *(double *)(0x00405000 + 16) = 500.0;\n    *(double *)(0x00405000 + 24) = 0.05;\n    *(double *)(0x00405000 + 32) = 2000.0;\n    *(double *)(0x00405000 + 40) = 0.12;\n    *(double *)(0x00405000 + 48) = 1000000000000.0;\n    *(double *)(0x00405000 + 56) = 0.20;\n\n    /* Initialize customer tier discount matrix at 0x00405080 */\n    *(int *)(0x00405080 + 0) = 0;\n    *(double *)(0x00405080 + 8) = 0.00;\n    *(double *)(0x00405080 + 16) = 1.00;\n    *(int *)(0x00405080 + 24) = 1;\n    *(double *)(0x00405080 + 32) = 0.03;\n    *(double *)(0x00405080 + 40) = 1.25;\n    *(int *)(0x00405080 + 48) = 2;\n    *(double *)(0x00405080 + 56) = 0.07;\n    *(double *)(0x00405080 + 64) = 1.50;\n    *(int *)(0x00405080 + 72) = 3;\n    *(double *)(0x00405080 + 80) = 0.15;\n    *(double *)(0x00405080 + 88) = 2.00;\n}",
+      "assembly": "00401010:  55                      push   rbp\n00401011:  48 89 e5                mov    rbp, rsp\n00401014:  48 8d 05 e5 3f 00 00    lea    rax, [rip+0x3fe5] ; 0x00405000\n0040101b:  c7 00 00 00 c8 42       mov    DWORD PTR [rax], 0x42c80000 ; 100.0\n00401021:  5d                      pop    rbp\n00401022:  c3                      ret",
+      "call_graph": {
+        "callees": [],
+        "callers": ["main"]
+      },
+      "memory_reads": [],
+      "memory_writes": ["0x00405000", "0x00405080"]
+    },
+    {
+      "name": "validate_account_status",
+      "address": "0x00401080",
+      "signature": "int validate_account_status(unsigned int account_id, int customer_tier)",
+      "decompiled_c": "int validate_account_status(unsigned int account_id, int customer_tier) {\n    if (account_id == 0 || account_id > 9999999) return 0;\n    if (customer_tier < 0 || customer_tier > 3) return 0;\n    return 1;\n}",
+      "assembly": "00401080:  55                      push   rbp\n00401081:  85 ff                   test   edi, edi\n00401083:  74 15                   je     0040109a\n00401085:  81 ff 7f 96 98 00       cmp    edi, 0x98967f\n0040108b:  77 0d                   ja     0040109a\n0040108d:  83 fe 03                cmp    esi, 3\n00401090:  77 08                   ja     0040109a\n00401092:  b8 01 00 00 00          mov    eax, 1\n00401097:  5d                      pop    rbp\n00401098:  c3                      ret\n0040109a:  31 c0                   xor    eax, eax\n0040109c:  5d                      pop    rbp\n0040109d:  c3                      ret",
+      "call_graph": {
+        "callees": [],
+        "callers": ["process_invoice"]
+      },
+      "memory_reads": [],
+      "memory_writes": []
+    },
+    {
+      "name": "calculate_line_subtotal",
+      "address": "0x00401100",
+      "signature": "double calculate_line_subtotal(const LineItem *item)",
+      "decompiled_c": "double calculate_line_subtotal(const LineItem *item) {\n    if (item == 0) return 0.0;\n    int qty = *(int *)(item + 4);\n    double price = *(double *)(item + 8);\n    if (qty <= 0 || price < 0.0) return 0.0;\n    double subtotal = (double)qty * price;\n    if (qty >= 100) {\n        subtotal = subtotal * 0.95; /* 5% bulk rebate */\n    }\n    return subtotal;\n}",
+      "assembly": "00401100:  55                      push   rbp\n00401101:  48 85 ff                test   rdi, rdi\n00401104:  74 25                   je     0040112b\n00401106:  8b 47 04                mov    eax, DWORD PTR [rdi+0x4]\n00401109:  f2 0f 10 47 08          movsd  xmm0, QWORD PTR [rdi+0x8]\n0040110e:  f2 0f 2a c8             cvtsi2sd xmm1, eax\n00401112:  f2 0f 59 c1             mulsd  xmm0, xmm1\n00401116:  83 f8 64                cmp    eax, 100\n00401119:  7c 09                   jl     00401124\n0040111b:  f2 0f 59 05 dd 2e 00 00 mulsd  xmm0, QWORD PTR [rip+0x2edd] ; 0.95\n00401124:  5d                      pop    rbp\n00401125:  c3                      ret\n0040112b:  66 0f 57 c0             xorpd  xmm0, xmm0\n0040112f:  5d                      pop    rbp\n00401130:  c3                      ret",
+      "call_graph": {
+        "callees": [],
+        "callers": ["process_invoice"]
+      },
+      "memory_reads": [],
+      "memory_writes": []
+    },
+    {
+      "name": "compute_progressive_tax",
+      "address": "0x00401180",
+      "signature": "double compute_progressive_tax(double taxable_amount)",
+      "decompiled_c": "double compute_progressive_tax(double taxable_amount) {\n    if (taxable_amount <= 0.0) return 0.0;\n    /* UNRESOLVED STATIC MEMORY TABLE: 0x00405000 not defined in local scope */\n    double *brackets = (double *)0x00405000;\n    double total_tax = 0.0;\n    double prev_threshold = 0.0;\n    for (int i = 0; i < 4; ++i) {\n        double current_threshold = brackets[i * 2];\n        double current_rate = brackets[i * 2 + 1];\n        if (taxable_amount > prev_threshold) {\n            double in_bracket = (taxable_amount < current_threshold ? taxable_amount : current_threshold) - prev_threshold;\n            total_tax += in_bracket * current_rate;\n        } else {\n            break;\n        }\n        prev_threshold = current_threshold;\n    }\n    return total_tax;\n}",
+      "assembly": "00401180:  55                      push   rbp\n00401181:  48 89 e5                mov    rbp, rsp\n00401184:  66 0f 57 c9             xorpd  xmm1, xmm1\n00401188:  f2 0f 2e c1             ucomisd xmm0, xmm1\n0040118c:  76 40                   jbe    004011ce\n0040118e:  48 8d 15 6b 3e 00 00    lea    rdx, [rip+0x3e6b] ; 0x00405000 TAX_BRACKETS\n00401195:  31 c0                   xor    eax, eax\n00401197:  f2 0f 10 14 02          movsd  xmm2, QWORD PTR [rdx+rax]\n0040119c:  f2 0f 10 5c 02 08       movsd  xmm3, QWORD PTR [rdx+rax+0x8]\n004011a2:  5d                      pop    rbp\n004011a3:  c3                      ret",
+      "call_graph": {
+        "callees": [],
+        "callers": ["process_invoice"]
+      },
+      "memory_reads": ["0x00405000"],
+      "memory_writes": []
+    },
+    {
+      "name": "apply_bankers_rounding",
+      "address": "0x00401220",
+      "signature": "double apply_bankers_rounding(double value)",
+      "decompiled_c": "double apply_bankers_rounding(double value) {\n    double scaled = value * 100.0;\n    double floor_val = floor(scaled);\n    double diff = scaled - floor_val;\n    double result;\n    if (fabs(diff - 0.5) < 0.000000001) {\n        long long floor_int = (long long)floor_val;\n        if (floor_int % 2 == 0) {\n            result = floor_val;\n        } else {\n            result = floor_val + 1.0;\n        }\n    } else {\n        result = round(scaled);\n    }\n    return result / 100.0;\n}",
+      "assembly": "00401220:  55                      push   rbp\n00401221:  f2 0f 59 05 d7 2d 00 00 mulsd  xmm0, QWORD PTR [rip+0x2dd7] ; 100.0\n00401229:  e8 82 fe ff ff          call   floor\n0040122e:  5d                      pop    rbp\n0040122f:  c3                      ret",
+      "call_graph": {
+        "callees": [],
+        "callers": ["process_invoice"]
+      },
+      "memory_reads": [],
+      "memory_writes": []
+    },
+    {
+      "name": "process_invoice",
+      "address": "0x00401300",
+      "signature": "InvoiceResult process_invoice(const InvoiceRequest *request)",
+      "decompiled_c": "InvoiceResult process_invoice(const InvoiceRequest *request) {\n    InvoiceResult res;\n    memset(&res, 0, sizeof(res));\n    if (request == 0 || !validate_account_status(*(unsigned int *)request, *(int *)(request + 4))) {\n        res.status_code = -1;\n        return res;\n    }\n    double gross = 0.0;\n    double taxable_gross = 0.0;\n    int total_units = 0;\n    int count = *(int *)(request + 8);\n    for (int i = 0; i < count && i < 8; ++i) {\n        double line = calculate_line_subtotal((const LineItem *)(request + 16 + i * 24));\n        gross += line;\n        total_units += *(int *)(request + 16 + i * 24 + 4);\n        if (*(int *)(request + 16 + i * 24 + 16) == 0) {\n            taxable_gross += line;\n        }\n    }\n    /* UNRESOLVED STATIC MEMORY TABLE: 0x00405080 customer tier matrix */\n    int tier = *(int *)(request + 4);\n    double *tier_data = (double *)(0x00405080 + tier * 24);\n    double disc_rate = tier_data[1];\n    if (total_units >= 500) disc_rate *= tier_data[2];\n    if (disc_rate > 0.30) disc_rate = 0.30;\n    double loyalty_disc = gross * disc_rate;\n    double net_subtotal = gross - loyalty_disc;\n    double taxable_net = (gross > 0.0) ? taxable_gross * (1.0 - disc_rate) : 0.0;\n    double tax = compute_progressive_tax(taxable_net);\n    res.gross_subtotal = apply_bankers_rounding(gross);\n    res.loyalty_discount = apply_bankers_rounding(loyalty_disc);\n    res.taxable_amount = apply_bankers_rounding(taxable_net);\n    res.tax_amount = apply_bankers_rounding(tax);\n    res.final_total = apply_bankers_rounding(net_subtotal + res.tax_amount);\n    res.status_code = 1;\n    return res;\n}",
+      "assembly": "00401300:  55                      push   rbp\n00401301:  48 89 e5                mov    rbp, rsp\n00401304:  48 83 ec 40             sub    rsp, 0x40\n00401308:  e8 73 fd ff ff          call   00401080 ; validate_account_status\n0040130d:  85 c0                   test   eax, eax\n0040130f:  74 42                   je     00401353\n00401311:  e8 ea fd ff ff          call   00401100 ; calculate_line_subtotal\n00401316:  e8 65 fe ff ff          call   00401180 ; compute_progressive_tax\n0040131b:  e8 00 ff ff ff          call   00401220 ; apply_bankers_rounding\n00401320:  5d                      pop    rbp\n00401321:  c3                      ret",
+      "call_graph": {
+        "callees": ["validate_account_status", "calculate_line_subtotal", "compute_progressive_tax", "apply_bankers_rounding"],
+        "callers": ["main"]
+      },
+      "memory_reads": ["0x00405000", "0x00405080"],
+      "memory_writes": []
+    }
+  ]
+}
