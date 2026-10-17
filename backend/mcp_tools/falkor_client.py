@@ -39,7 +39,71 @@ class FalkorClient:
         self._nodes: Dict[str, Dict[str, Any]] = {}
         self._edges: List[Dict[str, Any]] = []
 
+        self.last_query_trace: Dict[str, Any] = {}
         self._connect()
+
+    def select_target_graph(self, target_name: str) -> None:
+        """
+        Multigraph Isolation (Hackathon Blueprint Feature 3):
+        Leverages FalkorDB's multigraph architecture so each target binary has its
+        own isolated graph (e.g. ghostgraph:space_invaders, ghostgraph:billing).
+        """
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
+        isolated_name = f"ghostgraph_{clean_name}"
+        self.graph_name = isolated_name
+        if self.is_connected and self.client:
+            try:
+                self.graph = self.client.select_graph(self.graph_name)
+                logger.info(f"Switched to isolated FalkorDB multigraph: '{self.graph_name}'")
+            except Exception as e:
+                logger.warning(f"Could not select isolated graph {self.graph_name}: {e}")
+
+    def ro_query(self, cypher: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Read-Only Query (Hackathon Blueprint Feature 2):
+        Uses graph.ro_query() on FalkorDB for lightning-fast concurrent reads and
+        auditable agent execution traces (tool, latency_ms, rows).
+        """
+        import time
+        start_t = time.perf_counter()
+        params = params or {}
+        records: List[Dict[str, Any]] = []
+
+        if self.is_connected and self.graph:
+            try:
+                # Attempt native read-only query if supported by falkordb client
+                if hasattr(self.graph, "ro_query"):
+                    res = self.graph.ro_query(cypher, params)
+                else:
+                    res = self.graph.query(cypher, params)
+
+                if hasattr(res, "result_set") and res.result_set:
+                    raw_headers = res.header if hasattr(res, "header") and res.header else []
+                    headers = []
+                    for h in raw_headers:
+                        if isinstance(h, (list, tuple)) and len(h) > 1:
+                            headers.append(str(h[1]))
+                        else:
+                            headers.append(str(h))
+                    if not headers:
+                        headers = [f"col_{i}" for i in range(len(res.result_set[0]))]
+
+                    for row in res.result_set:
+                        records.append({headers[i]: row[i] for i in range(min(len(headers), len(row)))})
+            except Exception as e:
+                logger.warning(f"FalkorDB ro_query notice ({e}). Running in-memory.")
+                records = self._execute_in_memory(cypher, params)
+        else:
+            records = self._execute_in_memory(cypher, params)
+
+        elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+        self.last_query_trace = {
+            "cypher": cypher.strip().splitlines()[0][:60] + "...",
+            "params": params,
+            "latency_ms": elapsed_ms,
+            "row_count": len(records)
+        }
+        return records
 
     def _connect(self) -> None:
         """Attempts connection to real FalkorDB instance."""

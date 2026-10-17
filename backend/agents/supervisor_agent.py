@@ -313,19 +313,31 @@ class SupervisorAgent:
                     "node_type": "memory"
                 }
 
-        # Step 2: Multi-Hop Memory Query & Reasoning
-        cypher_traversal = f"MATCH (init:Function)-[:WRITES]->(m:GlobalMemory {{address: '{crit_mem}'}})<-[:READS]-(target:Function) RETURN init.name, m.label"
-
+        # Step 2: Multigraph Isolation & Blueprint Tool Trace (Organizer Blueprint Features 2 & 3)
         if use_graph_context:
+            falkor_client.select_target_graph(target_name)
+
+            # Feature 1: Load-Bearing Subroutines via Graph Algorithm (PageRank)
+            pagerank_ranks = cypher_tools.compute_function_pagerank(limit=3)
             yield {
                 "type": "AGENT_STEP",
                 "agent": "TopologyAgent",
-                "action": "MCP_CYPHER_REASONING",
-                "message": f"Executing Cypher multi-hop query on FalkorDB Cloud to resolve pointer {crit_mem}...",
-                "cypher": cypher_traversal
+                "action": "NATIVE_GRAPH_ALGORITHM_PAGERANK",
+                "message": f"FalkorDB PageRank identified load-bearing subroutines: {', '.join(r.get('function','') for r in pagerank_ranks[:3])}",
+                "trace": falkor_client.last_query_trace
             }
 
-            # Query real provenance from FalkorDB
+            # Feature 4: Explicit Multi-Hop Call Path behind the answer
+            shortest_path = cypher_tools.find_shortest_call_path(prod_fn, fn_to_reconstruct)
+            yield {
+                "type": "AGENT_STEP",
+                "agent": "TopologyAgent",
+                "action": "MULTI_HOP_EXPLICIT_PATH",
+                "message": f"Execution Path: {shortest_path.get('formatted', '')}",
+                "path": shortest_path.get("path_nodes", [])
+            }
+
+            # Query real provenance from FalkorDB using ro_query
             prov = cypher_tools.resolve_memory_source(crit_mem)
             if prov:
                 real_label = prov[0].get("label") or crit_label
@@ -340,7 +352,8 @@ class SupervisorAgent:
                 "label": real_label,
                 "producer": real_prod,
                 "consumer": fn_to_reconstruct,
-                "message": f"FalkorDB Provenance Resolved: {crit_mem} is '{real_label}' initialized by '{real_prod}'!"
+                "message": f"FalkorDB Provenance Resolved: {crit_mem} is '{real_label}' initialized by '{real_prod}'!",
+                "trace": falkor_client.last_query_trace
             }
 
             yield {
