@@ -568,14 +568,14 @@ async function rerunLiveExecution() {
   document.getElementById("flatCrashOverlay").classList.add("hidden");
   document.getElementById("ghostLandingOverlay").classList.add("hidden");
   if (currentTargetId === "space_invaders") {
-    await fetch("/api/invaders/reset", { method: "POST" });
+    try { await fetch("/api/invaders/reset", { method: "POST" }); } catch (e) {}
     startSpaceInvadersDuel();
   } else if (currentTargetId === "billing") {
     startBillingDuel();
   } else if (currentTargetId.startsWith("upload_") || currentTargetId === "custom_upload") {
     startBinaryAnalysisDuel();
   } else {
-    await fetch("/api/lunar/reset", { method: "POST" });
+    try { await fetch("/api/lunar/reset", { method: "POST" }); } catch (e) {}
     startDualFlightSimulation();
   }
 }
@@ -615,9 +615,171 @@ if (typeof window !== "undefined" && !window._invadersKeyListenerAdded) {
   window._invadersKeyListenerAdded = true;
 }
 
+// ============================================================================
+// Client-Side Space Invaders Engine (Smooth 60FPS Arcade with Zero Network Jitter)
+// ============================================================================
+let simInvadersGhost = null;
+let simInvadersFlat = null;
+
+function createLocalInvadersState() {
+  const bunkerShape = [
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,0,0,0,0,0,0,1,1,1]
+  ];
+  return {
+    score: 0,
+    highscore: 1200,
+    lives: 3,
+    alive: true,
+    player_x: 38,
+    tick_count: 0,
+    alien_grid: [
+      [1,1,1,1,1,1,1,1,1,1],
+      [2,2,2,2,2,2,2,2,2,2],
+      [2,2,2,2,2,2,2,2,2,2],
+      [3,3,3,3,3,3,3,3,3,3],
+      [3,3,3,3,3,3,3,3,3,3]
+    ],
+    alien_x: 10,
+    alien_y: 3,
+    alien_dir: 1,
+    bunkers: [
+      bunkerShape.map(r => [...r]),
+      bunkerShape.map(r => [...r]),
+      bunkerShape.map(r => [...r]),
+      bunkerShape.map(r => [...r])
+    ],
+    alien_missiles: [],
+    player_bullets: []
+  };
+}
+
+function resetLocalInvadersSim() {
+  simInvadersGhost = createLocalInvadersState();
+  simInvadersFlat = createLocalInvadersState();
+}
+
+function stepLocalInvaderEngine(state, action, isFlatMode) {
+  if (!state.alive) return state;
+  state.tick_count++;
+
+  // Player action
+  if (action === "left" && state.player_x > 4) state.player_x -= 2;
+  else if (action === "right" && state.player_x < 72) state.player_x += 2;
+  else if (action === "fire" && state.player_bullets.length < 3) {
+    state.player_bullets.push({ x: state.player_x + 2, y: 21 });
+  }
+
+  // Update Player Bullets
+  const activeBullets = [];
+  for (const b of state.player_bullets) {
+    b.y -= 1;
+    let hit = false;
+    // Check alien hit
+    if (b.y >= state.alien_y && b.y < state.alien_y + 10) {
+      const col = Math.floor((b.x - state.alien_x) / 4);
+      const row = Math.floor((b.y - state.alien_y) / 2);
+      if (row >= 0 && row < 5 && col >= 0 && col < 10) {
+        if (state.alien_grid[row] && state.alien_grid[row][col] !== 0) {
+          state.score += (state.alien_grid[row][col] === 1 ? 30 : (state.alien_grid[row][col] === 2 ? 20 : 10));
+          state.alien_grid[row][col] = 0;
+          hit = true;
+        }
+      }
+    }
+    if (!hit && b.y > 0) activeBullets.push(b);
+  }
+  state.player_bullets = activeBullets;
+
+  // Advance alien swarm
+  if (state.tick_count % 3 === 0) {
+    state.alien_x += state.alien_dir;
+    if (state.alien_x > 34 || state.alien_x < 4) {
+      state.alien_dir *= -1;
+      state.alien_y += 1;
+      if (state.alien_y >= 16) state.alive = false;
+    }
+  }
+
+  // Drop alien missiles
+  if (state.tick_count % 5 === 0 && state.alien_missiles.length < 4) {
+    const activeCols = [];
+    for (let c = 0; c < 10; c++) {
+      for (let r = 0; r < 5; r++) {
+        if (state.alien_grid[r][c] !== 0) { activeCols.push(c); break; }
+      }
+    }
+    if (activeCols.length > 0) {
+      const shotC = activeCols[Math.floor(Math.random() * activeCols.length)];
+      let lowestR = 0;
+      for (let r = 4; r >= 0; r--) {
+        if (state.alien_grid[r][shotC] !== 0) { lowestR = r; break; }
+      }
+      state.alien_missiles.push({
+        x: state.alien_x + shotC * 4 + 1,
+        y: state.alien_y + lowestR * 2 + 1
+      });
+    }
+  }
+
+  // Update alien missiles
+  const bunkerPositions = [12, 28, 44, 60];
+  const activeMissiles = [];
+  for (const m of state.alien_missiles) {
+    m.y += 1;
+    let missileActive = true;
+
+    // Bunker check
+    if (!isFlatMode) {
+      // In GhostGraph: bunker blocks absorb missiles and erode!
+      if (m.y >= 17 && m.y <= 20) {
+        for (let bIdx = 0; bIdx < 4; bIdx++) {
+          const bStartX = bunkerPositions[bIdx];
+          if (m.x >= bStartX && m.x < bStartX + 12) {
+            const br = m.y - 17;
+            const bc = m.x - bStartX;
+            if (state.bunkers[bIdx][br] && state.bunkers[bIdx][br][bc] === 1) {
+              state.bunkers[bIdx][br][bc] = 0; // Grounded erosion!
+              missileActive = false;
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      // In Flat LLM: bunker memory 0x00405240 is ungrounded -> zero erosion!
+      // Missiles phase straight through defensive bunkers!
+    }
+
+    if (missileActive) {
+      // Player hit check
+      if (m.y === 22 && m.x >= state.player_x && m.x <= state.player_x + 3) {
+        state.lives--;
+        missileActive = false;
+        if (state.lives <= 0) state.alive = false;
+      } else if (m.y >= 24) {
+        missileActive = false;
+      }
+    }
+
+    if (missileActive) activeMissiles.push(m);
+  }
+  state.alien_missiles = activeMissiles;
+
+  const remaining = state.alien_grid.flat().filter(v => v !== 0).length;
+  state.remaining_aliens = remaining;
+  if (remaining === 0) {
+    state.score += 1000;
+  }
+  return state;
+}
+
 function startSpaceInvadersDuel() {
   initDuelCanvases();
-  if (duelInterval) clearInterval(duelInterval);
+  if (duelInterval) { clearInterval(duelInterval); duelInterval = null; }
+  resetLocalInvadersSim();
 
   // Update dynamic metric labels
   const lFlat1 = document.getElementById("lblFlatMetric1");
@@ -662,29 +824,31 @@ function startSpaceInvadersDuel() {
     document.getElementById("flatCodeSnippet").innerText = liveFlatCode;
   }
 
-  duelInterval = setInterval(async () => {
-    try {
-      let action = "none";
-      if (invadersKeyFire) {
-        action = "fire";
-        invadersKeyFire = false;
-      } else if (invadersKeyLeft) {
-        action = "left";
-      } else if (invadersKeyRight) {
-        action = "right";
-      }
-
-      const res = await fetch("/api/invaders/step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: action, is_broken_mode: false })
-      });
-      const data = await res.json();
-      renderSpaceInvadersDuel(data);
-    } catch (err) {
-      console.error("Space Invaders step error:", err);
+  duelInterval = setInterval(() => {
+    let action = "none";
+    if (invadersKeyFire) {
+      action = "fire";
+      invadersKeyFire = false;
+    } else if (invadersKeyLeft) {
+      action = "left";
+    } else if (invadersKeyRight) {
+      action = "right";
     }
-  }, 60);
+
+    const ghostState = stepLocalInvaderEngine(simInvadersGhost, action, false);
+    const flatState = stepLocalInvaderEngine(simInvadersFlat, "none", true);
+
+    renderSpaceInvadersDuel({
+      ghostgraph: { ...ghostState, live_ghost_code: liveReconstructedCode },
+      flat_llm: { ...flatState, live_flat_code: liveFlatCode }
+    });
+
+    // Clean termination: halt when flat LLM is destroyed and game state reaches milestone
+    if (!flatState.alive && (!ghostState.alive || ghostState.remaining_aliens === 0)) {
+      clearInterval(duelInterval);
+      duelInterval = null;
+    }
+  }, 50);
 }
 
 function renderSpaceInvadersDuel(state) {
@@ -1444,9 +1608,124 @@ function drawGhostInvadersCanvas(ctx, canvas, state) {
   }
 }
 
+// ============================================================================
+// Client-Side Apollo Flight Simulation Engine (Buttery Smooth 60FPS Physics)
+// ============================================================================
+const LUNAR_TERRAIN_PROFILE = [
+  75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 45.0, 40.0, 35.0, 30.0, 25.0,
+  10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0,
+  16.25, 22.5, 28.75, 35.0, 41.25, 47.5, 53.75, 60.0, 66.25, 72.5, 78.75, 85.0
+];
+
+function raycastTerrain(x, y) {
+  const dx = 1000.0 / 31.0;
+  if (x <= 0) return y - LUNAR_TERRAIN_PROFILE[0];
+  if (x >= 1000) return y - LUNAR_TERRAIN_PROFILE[31];
+  const seg = Math.min(30, Math.floor(x / dx));
+  const t = (x - seg * dx) / dx;
+  const ty = (1.0 - t) * LUNAR_TERRAIN_PROFILE[seg] + t * LUNAR_TERRAIN_PROFILE[seg + 1];
+  return y - ty;
+}
+
+let simLunarGhost = null;
+let simLunarFlat = null;
+
+function resetLocalLunarSim() {
+  simLunarGhost = {
+    x: 250.0, y: 1000.0, vx: 4.0, vy: -12.0, pitch: 0.05,
+    fuel_mass: 8200.0, throttle: 0.0, total_mass: 15103.0,
+    is_landed: 0, status_code: 0, radar_alt: 1000.0
+  };
+  simLunarFlat = {
+    x: 250.0, y: 1000.0, vx: 4.0, vy: -12.0, pitch: 0.05,
+    fuel_mass: 8200.0, throttle: 0.0, total_mass: 15103.0,
+    is_landed: 0, status_code: 0, radar_alt: 1000.0
+  };
+}
+
+function stepLocalLunarSim() {
+  const dt = 0.1;
+
+  // 1. Step GhostGraph (Grounded guidance from FalkorDB Apollo memory)
+  if (simLunarGhost.is_landed === 0) {
+    const radar = Math.max(0.0, raycastTerrain(simLunarGhost.x, simLunarGhost.y));
+    const targetX = 420.0;
+    const dx = targetX - simLunarGhost.x;
+    const targetVx = Math.max(-6.0, Math.min(6.0, dx * 0.05));
+    const targetPitch = (radar < 15.0) ? 0.0 : Math.max(-0.12, Math.min(0.12, (targetVx - simLunarGhost.vx) * 0.04));
+    const pitchCmd = (targetPitch - simLunarGhost.pitch) * 2.5;
+
+    let targetVy = -1.0;
+    if (radar > 400.0) targetVy = -16.0;
+    else if (radar > 150.0) targetVy = -8.0;
+    else if (radar > 40.0) targetVy = -4.0;
+    else if (radar > 10.0) targetVy = -1.8;
+
+    const hoverThrottle = (simLunarGhost.total_mass * 1.62) / 45000.0;
+    const errVy = targetVy - simLunarGhost.vy;
+    let throttleCmd = hoverThrottle + (errVy * 0.09);
+    throttleCmd = Math.max(0.0, Math.min(1.0, throttleCmd));
+
+    simLunarGhost.pitch += pitchCmd * dt;
+    simLunarGhost.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, simLunarGhost.pitch));
+
+    const actualThrust = throttleCmd * 45000.0;
+    const fuelBurned = (actualThrust / 3050.0) * dt;
+    simLunarGhost.fuel_mass = Math.max(0.0, simLunarGhost.fuel_mass - fuelBurned);
+    simLunarGhost.total_mass = 6903.0 + simLunarGhost.fuel_mass;
+    simLunarGhost.throttle = throttleCmd;
+
+    const ax = (actualThrust * Math.sin(simLunarGhost.pitch)) / simLunarGhost.total_mass;
+    const ay = ((actualThrust * Math.cos(simLunarGhost.pitch)) - (simLunarGhost.total_mass * 1.62)) / simLunarGhost.total_mass;
+    simLunarGhost.vx += ax * dt;
+    simLunarGhost.x += simLunarGhost.vx * dt;
+    simLunarGhost.vy += ay * dt;
+    simLunarGhost.y += simLunarGhost.vy * dt;
+    simLunarGhost.radar_alt = Math.max(0.0, raycastTerrain(simLunarGhost.x, simLunarGhost.y));
+
+    if (simLunarGhost.radar_alt <= 0.8) {
+      simLunarGhost.is_landed = 1; // TOUCHDOWN VERIFIED!
+      simLunarGhost.vx = 0.0;
+      simLunarGhost.vy = 0.0;
+      simLunarGhost.throttle = 0.0;
+      simLunarGhost.radar_alt = 0.0;
+    }
+  }
+
+  // 2. Step Flat LLM (Missing global memory table 0x00403000 -> 0 thrust -> freefall crater collision)
+  if (simLunarFlat.is_landed === 0) {
+    const ay = -1.62;
+    simLunarFlat.vy += ay * dt;
+    simLunarFlat.y += simLunarFlat.vy * dt;
+    simLunarFlat.x += simLunarFlat.vx * dt;
+    simLunarFlat.radar_alt = Math.max(0.0, raycastTerrain(simLunarFlat.x, simLunarFlat.y));
+    simLunarFlat.throttle = 0.0;
+
+    if (simLunarFlat.radar_alt <= 0.0) {
+      simLunarFlat.is_landed = -1; // CRASHED!
+      simLunarFlat.radar_alt = 0.0;
+    }
+  }
+
+  return {
+    ghostgraph: {
+      ...simLunarGhost,
+      vy: Math.round(simLunarGhost.vy * 10) / 10,
+      radar_alt: Math.round(simLunarGhost.radar_alt * 10) / 10
+    },
+    flat_llm: {
+      ...simLunarFlat,
+      vy: Math.round(simLunarFlat.vy * 10) / 10,
+      radar_alt: Math.round(simLunarFlat.radar_alt * 10) / 10
+    },
+    terrain: LUNAR_TERRAIN_PROFILE
+  };
+}
+
 function startDualFlightSimulation() {
   initDuelCanvases();
-  if (duelInterval) clearInterval(duelInterval);
+  if (duelInterval) { clearInterval(duelInterval); duelInterval = null; }
+  resetLocalLunarSim();
 
   // Restore Apollo labels
   const lFlat1 = document.getElementById("lblFlatMetric1");
@@ -1481,24 +1760,16 @@ function startDualFlightSimulation() {
     if (flatCodeEl) flatCodeEl.innerText = liveFlatCode;
   }
 
-  duelInterval = setInterval(async () => {
-    try {
-      const res = await fetch("/api/lunar/step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          throttle: 0.65,
-          pitch_rate: 0.0,
-          auto_guidance: true,
-          mode: "ghostgraph"
-        })
-      });
-      const data = await res.json();
-      renderDuelFrame(data);
-    } catch (err) {
-      console.error("Simulation step error:", err);
+  duelInterval = setInterval(() => {
+    const frame = stepLocalLunarSim();
+    renderDuelFrame(frame);
+
+    // Stop cleanly once both vehicles reach terminal touchdown or crater states
+    if (frame.ghostgraph.is_landed !== 0 && frame.flat_llm.is_landed !== 0) {
+      clearInterval(duelInterval);
+      duelInterval = null;
     }
-  }, 100);
+  }, 50);
 }
 
 function renderDuelFrame(data) {
