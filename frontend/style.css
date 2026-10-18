@@ -58,6 +58,15 @@ html, body {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.025);
 }
 
+.nav-pill-bar > *,
+.nav-pill-bar button,
+.nav-pill-bar a,
+.nav-link-item,
+.nav-link-item > * {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 /* Tactile 3D Matte Black Primary CTA Button (Exact Match to Reference) */
 .btn-tactile-black {
   background: linear-gradient(180deg, #2b2b2f 0%, #151518 48%, #0b0b0d 100%);

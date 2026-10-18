@@ -37,44 +37,44 @@
     <!-- ================================================================== -->
     <!-- FLOATING TOP PILL NAVBAR (Persistent & Identical to Reference)     -->
     <!-- ================================================================== -->
-    <header class="w-full pt-7 pb-3 px-6 md:px-12 z-20">
-      <nav class="nav-pill-bar max-w-[920px] mx-auto pl-6 pr-2.5 py-2 flex items-center justify-between">
+    <header class="w-full pt-7 pb-3 px-4 md:px-10 z-20">
+      <nav class="nav-pill-bar max-w-[1140px] mx-auto pl-6 pr-2.5 py-2 flex items-center justify-between gap-4">
         
         <!-- Left Brand Mark -->
-        <button onclick="showHomeScreen()" class="flex items-center gap-2.5 text-left group focus:outline-none">
-          <svg class="w-6 h-6 text-[#0b0b0e]" viewBox="0 0 24 24" fill="none">
+        <button onclick="showHomeScreen()" class="flex-none whitespace-nowrap flex items-center gap-2.5 text-left group focus:outline-none">
+          <svg class="w-6 h-6 text-[#0b0b0e] flex-none" viewBox="0 0 24 24" fill="none">
             <path d="M16.5 7.5C15.3 6.2 13.6 5.5 11.7 5.5C8.0 5.5 5 8.4 5 12C5 15.6 8.0 18.5 11.7 18.5C13.6 18.5 15.3 17.8 16.5 16.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
             <circle cx="17.5" cy="12" r="2.2" fill="currentColor"/>
           </svg>
-          <span class="font-bold text-[16px] tracking-tight text-[#0b0b0e]">GhostGraph</span>
+          <span class="font-bold text-[16px] tracking-tight text-[#0b0b0e] flex-none whitespace-nowrap">GhostGraph</span>
         </button>
 
         <!-- Center Navigation Links -->
-        <div class="hidden md:flex items-center gap-7 text-[14px] font-medium text-[#1c1d21]">
-          <button onclick="showHomeScreen()" class="hover:text-[#6b7280] transition-colors">Home</button>
-          <button onclick="openTargetSelectorModal()" class="hover:text-[#6b7280] transition-colors">Targets</button>
-          <button onclick="selectTarget(currentTargetId || 'space_invaders')" class="hover:text-[#6b7280] transition-colors">Studio</button>
-          <button onclick="showDuelScreen()" class="hover:text-[#6b7280] transition-colors">Live Duel</button>
-          <button onclick="openCypherModal()" class="hover:text-[#6b7280] transition-colors flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-[#6b7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
-            <span>Cypher Console</span>
+        <div class="hidden md:flex flex-none items-center gap-5 lg:gap-6 text-[14px] font-medium text-[#1c1d21] whitespace-nowrap">
+          <button onclick="showHomeScreen()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Home</button>
+          <button onclick="openTargetSelectorModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Targets</button>
+          <button onclick="selectTarget(currentTargetId || 'space_invaders')" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Studio</button>
+          <button onclick="showDuelScreen()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Live Duel</button>
+          <button onclick="openCypherModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-[#6b7280] flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            <span class="flex-none whitespace-nowrap">Cypher Console</span>
           </button>
-          <button onclick="openGuideModal()" class="hover:text-[#6b7280] transition-colors flex items-center gap-1.5 text-[#4b5563]">
-            <span class="w-4 h-4 rounded-full bg-[#f3f4f6] text-[#141417] text-[10px] font-bold inline-flex items-center justify-center">?</span>
-            <span>Guide</span>
+          <button onclick="openGuideModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors flex items-center gap-1.5 text-[#4b5563]">
+            <span class="w-4 h-4 rounded-full bg-[#f3f4f6] text-[#141417] text-[10px] font-bold inline-flex items-center justify-center flex-none">?</span>
+            <span class="flex-none whitespace-nowrap">Guide</span>
           </button>
         </div>
 
         <!-- Right Action Strip: FalkorDB Connection Transparency (Bug #8) + Upload Button -->
-        <div class="flex items-center gap-2.5">
-          <div id="falkorStatusBadge" class="hidden sm:flex items-center gap-2 bg-[#f3f4f6] px-3.5 py-2 rounded-full text-[12px] font-medium text-[#374151] border border-[#e5e7eb] cursor-default" title="FalkorDB Connection Status">
-            <span id="falkorStatusDot" class="w-2 h-2 rounded-full bg-[#d97706] animate-pulse"></span>
-            <span id="falkorStatusLabel">FalkorDB: Checking...</span>
+        <div class="flex flex-none items-center gap-2.5 whitespace-nowrap">
+          <div id="falkorStatusBadge" class="hidden sm:flex flex-none whitespace-nowrap items-center gap-2 bg-[#f3f4f6] px-3.5 py-2 rounded-full text-[12px] font-medium text-[#374151] border border-[#e5e7eb] cursor-default" title="FalkorDB Connection Status">
+            <span id="falkorStatusDot" class="w-2 h-2 rounded-full bg-[#d97706] animate-pulse flex-none"></span>
+            <span id="falkorStatusLabel" class="flex-none whitespace-nowrap">FalkorDB: Checking...</span>
           </div>
 
-          <button onclick="triggerBinaryUpload()" class="bg-[#f3f4f6] hover:bg-[#e7e9ee] text-[#0b0b0e] font-semibold text-[13px] px-5 py-2.5 rounded-full transition-colors flex items-center gap-2">
-            <span>Upload Binary</span>
-            <svg class="w-3.5 h-3.5 text-[#0b0b0e]" viewBox="0 0 16 16" fill="currentColor">
+          <button onclick="triggerBinaryUpload()" class="flex-none whitespace-nowrap bg-[#f3f4f6] hover:bg-[#e7e9ee] text-[#0b0b0e] font-semibold text-[13px] px-5 py-2.5 rounded-full transition-colors flex items-center gap-2">
+            <span class="flex-none whitespace-nowrap">Upload Binary</span>
+            <svg class="w-3.5 h-3.5 text-[#0b0b0e] flex-none" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.414A2 2 0 0 0 13.414 4L12 2.586A2 2 0 0 0 10.586 2H4zm4 3.5a.75.75 0 0 1 .75.75v2.69l1.22-1.22a.75.75 0 1 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.22 1.22V6.25A.75.75 0 0 1 8 5.5z"/>
             </svg>
           </button>
@@ -179,24 +179,24 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2.5">
-          <div id="studioFalkorBadge" class="hidden sm:flex items-center gap-2 bg-white px-3.5 py-2 rounded-full border border-[#e5e7eb] text-[12px] font-medium text-[#374151]" title="FalkorDB Engine Status">
-            <span id="studioFalkorDot" class="w-2 h-2 rounded-full bg-[#16a34a]"></span>
-            <span id="studioFalkorLabel">FalkorDB Connected</span>
+        <div class="flex flex-wrap md:flex-nowrap flex-none items-center gap-2.5 whitespace-nowrap">
+          <div id="studioFalkorBadge" class="hidden sm:flex flex-none whitespace-nowrap items-center gap-2 bg-white px-3.5 py-2 rounded-full border border-[#e5e7eb] text-[12px] font-medium text-[#374151]" title="FalkorDB Engine Status">
+            <span id="studioFalkorDot" class="w-2 h-2 rounded-full bg-[#16a34a] flex-none"></span>
+            <span id="studioFalkorLabel" class="flex-none whitespace-nowrap">FalkorDB Connected</span>
           </div>
-          <button onclick="openCypherModal()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-[#0b0b0e]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
-            <span>Cypher</span>
+          <button onclick="openCypherModal()" class="flex-none whitespace-nowrap px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-[#0b0b0e] flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            <span class="flex-none whitespace-nowrap">Cypher</span>
           </button>
-          <button onclick="exportReconstructedProject()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
+          <button onclick="exportReconstructedProject()" class="flex-none whitespace-nowrap px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
             Export Project
           </button>
-          <button onclick="openTargetSelectorModal()" class="px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
+          <button onclick="openTargetSelectorModal()" class="flex-none whitespace-nowrap px-4 py-2 bg-white hover:bg-[#f3f4f6] text-[#141417] font-medium text-[13px] rounded-full border border-[#e4e5e9] transition-colors">
             Switch Binary
           </button>
-          <button id="btnGoToDuel" onclick="showDuelScreen()" class="hidden btn-tactile-black px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-2">
-            <span>Open Live Duel</span>
-            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
+          <button id="btnGoToDuel" onclick="showDuelScreen()" class="hidden flex-none whitespace-nowrap btn-tactile-black px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-2">
+            <span class="flex-none whitespace-nowrap">Open Live Duel</span>
+            <svg class="w-3.5 h-3.5 flex-none" viewBox="0 0 16 16" fill="none">
               <path d="M6 3.5L10.5 8L6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
@@ -288,14 +288,14 @@
             Watch both reconstructed engines run side-by-side with identical inputs.
           </p>
         </div>
-        <div class="flex items-center gap-2.5">
-          <button onclick="rerunLiveExecution()" class="px-4 py-2 bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#0b0b0e] font-medium text-[13px] rounded-full transition-colors">
+        <div class="flex flex-none items-center gap-2.5 whitespace-nowrap">
+          <button onclick="rerunLiveExecution()" class="flex-none whitespace-nowrap px-4 py-2 bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#0b0b0e] font-medium text-[13px] rounded-full transition-colors">
             Rerun Simulation
           </button>
-          <button onclick="exportReconstructedProject()" class="px-4 py-2 bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#0b0b0e] font-medium text-[13px] rounded-full transition-colors">
+          <button onclick="exportReconstructedProject()" class="flex-none whitespace-nowrap px-4 py-2 bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#0b0b0e] font-medium text-[13px] rounded-full transition-colors">
             Export C Project
           </button>
-          <button onclick="showStudioScreen()" class="btn-tactile-black px-5 py-2 text-[13px] font-medium">
+          <button onclick="showStudioScreen()" class="flex-none whitespace-nowrap btn-tactile-black px-5 py-2 text-[13px] font-medium">
             Back to Studio
           </button>
         </div>
