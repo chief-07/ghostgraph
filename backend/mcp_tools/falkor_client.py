@@ -130,6 +130,11 @@ class FalkorClient:
             return self._graphs[isolated_name]
         return None
 
+    def get_isolated_graph_name(self, target_name: str) -> str:
+        """Returns the canonical isolated multigraph name for a target."""
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
+        return f"ghostgraph_{clean_name}"
+
     def select_target_graph(self, target_name: str) -> str:
         """
         Multigraph Isolation (Hackathon Blueprint Feature 3 & Problem 7):
@@ -137,8 +142,7 @@ class FalkorClient:
         target binary or tenant has its own isolated graph (e.g. ghostgraph_space_invaders, ghostgraph_billing)
         without cross-tenant state bleed or race conditions in concurrent async tasks.
         """
-        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
-        isolated_name = f"ghostgraph_{clean_name}"
+        isolated_name = self.get_isolated_graph_name(target_name)
         _active_graph_name.set(isolated_name)
         self._default_graph_name = isolated_name
 
@@ -312,16 +316,37 @@ class FalkorClient:
                     "address": fn.get("address", ""),
                     "signature": fn.get("signature", ""),
                     "pseudocode": fn.get("pseudocode", ""),
-                    "raw_asm": fn.get("raw_asm", "")
+                    "raw_asm": fn.get("raw_asm", ""),
+                    "confidence": fn.get("confidence", 1.0)
                 }
             return [{"count(f)": len(fns)}]
 
-        # 3. Batch UNWIND Edges (Calls, Reads, Writes)
+        # 3. Batch UNWIND Edges (Calls, Indirect Calls, Reads, Writes)
         if "UNWIND $calls AS c" in cypher:
             calls = params.get("calls", [])
             for c in calls:
                 self._edges.append({"source": c["caller"], "target": c["callee"], "type": "CALLS"})
             return [{"count(r)": len(calls)}]
+
+        if "UNWIND $indirect_calls AS ic" in cypher:
+            ics = params.get("indirect_calls", [])
+            for ic in ics:
+                spec = ic.get("target_specifier", "")
+                spec_id = f"spec_{spec}"
+                self._nodes[spec_id] = {
+                    "type": "SpeculativeTarget",
+                    "specifier": spec,
+                    "name": f"Speculative: {spec}"
+                }
+                self._edges.append({
+                    "source": ic.get("caller", ""),
+                    "target": spec_id,
+                    "type": "INDIRECT_CALL",
+                    "address": ic.get("call_address", ""),
+                    "confidence": ic.get("confidence", 0.65),
+                    "speculative": True
+                })
+            return [{"count(r)": len(ics)}]
 
         if "UNWIND $reads AS r" in cypher:
             reads = params.get("reads", [])
@@ -649,6 +674,25 @@ class FalkorClient:
                     "props": e
                 })
             return results
+
+        # 7c. Speculative Indirect Calls Query Support
+        if "INDIRECT_CALL" in cypher and "RETURN" in cypher:
+            fname = params.get("fname")
+            res = []
+            for e in self._edges:
+                if e.get("type") == "INDIRECT_CALL":
+                    caller = e.get("source")
+                    if fname and caller != fname:
+                        continue
+                    tgt_node = self._nodes.get(e.get("target"), {})
+                    res.append({
+                        "caller": caller,
+                        "call_address": e.get("address", ""),
+                        "target_specifier": tgt_node.get("specifier", e.get("target")),
+                        "confidence": e.get("confidence", 0.65),
+                        "speculative": e.get("speculative", True)
+                    })
+            return res
 
         # 8. Record Candidate & Test Outcomes
         if "PASSED" in cypher and ("MERGE (t:TestCase" in cypher or ":PASSED" in cypher):

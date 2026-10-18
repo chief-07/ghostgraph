@@ -292,6 +292,8 @@ async def execute_custom_cypher(request: Request):
     """
     body = await request.json()
     query = body.get("query", "").strip()
+    target_id = body.get("target_id") or body.get("target") or "lunar_lander"
+    falkor_client.select_target_graph(target_id)
     if not query:
         raise HTTPException(status_code=400, detail="Empty query provided.")
 

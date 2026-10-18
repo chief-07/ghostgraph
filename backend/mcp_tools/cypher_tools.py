@@ -17,7 +17,9 @@ def get_function_context(function_identifier: str, graph_name: Optional[str] = N
     Retrieves the complete topological context of a function by name or hex address:
     - Pseudocode, raw assembly, & signature
     - Callers (incoming call edges)
-    - Callees (outgoing call edges)
+    - Callees (outgoing direct call edges)
+    - Speculative indirect calls (unresolved register/memory calls)
+    - Function confidence score (1.0 = direct entry, 0.70 = linear sweep heuristic)
     - Memory reads and writes
     """
     cypher = """
@@ -25,15 +27,18 @@ def get_function_context(function_identifier: str, graph_name: Optional[str] = N
     WHERE f.name = $id OR f.address = $id
     OPTIONAL MATCH (caller:Function)-[:CALLS]->(f)
     OPTIONAL MATCH (f)-[:CALLS]->(callee:Function)
+    OPTIONAL MATCH (f)-[ic:INDIRECT_CALL]->(st:SpeculativeTarget)
     OPTIONAL MATCH (f)-[:READS]->(read_mem:GlobalMemory)
     OPTIONAL MATCH (f)-[:WRITES]->(write_mem:GlobalMemory)
     RETURN f.name AS name,
            f.address AS address,
            f.signature AS signature,
+           coalesce(f.confidence, 1.0) AS confidence,
            coalesce(f.pseudocode, f.raw_asm, '') AS pseudocode,
            f.raw_asm AS raw_asm,
            collect(DISTINCT coalesce(caller.name, caller.address)) AS callers,
            collect(DISTINCT coalesce(callee.name, callee.address)) AS callees,
+           collect(DISTINCT {target: st.specifier, address: ic.address, confidence: ic.confidence}) AS indirect_calls,
            collect(DISTINCT {address: read_mem.address, label: read_mem.label, type: read_mem.data_type}) AS reads,
            collect(DISTINCT {address: write_mem.address, label: write_mem.label, type: write_mem.data_type}) AS writes
     """
@@ -44,13 +49,42 @@ def get_function_context(function_identifier: str, graph_name: Optional[str] = N
         "name": function_identifier,
         "address": "",
         "signature": f"void {function_identifier}()",
+        "confidence": 1.0,
         "pseudocode": "// Function not found in graph",
         "raw_asm": "",
         "callers": [],
         "callees": [],
+        "indirect_calls": [],
         "reads": [],
         "writes": []
     }
+
+def get_indirect_calls(function_name: Optional[str] = None, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Speculative Indirect Call Query (Track 01 & Problem 11):
+    Retrieves unresolved indirect branch/call sites (e.g. call rax, call [rip+disp])
+    along with their speculative targets and confidence scores.
+    """
+    if function_name:
+        cypher = """
+        MATCH (f:Function {name: $fname})-[r:INDIRECT_CALL]->(tgt:SpeculativeTarget)
+        RETURN f.name AS caller,
+               r.address AS call_address,
+               tgt.specifier AS target_specifier,
+               r.confidence AS confidence,
+               r.speculative AS speculative
+        """
+        return falkor_client.ro_query(cypher, {"fname": function_name}, graph_name=graph_name)
+    else:
+        cypher = """
+        MATCH (f:Function)-[r:INDIRECT_CALL]->(tgt:SpeculativeTarget)
+        RETURN f.name AS caller,
+               r.address AS call_address,
+               tgt.specifier AS target_specifier,
+               r.confidence AS confidence,
+               r.speculative AS speculative
+        """
+        return falkor_client.ro_query(cypher, graph_name=graph_name)
 
 def resolve_memory_source(memory_address: str, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """

@@ -117,7 +117,7 @@ GhostGraph includes 3 live, end-to-end benchmark targets spanning business syste
 └───────────────────────────────┴─────────────────────────────────┴───────────────────────────────┘
 ```
 
-Plus a **Live Custom Binary Upload Engine** powered by the **Capstone Disassembler**, allowing users to upload any raw stripped ELF/PE binary and watch FalkorDB index its call topology and memory dereferences in <120ms.
+Plus a **Live Custom Binary Upload Engine** powered by the **Capstone Disassembler**, allowing users to upload any raw stripped x86_64 ELF64 (Linux) or PE32+ (Windows) binary and watch FalkorDB index its call topology, indirect calls, and memory dereferences in <120ms.
 
 ---
 
@@ -138,8 +138,9 @@ erDiagram
 ```
 
 ### Node Schema:
-- `(:Program {name, arch, sha256, target_type})`
-- `(:Function {name, address, signature, pseudocode, raw_asm})`
+- `(:Program {name, arch, sha256, target_type, instruction_count, functions_count})`
+- `(:Function {name, address, signature, pseudocode, raw_asm, confidence})`
+- `(:SpeculativeTarget {specifier, name})`
 - `(:GlobalMemory {address, label, data_type, size, description})`
 - `(:Struct {name, size})`
 - `(:StructField {name, offset, type})`
@@ -149,9 +150,11 @@ erDiagram
 ### Relationship Schema:
 - `(:Program)-[:CONTAINS]->(:Function)`
 - `(:Function)-[:CALLS]->(:Function)`
+- `(:Function)-[:INDIRECT_CALL {address, confidence, speculative}]->(:SpeculativeTarget)`
 - `(:Function)-[:READS]->(:GlobalMemory)`
 - `(:Function)-[:WRITES]->(:GlobalMemory)`
 - `(:Struct)-[:HAS_FIELD]->(:StructField)`
+- `(:GlobalMemory)-[:MAPS_TO_STRUCT]->(:Struct)`
 - `(:Candidate)-[:RECONSTRUCTS]->(:Function)`
 - `(:Candidate)-[:PASSED]->(:TestCase)`
 - `(:Candidate)-[:FAILED_ON {diff, timestamp}]->(:TestCase)`
@@ -288,9 +291,9 @@ FALKORDB_GRAPH_NAME=ghostgraph
 ### 3. Run Pytest Verification Suite
 Verify live FalkorDB Cloud connectivity and all agent verification tools:
 ```bash
-python -m pytest backend/tests/
+python -m pytest backend/tests/ -v
 ```
-*Expected: 17 passed across console, memory truthfulness, self-healing, status, struct isolation, and differential execution tests.*
+*Expected: 53 passed CI tests across tenant isolation, security sandboxing, HMAC certificate verification, indirect calls & confidence scoring, console guardrails, episodic self-healing memory, and truthful differential execution.*
 
 ### 4. Launch the Interactive Dashboard
 ```bash
@@ -300,18 +303,92 @@ Open **`http://127.0.0.1:8000`** in your browser.
 
 ---
 
+## Supported Binary Architectures & Reverse-Engineering Rigor
+
+GhostGraph strictly targets 64-bit binaries:
+- **x86_64 ELF64 (Linux)**
+- **x86_64 PE32+ (Windows)**
+
+### Rigorous Disassembly & Topology Recovery
+1. **Header Validation:** The ingestion engine inspects ELF headers (`ELFCLASS64`, `e_machine == 62`) and PE headers (`IMAGE_FILE_MACHINE_AMD64 == 0x8664`). Unsupported architectures (e.g. 32-bit x86, ARM) are rejected with clear diagnostics rather than failing silently.
+2. **Speculative Indirect Calls:** Non-immediate call instructions (`call rax`, `call [rip + disp]`) are captured as speculative edges:
+   ```cypher
+   (:Function {name: $caller})-[:INDIRECT_CALL {address: $addr, confidence: 0.65, speculative: true}]->(:SpeculativeTarget {specifier: $target})
+   ```
+   This prevents unresolved indirect control flow from silently breaking call graphs.
+3. **Confidence Scoring:** Recovered `Function` nodes carry an explicit confidence property:
+   - `1.0`: Direct call targets and verified entrypoints.
+   - `0.70`: Functions discovered via linear sweep heuristics following return boundaries.
+
+---
+
+## Cryptographic Verification Certificates (HMAC-SHA256)
+
+Every verified candidate exports a tamper-evident verification certificate signed via **HMAC-SHA256**. The signature is calculated over a canonical verification digest:
+```
+canonical_digest = sha256(f"{target_id}:{candidate_id}:{version}:{status}:{parity}:{passed_tests}:{total_tests}:{source_sha256}:{timestamp}")
+cryptographic_signature = hmac_sha256(canonical_digest, secret_key)
+```
+
+### Public Verification API Endpoint (`POST /api/verify-certificate`)
+External auditors or hackathon judges can independently verify any exported certificate at runtime:
+```bash
+curl -X POST http://127.0.0.1:8000/api/verify-certificate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "certificate": {
+      "canonical_digest_sha256": "4b92b6a6c4df1ec403f0b2fbe0e2e5055b85e054456993a4bc60cecaeef2bf56",
+      "cryptographic_signature": "a7873a1fe7c7a5ba82ddba4250ee6396f01c80eb9a8dc58848ff78b9ec437e49",
+      "signature_algorithm": "HMAC-SHA256",
+      "signing_authority": "GhostGraph Differential Verification Engine",
+      "target_id": "lunar_lander",
+      "candidate_id": "cand_update_newtonian_physics_v1",
+      "candidate_version": 1,
+      "status": "VERIFIED",
+      "mathematical_parity": 100.0,
+      "passed_tests": 20,
+      "total_tests": 20,
+      "source_sha256": "81f7d54401df4e45c4ffb7f739665f979774ba1f3a9e32d60fb26eb1965bb156",
+      "timestamp": 1729267200
+    }
+  }'
+```
+**Response:**
+```json
+{
+  "valid": true,
+  "status": "SIGNATURE_VALID",
+  "candidate_id": "cand_update_newtonian_physics_v1",
+  "parity": 100.0,
+  "details": "Certificate signature cryptographically verified against canonical digest."
+}
+```
+*Any alteration to source code, parity, status, or test counts instantly invalidates the HMAC signature and is flagged as `TAMPERED_CERTIFICATE`.*
+
+---
+
 ## AI Assistant & Human Technical Ownership Disclosure (Rule #11)
 
 In strict compliance with **Hackathon Rule #11**, we transparently disclose our development methodology:
 
-1. **Role of AI Coding Assistants:**  
-   AI assistants (Google Gemini and Antigravity) were utilized as pair-programming execution engines under continuous, direct human instruction. They assisted with boilerplate scaffolding, Capstone disassembler binding, AST conversion routines, and rapid test generation.
-2. **Human Architectural & Technical Ownership (Rule #12 & #13):**  
+1. **Role of AI Models & Multi-Agent Swarm:**  
+   GhostGraph operates an autonomous **ReAct multi-agent swarm** powered by **Google Gemini Flash-Lite** (`gemini-flash-lite-latest`):
+   - **`TopologyAgent`**: Disassembles x86_64 binaries via Capstone and constructs property graphs in FalkorDB Cloud.
+   - **`DetectiveAgent`**: Investigates graph call hierarchies, multi-hop memory provenance, and struct layouts using MCP tools.
+   - **`ArchitectAgent`**: Reconstructs high-level C/Python algorithms grounded in FalkorDB topology.
+   - **`InspectorAgent`**: Executes candidates inside an isolated subprocess sandbox against deterministic test vectors.
+   - **`MemoryAgent`**: Records episodic test failures (`FAILED_ON`) and recalls diffs to guide self-healing convergence.
+   - **Dynamic Graph AST Grounding**: The agents dynamically reason over FalkorDB connected data. If FalkorDB is disconnected or graph evidence is removed, AST synthesis collapses, proving the graph's causal role.
+2. **Role of AI Coding Assistants:**  
+   AI assistants (Google Gemini and Antigravity) were utilized as pair-programming execution engines under continuous, direct human instruction for boilerplate scaffolding, Capstone disassembler binding, AST conversion routines, and test generation.
+3. **Human Architectural & Technical Ownership (Rule #12 & #13):**  
    All core architectures were designed, verified, and debugged by the human team:
-   - The directed property graph schema relating subroutines, memory offsets, and test vectors.
+   - The directed property graph schema relating subroutines, memory offsets, speculative edges, and test vectors.
    - The multi-hop OpenCypher query design that bridges consumer subroutines to producer initialization routines.
-   - The differential AST verification harness and mathematical parity scoring.
+   - The differential AST verification harness, isolated subprocess sandbox, and mathematical parity scoring.
    - The episodic memory feedback mechanism committing `FAILED_ON` diffs to drive self-healing convergence.
+   - The cryptographic HMAC-SHA256 signature verification engine and anti-tampering guards.
+   - The multi-tenant ContextVar graph isolation preserving durable working memory without race conditions.
    - The exclusive enforcement of live FalkorDB Cloud execution with socket resilience.
 
 ---
