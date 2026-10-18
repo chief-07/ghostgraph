@@ -179,12 +179,12 @@ pre, code {
 
 /* Screen Transitions (Discrete Views) */
 .screen-view {
-  display: none;
+  display: none !important;
   opacity: 0;
   transition: opacity 0.18s ease-in-out;
 }
 .screen-view.active {
-  display: flex;
+  display: flex !important;
   opacity: 1;
   flex: 1 1 0%;
   flex-direction: column;
