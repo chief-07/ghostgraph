@@ -101,6 +101,30 @@ TARGETS = {
 frontend_dir = Path(__file__).parent.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+    assets_dir = frontend_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+@app.get("/style.css")
+async def serve_root_css():
+    css_file = frontend_dir / "style.css"
+    if css_file.exists():
+        return HTMLResponse(content=css_file.read_text(encoding="utf-8"), media_type="text/css")
+    raise HTTPException(status_code=404)
+
+@app.get("/app.js")
+async def serve_root_app_js():
+    js_file = frontend_dir / "app.js"
+    if js_file.exists():
+        return HTMLResponse(content=js_file.read_text(encoding="utf-8"), media_type="application/javascript")
+    raise HTTPException(status_code=404)
+
+@app.get("/graph_engine.js")
+async def serve_root_graph_js():
+    js_file = frontend_dir / "graph_engine.js"
+    if js_file.exists():
+        return HTMLResponse(content=js_file.read_text(encoding="utf-8"), media_type="application/javascript")
+    raise HTTPException(status_code=404)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
