@@ -353,7 +353,7 @@ async def stream_reconstruction(
     Streams the live multi-agent execution events (Gemini reasoning,
     Cypher MCP calls, GCC compilation, differential diffs) via Server-Sent Events.
     """
-    iterations = max_iterations if max_iterations is not None else (2 if use_graph else 1)
+    iterations = max_iterations if max_iterations is not None else (5 if use_graph else 1)
     async def event_generator():
         for event in supervisor_agent.run_reconstruction_pipeline(
             target_name=target_id,
