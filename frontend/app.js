@@ -384,6 +384,15 @@ function appendTraceEvent(evt) {
 
   if (evt.type === "PIPELINE_START") {
     div.innerHTML = `<span class="text-[#0284c7] font-bold">[SUPERVISOR]</span> Ingested binary target: ${evt.target_display_name}`;
+  } else if (evt.type === "AGENT_THOUGHT") {
+    div.innerHTML = `<span class="text-[#7c3aed] font-bold">🧠 [${evt.agent || 'REASONING'}]</span> <span class="italic text-gray-700">${evt.message}</span>`;
+  } else if (evt.type === "TOOL_CALL") {
+    const argsStr = evt.args ? `(${Object.entries(evt.args).map(([k, v]) => `${k}="${v}"`).join(', ')})` : '()';
+    div.innerHTML = `<span class="text-[#0284c7] font-bold">🛠️ [TOOL CALL]</span> <code class="bg-gray-100 px-1 py-0.5 rounded text-xs text-blue-800 font-mono">${evt.tool}${argsStr}</code> ${evt.rationale ? `<span class="text-xs text-gray-500">→ ${evt.rationale}</span>` : ''}`;
+  } else if (evt.type === "TOOL_RESULT") {
+    div.innerHTML = `<span class="text-[#059669] font-bold">📥 [TOOL RESULT]</span> <span class="text-xs text-gray-700">${evt.summary || evt.message}</span>`;
+  } else if (evt.type === "EPISODIC_MEMORY") {
+    div.innerHTML = `<span class="text-[#d97706] font-bold">💾 [EPISODIC MEMORY]</span> <span class="text-xs text-amber-900">${evt.message}</span>`;
   } else if (evt.type === "AGENT_STEP") {
     div.innerHTML = `<span class="text-[#d97706] font-bold">[${evt.agent}]</span> ${evt.message}`;
   } else if (evt.type === "MEMORY_RESOLVED") {

@@ -298,17 +298,19 @@ async def stream_reconstruction(
             yield {"data": json.dumps(event)}
             etype = event.get("type", "")
             if etype == "MEMORY_RESOLVED":
-                await asyncio.sleep(0.9)
+                await asyncio.sleep(0.8)
             elif etype in ("CANDIDATE_GENERATED", "VERIFICATION_RESULT"):
-                await asyncio.sleep(0.6)
-            elif etype == "AGENT_STEP":
+                await asyncio.sleep(0.5)
+            elif etype in ("AGENT_THOUGHT", "EPISODIC_MEMORY"):
                 await asyncio.sleep(0.4)
+            elif etype in ("TOOL_CALL", "TOOL_RESULT", "AGENT_STEP"):
+                await asyncio.sleep(0.3)
             elif etype == "TEST_STEP":
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.15)
             elif etype in ("NODE_DISCOVERED", "EDGE_DISCOVERED"):
-                await asyncio.sleep(0.06)
+                await asyncio.sleep(0.04)
             else:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.05)
 
     return EventSourceResponse(event_generator())
 

@@ -322,8 +322,20 @@ class SupervisorAgent:
                     "label": rel_type
                 }
 
-        # Step 2: Multigraph Isolation & Blueprint Tool Trace (Organizer Blueprint Features 2 & 3)
+        # Step 2: Autonomous Multi-Agent Topological Investigation (FalkorDB Graph Reasoning)
         if use_graph_context:
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "TopologyAgent",
+                "message": f"Initiating topological analysis of target '{target_name}'. Executing PageRank over function call graph to discover load-bearing computational hubs."
+            }
+            yield {
+                "type": "TOOL_CALL",
+                "agent": "TopologyAgent",
+                "tool": "compute_function_pagerank",
+                "args": {"limit": 5},
+                "rationale": "Identify high-centrality computational hubs across CALLS topology."
+            }
 
             # Feature 1: Load-Bearing Subroutines via Graph Algorithm (PageRank)
             pagerank_ranks = cypher_tools.compute_function_pagerank(limit=5)
@@ -335,6 +347,12 @@ class SupervisorAgent:
                 fn_to_reconstruct = pr_functions[0]
 
             yield {
+                "type": "TOOL_RESULT",
+                "agent": "TopologyAgent",
+                "tool": "compute_function_pagerank",
+                "summary": f"Ranked {len(pr_functions)} subroutines by PageRank centrality: {', '.join(pr_functions[:3])}"
+            }
+            yield {
                 "type": "AGENT_STEP",
                 "agent": "TopologyAgent",
                 "action": "NATIVE_GRAPH_ALGORITHM_PAGERANK",
@@ -342,9 +360,29 @@ class SupervisorAgent:
                 "trace": falkor_client.last_query_trace
             }
 
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "DetectiveAgent",
+                "message": f"Investigating memory dependencies for '{fn_to_reconstruct}'. Tracing multi-hop execution call path from initialization producer '{prod_fn}'."
+            }
+            yield {
+                "type": "TOOL_CALL",
+                "agent": "DetectiveAgent",
+                "tool": "find_shortest_call_path",
+                "args": {"start": prod_fn, "target": fn_to_reconstruct},
+                "rationale": "Validate execution reachability between memory initialization and consumption."
+            }
+
             # Feature 4: Explicit Multi-Hop Call Path behind the answer
             shortest_path = cypher_tools.find_shortest_call_path(prod_fn, fn_to_reconstruct)
             call_chain = shortest_path.get("path_nodes", [])
+
+            yield {
+                "type": "TOOL_RESULT",
+                "agent": "DetectiveAgent",
+                "tool": "find_shortest_call_path",
+                "summary": f"Execution path discovered: {shortest_path.get('formatted', '')}"
+            }
             yield {
                 "type": "AGENT_STEP",
                 "agent": "TopologyAgent",
@@ -353,11 +391,30 @@ class SupervisorAgent:
                 "path": call_chain
             }
 
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "DetectiveAgent",
+                "message": f"Scanning disassembly for memory references. Detected detached pointer '{crit_mem}'. Querying FalkorDB memory provenance."
+            }
+            yield {
+                "type": "TOOL_CALL",
+                "agent": "DetectiveAgent",
+                "tool": "resolve_memory_source",
+                "args": {"address": crit_mem},
+                "rationale": "Resolve which producer subroutine initializes this memory buffer and retrieve its data layout."
+            }
+
             # Query real provenance from FalkorDB using ro_query (Bug #6: truthful check)
             prov = cypher_tools.resolve_memory_source(crit_mem)
             if prov and prov[0].get("producer_function"):
                 real_label = prov[0].get("label") or crit_label
                 real_prod = prov[0].get("producer_function")
+                yield {
+                    "type": "TOOL_RESULT",
+                    "agent": "DetectiveAgent",
+                    "tool": "resolve_memory_source",
+                    "summary": f"Memory buffer '{crit_mem}' grounded to '{real_label}' initialized by '{real_prod}'"
+                }
                 yield {
                     "type": "MEMORY_RESOLVED",
                     "address": crit_mem,
@@ -393,6 +450,12 @@ class SupervisorAgent:
                     logger.info(f"FalkorDB verified that {fn_to_reconstruct} does not have a direct READS edge to {crit_mem}; skipping unverified edge.")
             else:
                 yield {
+                    "type": "TOOL_RESULT",
+                    "agent": "DetectiveAgent",
+                    "tool": "resolve_memory_source",
+                    "summary": f"Memory address '{crit_mem}' producer could not be resolved from topology."
+                }
+                yield {
                     "type": "MEMORY_UNRESOLVED",
                     "address": crit_mem,
                     "consumer": fn_to_reconstruct,
@@ -402,18 +465,35 @@ class SupervisorAgent:
         else:
             call_chain = []
             yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "ReconstructionAgent",
+                "message": f"Isolated LLM mode requested. Disabling all FalkorDB topological and memory graph queries. Pointers will remain ungrounded."
+            }
+            yield {
                 "type": "AGENT_STEP",
                 "agent": "ReconstructionAgent",
                 "action": "FLAT_ISOLATED_INFERENCE",
                 "message": f"Isolated LLM inference on {fn_to_reconstruct} with ZERO graph context. Pointers remain ungrounded."
             }
 
-        # Step 3: Real Candidate Code Synthesis via Gemini 3.1 Flash-Lite
+        # Step 3: Real Candidate Code Synthesis via Gemini Flash-Lite
+        yield {
+            "type": "AGENT_THOUGHT",
+            "agent": "ArchitectAgent",
+            "message": f"Graph context gathered (memory buffers: {len(prov) if use_graph_context and prov else 0}, call chain: {' -> '.join(call_chain) if call_chain else 'None'}). Requesting code synthesis for '{fn_to_reconstruct}' via Google Gemini Flash-Lite."
+        }
+        yield {
+            "type": "TOOL_CALL",
+            "agent": "ArchitectAgent",
+            "tool": "reconstruct_function",
+            "args": {"function": fn_to_reconstruct, "version": 1, "use_graph_context": use_graph_context},
+            "rationale": "Perform grounded code generation using multi-hop graph topology."
+        }
         yield {
             "type": "AGENT_STEP",
             "agent": "ReconstructionAgent",
             "action": f"SYNTHESIZE_{target_language.upper()}",
-            "message": f"Synthesizing '{fn_to_reconstruct}' via Gemini 3.1 Flash-Lite (use_graph_context={use_graph_context})..."
+            "message": f"Synthesizing '{fn_to_reconstruct}' via Gemini Flash-Lite (use_graph_context={use_graph_context})..."
         }
 
         recon_result = self.reconstructor.reconstruct_function(
@@ -446,6 +526,18 @@ class SupervisorAgent:
         }
 
         # Step 4: Verification Agent (Real Compilation + 20 Differential Test Vectors)
+        yield {
+            "type": "AGENT_THOUGHT",
+            "agent": "InspectorAgent",
+            "message": f"Candidate {candidate_id} generated. Commencing differential verification across 20 test vectors in isolated execution sandbox."
+        }
+        yield {
+            "type": "TOOL_CALL",
+            "agent": "InspectorAgent",
+            "tool": "run_differential_verification",
+            "args": {"candidate_id": candidate_id, "target": target_name},
+            "rationale": "Evaluate candidate outputs against reference ground truth vectors."
+        }
         yield {
             "type": "AGENT_STEP",
             "agent": "VerificationAgent",
@@ -493,12 +585,38 @@ class SupervisorAgent:
             "message": f"Verification Result: {parity}% Parity ({passed_count}/{total_count} Tests Passed)"
         }
 
-        # Step 5: Multi-Turn Self-Healing Refinement (Track 02: Episodic Memory in FalkorDB)
+        # Step 5: Closed-Loop Episodic Memory Storage & Self-Healing (Track 02)
         current_version = 1
         converged = (parity == 100.0)
 
+        # Record failed test vectors into FalkorDB episodic memory graph
+        if not converged and use_graph_context:
+            failed_tests = [tc for tc in diff_summary.get("results", []) if tc.get("status") != "PASSED"]
+            for tc in failed_tests:
+                cypher_tools.record_test_outcome(candidate_id, tc["test_id"], passed=False, diff=tc.get("diff") or "")
+            yield {
+                "type": "EPISODIC_MEMORY",
+                "agent": "MemoryAgent",
+                "action": "STORE_FAILURE_FEEDBACK",
+                "candidate_id": candidate_id,
+                "failed_count": len(failed_tests),
+                "message": f"Persisted {len(failed_tests)} failing test vector(s) into FalkorDB episodic memory: (:Candidate {{id: '{candidate_id}'}})-[:FAILED_ON]->(:TestCase)."
+            }
+
         while current_version < max_iterations and not converged and use_graph_context:
             current_version += 1
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "MemoryAgent",
+                "message": f"Candidate v{current_version - 1} achieved {parity}% parity ({passed_count}/{total_count} passed). Querying FalkorDB failure memory to recall exact failure diffs for self-healing."
+            }
+            yield {
+                "type": "TOOL_CALL",
+                "agent": "MemoryAgent",
+                "tool": "fetch_failure_memory",
+                "args": {"target": target_name, "version": current_version - 1, "function": fn_to_reconstruct},
+                "rationale": f"Recall episodic failure records of Candidate v{current_version - 1} from FalkorDB."
+            }
             yield {
                 "type": "AGENT_STEP",
                 "agent": "SupervisorAgent",
@@ -526,6 +644,17 @@ class SupervisorAgent:
 
             recalled_count = recon_result.get("recalled_failures_count", 0)
             yield {
+                "type": "TOOL_RESULT",
+                "agent": "MemoryAgent",
+                "tool": "fetch_failure_memory",
+                "summary": f"Recalled {recalled_count} failure memories from FalkorDB for targeted repair."
+            }
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "ArchitectAgent",
+                "message": f"Refined Candidate v{current_version} synthesized using {recalled_count} recalled failure memories from FalkorDB."
+            }
+            yield {
                 "type": "CANDIDATE_GENERATED",
                 "candidate_id": candidate_id,
                 "target_function": fn_to_reconstruct,
@@ -537,6 +666,18 @@ class SupervisorAgent:
                 "message": f"Synthesized Candidate {candidate_id} (v{current_version}) using {recalled_count} failure memories from FalkorDB."
             }
 
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "InspectorAgent",
+                "message": f"Re-executing differential test suite on refined Candidate v{current_version} in sandbox."
+            }
+            yield {
+                "type": "TOOL_CALL",
+                "agent": "InspectorAgent",
+                "tool": "run_differential_verification",
+                "args": {"candidate_id": candidate_id, "version": current_version},
+                "rationale": "Verify whether memory-guided repairs achieved full parity."
+            }
             yield {
                 "type": "AGENT_STEP",
                 "agent": "VerificationAgent",
@@ -575,6 +716,26 @@ class SupervisorAgent:
                 "total": total_count,
                 "parity_percentage": parity,
                 "message": f"Self-Healing Result (v{current_version}): {parity}% Parity ({passed_count}/{total_count} Tests Passed)"
+            }
+
+            if not converged:
+                failed_tests = [tc for tc in diff_summary.get("results", []) if tc.get("status") != "PASSED"]
+                for tc in failed_tests:
+                    cypher_tools.record_test_outcome(candidate_id, tc["test_id"], passed=False, diff=tc.get("diff") or "")
+                yield {
+                    "type": "EPISODIC_MEMORY",
+                    "agent": "MemoryAgent",
+                    "action": "STORE_FAILURE_FEEDBACK",
+                    "candidate_id": candidate_id,
+                    "failed_count": len(failed_tests),
+                    "message": f"Persisted {len(failed_tests)} failing test vector(s) into FalkorDB episodic memory: (:Candidate {{id: '{candidate_id}'}})-[:FAILED_ON]->(:TestCase)."
+                }
+
+        if converged:
+            yield {
+                "type": "AGENT_THOUGHT",
+                "agent": "SupervisorAgent",
+                "message": f"Differential verification succeeded with 100.0% parity. All test vectors match reference ground truth. Candidate {candidate_id} verified."
             }
 
         # Step 6: Pipeline Completion
