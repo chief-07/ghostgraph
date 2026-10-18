@@ -12,6 +12,11 @@ from backend.mcp_tools.falkor_client import falkor_client
 
 logger = logging.getLogger("ghostgraph.topology_agent")
 
+SUPPORTED_BINARY_ARCHITECTURES = [
+    "x86_64 ELF64 (Linux)",
+    "x86_64 PE32+ (Windows)"
+]
+
 class TopologyAgent:
     """Agent that ingests and maps binary decompilation artifacts into FalkorDB."""
 
@@ -37,8 +42,13 @@ class TopologyAgent:
     ) -> Dict[str, Any]:
         """
         Genuinely disassembles machine code bytes using Capstone,
-        extracts function boundaries, call graphs, and RIP-relative memory references,
-        and persists the topological graph directly into FalkorDB Cloud (multigraph isolated).
+        extracts function boundaries, call graphs, RIP-relative memory references,
+        and speculative indirect call edges, persisting the topological graph
+        directly into FalkorDB Cloud (multigraph isolated).
+
+        Supported Binary Architectures:
+        - x86_64 ELF64 (Linux)
+        - x86_64 PE32+ (Windows)
         """
         import struct
         import capstone
@@ -47,37 +57,52 @@ class TopologyAgent:
         if target_id:
             self.client.select_target_graph(target_id)
 
-        # Step 1: Detect ELF or PE (.exe) headers if present to find code offset & entrypoint
+        # Step 1: Detect ELF or PE (.exe) headers with architecture validation
         code_bytes = binary_data
         load_addr = base_address
 
         if binary_data.startswith(b"\x7fELF"):
+            if len(binary_data) < 54 or binary_data[4] != 2:  # 2 = ELFCLASS64
+                raise ValueError(
+                    f"Unsupported binary architecture. GhostGraph engine targets: {', '.join(SUPPORTED_BINARY_ARCHITECTURES)}. "
+                    "Provided ELF is not 64-bit (ELFCLASS64)."
+                )
+            e_machine = struct.unpack_from("<H", binary_data, 18)[0]
+            if e_machine != 62:  # 62 (0x3E) = EM_X86_64
+                raise ValueError(
+                    f"Unsupported binary architecture. GhostGraph engine targets: {', '.join(SUPPORTED_BINARY_ARCHITECTURES)}. "
+                    f"Provided ELF machine type {e_machine} is not x86_64 (62)."
+                )
             try:
-                if binary_data[4] == 2:  # ELFCLASS64
-                    e_entry = struct.unpack_from("<Q", binary_data, 24)[0]
-                    e_phoff = struct.unpack_from("<Q", binary_data, 32)[0]
-                    e_phentsize = struct.unpack_from("<H", binary_data, 54)[0]
-                    e_phnum = struct.unpack_from("<H", binary_data, 56)[0]
+                e_entry = struct.unpack_from("<Q", binary_data, 24)[0]
+                e_phoff = struct.unpack_from("<Q", binary_data, 32)[0]
+                e_phentsize = struct.unpack_from("<H", binary_data, 54)[0]
+                e_phnum = struct.unpack_from("<H", binary_data, 56)[0]
 
-                    for i in range(e_phnum):
-                        offset = e_phoff + (i * e_phentsize)
-                        p_type, p_flags = struct.unpack_from("<II", binary_data, offset)
-                        if p_type == 1 and (p_flags & 1):  # PT_LOAD & PF_X
-                            p_offset = struct.unpack_from("<Q", binary_data, offset + 8)[0]
-                            p_vaddr = struct.unpack_from("<Q", binary_data, offset + 16)[0]
-                            p_filesz = struct.unpack_from("<Q", binary_data, offset + 32)[0]
-                            if p_filesz > 0 and p_offset < len(binary_data):
-                                code_bytes = binary_data[p_offset : p_offset + p_filesz]
-                                load_addr = p_vaddr
-                                break
-                    if e_entry != 0:
-                        load_addr = e_entry
+                for i in range(e_phnum):
+                    offset = e_phoff + (i * e_phentsize)
+                    p_type, p_flags = struct.unpack_from("<II", binary_data, offset)
+                    if p_type == 1 and (p_flags & 1):  # PT_LOAD & PF_X
+                        p_offset = struct.unpack_from("<Q", binary_data, offset + 8)[0]
+                        p_vaddr = struct.unpack_from("<Q", binary_data, offset + 16)[0]
+                        p_filesz = struct.unpack_from("<Q", binary_data, offset + 32)[0]
+                        if p_filesz > 0 and p_offset < len(binary_data):
+                            code_bytes = binary_data[p_offset : p_offset + p_filesz]
+                            load_addr = p_vaddr
+                            break
+                if e_entry != 0:
+                    load_addr = e_entry
             except Exception as e:
                 logger.debug(f"ELF parse note: {e}")
         elif binary_data.startswith(b"MZ"):
             try:
                 import pefile
                 pe = pefile.PE(data=binary_data)
+                if hasattr(pe, "FILE_HEADER") and pe.FILE_HEADER.Machine != 0x8664:  # IMAGE_FILE_MACHINE_AMD64
+                    raise ValueError(
+                        f"Unsupported binary architecture. GhostGraph engine targets: {', '.join(SUPPORTED_BINARY_ARCHITECTURES)}. "
+                        f"Provided PE machine type 0x{pe.FILE_HEADER.Machine:X} is not PE32+ / AMD64 (0x8664)."
+                    )
                 # Look for executable section (usually .text)
                 for section in pe.sections:
                     if section.Characteristics & 0x20000000:  # IMAGE_SCN_MEM_EXECUTE
@@ -88,10 +113,12 @@ class TopologyAgent:
                             break
                 if hasattr(pe, "OPTIONAL_HEADER") and pe.OPTIONAL_HEADER.AddressOfEntryPoint:
                     load_addr = pe.OPTIONAL_HEADER.ImageBase + pe.OPTIONAL_HEADER.AddressOfEntryPoint
+            except ValueError:
+                raise
             except Exception as e:
                 logger.debug(f"PE parse note: {e}")
 
-        # Step 2: Full Instruction Disassembly with Capstone
+        # Step 2: Full Instruction Disassembly with Capstone (64-bit x86 mode)
         md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
         md.detail = True
 
@@ -103,7 +130,7 @@ class TopologyAgent:
                 "functions_count": 0
             }
 
-        # Step 3: Discover Function Boundaries & Call Destinations
+        # Step 3: Discover Function Boundaries, Entry Points & Indirect Calls
         insn_by_addr = {insn.address: insn for insn in instructions}
         call_targets = set()
         ret_addrs = set()
@@ -114,19 +141,33 @@ class TopologyAgent:
                     target_addr = int(insn.op_str, 16)
                     call_targets.add(target_addr)
                 except ValueError:
+                    # Non-immediate call: indirect call (e.g., call rax, call [rip+0x200])
                     pass
             elif insn.group(capstone.CS_GRP_RET):
                 ret_addrs.add(insn.address)
 
-        entry_points = sorted(list(call_targets | {load_addr}))
+        direct_entry_points = set(call_targets | {load_addr})
+
+        # Heuristic linear-sweep discovery: identify function entry points following return statements
+        heuristic_entry_points = set()
+        saw_ret = False
+        for insn in instructions:
+            if saw_ret:
+                if insn.address not in direct_entry_points:
+                    heuristic_entry_points.add(insn.address)
+                saw_ret = False
+            if insn.address in ret_addrs:
+                saw_ret = True
+
+        all_entries = sorted(list(direct_entry_points | heuristic_entry_points))
 
         functions = []
         function_map = {}
 
-        for i, entry in enumerate(entry_points):
+        for i, entry in enumerate(all_entries):
             fn_name = f"sub_{entry:08x}" if entry != load_addr else "main_entry"
             fn_insns = []
-            next_entry = entry_points[i + 1] if i + 1 < len(entry_points) else float("inf")
+            next_entry = all_entries[i + 1] if i + 1 < len(all_entries) else float("inf")
 
             cur = entry
             while cur in insn_by_addr and cur < next_entry:
@@ -136,18 +177,23 @@ class TopologyAgent:
                 if insn.address in ret_addrs:
                     break
 
+            # Confidence scoring: 1.0 for direct call targets/entry, 0.70 for linear sweep heuristics
+            confidence = 1.0 if entry in direct_entry_points else 0.70
+
             if fn_insns:
                 functions.append({
                     "name": fn_name,
                     "address": f"0x{entry:08X}",
                     "instruction_count": len(fn_insns),
                     "instructions": fn_insns,
+                    "confidence": confidence,
                     "asm_text": "\n".join(f"0x{ins.address:08X}: {ins.mnemonic} {ins.op_str}" for ins in fn_insns[:40])
                 })
                 function_map[entry] = fn_name
 
-        # Step 4: Extract CALLS and Memory READS/WRITES Edges
+        # Step 4: Extract CALLS, INDIRECT_CALL (Speculative), and Memory READS/WRITES Edges
         call_edges = []
+        indirect_call_edges = []
         read_edges = []
         write_edges = []
         global_memory = {}
@@ -163,7 +209,16 @@ class TopologyAgent:
                                 "callee": function_map[tgt]
                             })
                     except ValueError:
-                        pass
+                        # Indirect call target: record as speculative edge
+                        target_spec = insn.op_str.strip()
+                        indirect_call_edges.append({
+                            "caller": fn["name"],
+                            "caller_address": fn["address"],
+                            "call_address": f"0x{insn.address:08X}",
+                            "target_specifier": target_spec,
+                            "confidence": 0.65,
+                            "speculative": True
+                        })
 
                 for op_idx, op in enumerate(insn.operands):
                     if op.type == x86.X86_OP_MEM:
@@ -197,7 +252,8 @@ class TopologyAgent:
             "name": f["name"],
             "address": f["address"],
             "count": f["instruction_count"],
-            "asm": f["asm_text"]
+            "asm": f["asm_text"],
+            "confidence": f["confidence"]
         } for f in functions]
         if fn_payload:
             self.client.query("""
@@ -206,7 +262,8 @@ class TopologyAgent:
             MERGE (f:Function {address: fn.address})
             SET f.name = fn.name,
                 f.instruction_count = fn.count,
-                f.raw_asm = fn.asm
+                f.raw_asm = fn.asm,
+                f.confidence = fn.confidence
             MERGE (p)-[:CONTAINS]->(f)
             RETURN count(f)
             """, {"pname": program_name, "fns": fn_payload})
@@ -228,6 +285,19 @@ class TopologyAgent:
             MERGE (caller)-[:CALLS]->(callee)
             RETURN count(*)
             """, {"calls": call_edges})
+
+        if indirect_call_edges:
+            self.client.query("""
+            UNWIND $indirect_calls AS ic
+            MATCH (caller:Function {name: ic.caller})
+            MERGE (tgt:SpeculativeTarget {specifier: ic.target_specifier})
+            MERGE (caller)-[r:INDIRECT_CALL {
+                address: ic.call_address,
+                confidence: ic.confidence,
+                speculative: true
+            }]->(tgt)
+            RETURN count(r)
+            """, {"indirect_calls": indirect_call_edges})
 
         if read_edges:
             self.client.query("""
@@ -253,12 +323,16 @@ class TopologyAgent:
             "status": "INGESTED",
             "target_id": target_id or program_name,
             "program_name": program_name,
+            "architecture": "x86_64",
+            "supported_architectures": SUPPORTED_BINARY_ARCHITECTURES,
             "primary_fn": primary_fn,
             "critical_mem": critical_mem,
             "total_instructions": len(instructions),
             "functions_count": len(functions),
             "functions": [f["name"] for f in functions],
             "call_edges_count": len(call_edges),
+            "indirect_call_edges_count": len(indirect_call_edges),
+            "indirect_calls": indirect_call_edges,
             "memory_nodes_count": len(global_memory),
             "read_edges_count": len(read_edges),
             "write_edges_count": len(write_edges),
@@ -346,7 +420,8 @@ class TopologyAgent:
                     "address": fn.get("address", ""),
                     "signature": fn.get("signature", ""),
                     "pseudocode": pseudocode,
-                    "raw_asm": raw_asm
+                    "raw_asm": raw_asm,
+                    "confidence": float(fn.get("confidence", 1.0))
                 })
                 callees = fn.get("callees") or (fn.get("call_graph", {}).get("callees") if isinstance(fn.get("call_graph"), dict) else []) or []
                 for c in callees:
@@ -365,7 +440,8 @@ class TopologyAgent:
             SET f.address = fn.address,
                 f.signature = fn.signature,
                 f.pseudocode = fn.pseudocode,
-                f.raw_asm = fn.raw_asm
+                f.raw_asm = fn.raw_asm,
+                f.confidence = coalesce(fn.confidence, 1.0)
             MERGE (p)-[:CONTAINS]->(f)
             RETURN count(f)
             """
@@ -523,15 +599,15 @@ class TopologyAgent:
         """
         cypher_nodes = """
         MATCH (n)
-        WHERE n:Program OR n:Function OR n:GlobalMemory OR n:TestCase OR n:Candidate OR n:Struct OR n:StructField
+        WHERE n:Program OR n:Function OR n:GlobalMemory OR n:TestCase OR n:Candidate OR n:Struct OR n:StructField OR n:SpeculativeTarget
         RETURN id(n) AS id, labels(n)[0] AS label,
-               coalesce(n.name, n.address, n.id, 'Node') AS name,
+               coalesce(n.name, n.specifier, n.address, n.id, 'Node') AS name,
                properties(n) AS props
         """
         cypher_edges = """
         MATCH (source)-[r]->(target)
-        WHERE (source:Program OR source:Function OR source:GlobalMemory OR source:TestCase OR source:Candidate OR source:Struct OR source:StructField)
-          AND (target:Program OR target:Function OR target:GlobalMemory OR target:TestCase OR target:Candidate OR target:Struct OR target:StructField)
+        WHERE (source:Program OR source:Function OR source:GlobalMemory OR source:TestCase OR source:Candidate OR source:Struct OR source:StructField OR source:SpeculativeTarget)
+          AND (target:Program OR target:Function OR target:GlobalMemory OR target:TestCase OR target:Candidate OR target:Struct OR target:StructField OR target:SpeculativeTarget)
         RETURN id(source) AS source, id(target) AS target, type(r) AS type, properties(r) AS props
         """
         raw_nodes = self.client.query(cypher_nodes)

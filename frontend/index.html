@@ -97,13 +97,13 @@
           <div class="flex-1 max-w-[680px] mx-auto flex flex-col items-center text-center px-2">
 
             <!-- Main Display Headline in Outfit Sans -->
-            <h1 class="text-[44px] sm:text-[60px] md:text-[68px] font-semibold tracking-[-0.032em] leading-[1.08] text-[#0b0b0e] text-center">
-              Power Up Binary<br>Reconstruction
+            <h1 class="text-[44px] sm:text-[60px] md:text-[68px] font-semibold tracking-[-0.032em] leading-[1.08] text-[#0b0b0e]">
+              GHOSTGRAPH
             </h1>
 
             <!-- Simple, Plain-English Subtitle -->
-            <p class="mt-5 text-[15px] md:text-[16px] font-normal text-[#686c75] leading-[1.6] max-w-[500px] mx-auto text-center">
-              Turn mystery binary code back into working, verified software using AI and FalkorDB knowledge graphs.
+            <p class="mt-5 text-[15px] md:text-[16px] font-normal text-[#686c75] leading-[1.6] max-w-[540px] mx-auto">
+              An autonomous multi-agent system for reverse engineering stripped binaries into verified, compilable source code using FalkorDB knowledge graphs.
             </p>
 
             <!-- 3-Step Simple Quick Guide Pill Strip (Clean & Tidy) -->
@@ -124,16 +124,13 @@
               </div>
             </div>
 
-            <!-- Primary Actions: Launch Studio + How It Works Button -->
-            <div class="mt-8 flex items-center justify-center gap-3">
+            <!-- Primary Action: Launch Studio -->
+            <div class="mt-8 flex items-center justify-center">
               <button onclick="openTargetSelectorModal()" class="btn-tactile-black px-8 py-3.5 text-[14px] font-medium inline-flex items-center gap-2.5 cursor-pointer">
                 <span>Start Reconstruction</span>
                 <svg class="w-3.5 h-3.5 text-white/90" viewBox="0 0 16 16" fill="none">
                   <path d="M6 3.5L10.5 8L6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-              </button>
-              <button onclick="openGuideModal()" class="bg-white hover:bg-[#f3f4f6] text-[#0b0b0e] border border-[#e5e7eb] px-6 py-3.5 text-[14px] font-medium rounded-full inline-flex items-center gap-2 transition-colors cursor-pointer">
-                <span>How It Works</span>
               </button>
             </div>
             <div id="uploadStatusMessage" class="hidden text-xs font-mono text-[#16a34a] pt-2"></div>
@@ -387,6 +384,37 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- Custom Binary Compilation & Local Execution Guide (Custom Specimen Support) -->
+      <div id="customUploadCompileGuide" class="hidden border border-[#e2e8f0] bg-[#f8fafc] rounded-2xl p-5 space-y-3 shadow-xs">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></span>
+            <span class="text-[14px] font-bold text-[#0b0b0e]">Custom Binary Specimen: Local Compilation &amp; Execution Guide</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="copyReconstructedCode()" class="px-3 py-1.5 bg-white hover:bg-[#f1f5f9] text-[#0b0b0e] border border-[#cbd5e1] text-[12px] font-medium rounded-full transition-colors flex items-center gap-1.5 cursor-pointer">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy Code</span>
+            </button>
+            <button onclick="downloadReconstructedSource()" class="px-3 py-1.5 bg-[#0b0b0e] hover:bg-[#1e293b] text-white text-[12px] font-medium rounded-full transition-colors flex items-center gap-1.5 cursor-pointer">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Download Source</span>
+            </button>
+          </div>
+        </div>
+        <p class="text-[12.5px] text-[#475569] leading-relaxed">
+          GhostGraph has reverse-engineered your uploaded binary into clean source code grounded by FalkorDB graph memory. Because custom binaries require their specific host OS runtime, compile and execute the reconstructed logic directly on your local system:
+        </p>
+        <div class="bg-[#0f172a] text-[#f8fafc] font-mono text-[12px] rounded-xl p-3.5 overflow-x-auto leading-relaxed border border-[#334155]">
+          <div class="text-[#94a3b8] mb-1"># 1. Compile as standalone native executable:</div>
+          <div class="text-[#38bdf8] select-all">gcc -O2 -o reconstructed_bin candidate.c</div>
+          <div class="text-[#94a3b8] mt-2 mb-1"># 2. Or compile as shared library for differential test injection:</div>
+          <div class="text-[#38bdf8] select-all">gcc -O2 -fPIC -shared -o candidate.so candidate.c</div>
+          <div class="text-[#94a3b8] mt-2 mb-1"># 3. Run and verify on host:</div>
+          <div class="text-[#34d399] select-all">./reconstructed_bin</div>
+        </div>
       </div>
 
     </section>

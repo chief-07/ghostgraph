@@ -1,0 +1,24 @@
+[project]
+name = "ghostgraph"
+version = "2.0.0"
+description = "GhostGraph: Autonomous Graph-Based Reverse Engineering Platform"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "sse-starlette>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.6.0",
+    "httpx>=0.27.0",
+    "falkordb>=1.0.8",
+    "mcp>=1.2.0,<2.0.0",
+    "google-genai>=0.1.0",
+    "capstone>=5.0.0",
+    "pefile>=2023.2.7",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "anyio>=4.0.0"
+]
+
+[tool.vercel]
+entrypoint = "backend.app:app"

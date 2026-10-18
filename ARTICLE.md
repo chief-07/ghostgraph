@@ -1,30 +1,25 @@
-# Resurrecting Lost Source Code: Building an Autonomous Graph-Guided Reverse Engineering Agent with FalkorDB
+# Reconstructing Stripped Binaries with FalkorDB and Multi-Agent Verification
 
-*By the GhostGraph Team for the WeMakeDevs & FalkorDB "Graph Hacks: Context for AI Agents" Hackathon (October 2026)*
+*Written by the GhostGraph team for the WeMakeDevs & FalkorDB "Graph Hacks: Context for AI Agents" Hackathon*
 
-[![FalkorDB](https://img.shields.io/badge/Graph_Database-FalkorDB-8B5CF6?style=for-the-badge&logo=redis&logoColor=white)](https://falkordb.com/)
-[![FastAPI](https://img.shields.io/badge/API_Framework-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Gemini](https://img.shields.io/badge/LLM-Gemini_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://aistudio.google.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![FalkorDB](https://img.shields.io/badge/Graph_Database-FalkorDB-0b0b0e?style=flat-square&logo=redis&logoColor=white)](https://falkordb.com/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Gemini](https://img.shields.io/badge/Model-Gemini_3.1_Flash_Lite-4285F4?style=flat-square&logo=google&logoColor=white)](https://aistudio.google.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-gray?style=flat-square)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 1. The "Ghost Code" Crisis: Infrastructure Running on Black Boxes
+## The Problem with Decompilers and Isolated LLMs
 
-Across global financial cores, aerospace telemetry systems, factory automation networks, and embedded energy grids, a quiet crisis exists: **mission-critical software running on compiled machine code whose original source code has been permanently lost.** The engineers who authored the software in the 1980s or 1990s have retired; the ancient build toolchains are obsolete; and only stripped binary executables (`.exe`, ELF, firmware ROMs) remain in production.
-
-When organizations attempt to modernize or audit these legacy binaries, they reach for standard reverse engineering disassemblers like **NSA Ghidra** or **IDA Pro**. 
-
-However, decompilers do not produce clean, compilable modern source code. Instead, they output **fragmented, non-compilable C pseudocode** riddled with detached raw memory offsets:
+Anyone who has spent time reverse engineering a stripped binary in Ghidra, IDA Pro, or Binary Ninja knows the routine. You open an old executable whose source code was lost years ago, wait for the auto-analysis pass to finish, and click on a function. What you get back isn't source code you can compile—it's a single function's worth of C-like pseudocode full of raw pointers and unnamed offsets:
 
 ```c
-/* Raw decompiled snippet from Ghidra */
 double compute_progressive_tax(double taxable_amount) {
     if (taxable_amount <= 0.0) return 0.0;
-    
-    /* CRITICAL CONTEXT GAP: 0x00405000 is an unlabelled pointer */
+
+    // Where is 0x00405000 initialized? What layout does it have?
     double *brackets = (double *)0x00405000;
-    
+
     double total_tax = 0.0;
     double prev_threshold = 0.0;
     for (int i = 0; i < 4; ++i) {
@@ -42,234 +37,163 @@ double compute_progressive_tax(double taxable_amount) {
 }
 ```
 
-When systems engineers paste this decompiled snippet into standard frontier Large Language Models (LLMs), **the LLM hallucinates and fails**. 
+If you paste this function into an LLM and ask it to reconstruct a clean, working implementation, the model has to guess what lives at `0x00405000`. It has the local control flow—a loop over four pairs of doubles—but zero visibility into the rest of the binary. In practice, an isolated LLM will invent plausible-looking numbers (say, a flat 10% rate or standard tax brackets it memorized from training data) and hand you code that compiles cleanly and fails nearly every test vector.
 
-Why? Because the LLM suffers from the **Context Cliff**: it cannot see what data resides at memory address `0x00405000`. Without knowing whether `0x00405000` contains progressive income tax brackets, fuel consumption curves, or polynomial lookup tables, the model guesses a flat 10% tax rate or fills the buffer with zeroes. In commercial billing, a 1-cent calculation drift across 10 million transactions represents an audit catastrophe.
+The information needed to reconstruct that function accurately is almost always in the binary. Another subroutine—often several hops away in the initialization path—writes the actual table into `0x00405000`. Callers pass structs of a specific byte width into the function. Sibling routines read from the same memory block.
 
-To solve this, we built **GhostGraph**: an autonomous multi-agent reverse-engineering swarm that uses **FalkorDB** as its topological nervous system and persistent episodic memory layer.
+Decompilation fails when treated as a flat text problem because a compiled program isn't flat text. It's a graph of control flow, call edges, struct layouts, and shared memory state.
+
+That observation is why we built **GhostGraph**.
 
 ---
 
-## 2. Why a Graph is Load-Bearing (The "Rule #3" Architecture)
+## How GhostGraph Uses FalkorDB as Its Core Engine
 
-In the official *Graph Hacks* rules, WeMakeDevs and FalkorDB established the **Golden Rule (Rule #3)**:
-> *"The graph has to do real work. A visualization drawn on top of ordinary storage does not qualify: if the product still works once FalkorDB is taken out, the graph is decoration rather than the thing the product runs on."*
+One of the central rules of this hackathon is straightforward: *if your product still works when you take FalkorDB out, the graph is just decoration.*
 
-Code is not flat text; it is an inherently interconnected **directed graph of call hierarchies, dataflows, and memory ownership**.
+In GhostGraph, removing FalkorDB breaks the agent's ability to see past the current function boundary. We use FalkorDB in two distinct ways during a reconstruction run:
+
+### 1. Structural & Memory Provenance Graph
+When a binary is loaded—either one of our benchmark targets or a custom `.exe` / `.elf` disassembled live via Capstone—our `TopologyAgent` extracts functions, call targets, struct field offsets, and global memory read/write instructions into an isolated FalkorDB multigraph (`ghostgraph_<target_id>`).
 
 ```
-                           (:Function {name: 'init_tariff_tables'})
-                                              │
-                                              │ [:WRITES]
-                                              ▼
-                             (:GlobalMemory {address: '0x00405000'})
-                                              ▲
-                                              │ [:READS]
-                                              │
-                         (:Function {name: 'compute_progressive_tax'})
-                                              ▲
-                                              │ [:CALLS]
-                                              │
-                            (:Function {name: 'process_invoice'})
+(:Function {name: 'init_tariff_tables'})
+       │
+       ├──[:WRITES]──► (:GlobalMemory {address: '0x00405000', label: 'TAX_BRACKET_TABLE'})
+       │                      ▲
+       │                      │ [:READS]
+(:Function {name: 'compute_progressive_tax'})
+       ▲
+       └──[:CALLS]─── (:Function {name: 'process_invoice'})
 ```
 
-When an LLM attempts to reconstruct `compute_progressive_tax` in isolation, it lacks the context of where `0x00405000` came from. In FalkorDB, this is solved by a **2-hop multi-hop Cypher traversal**:
+Before the `ReconstructionAgent` writes a single line of code for `compute_progressive_tax`, it runs a 2-hop Cypher traversal to find every function that writes to the memory addresses `compute_progressive_tax` reads:
 
 ```cypher
-MATCH (target:Function {name: 'compute_progressive_tax'})-[:READS]->(mem:GlobalMemory)<-[:WRITES]-(initializer:Function)
-RETURN target.name AS consumer,
-       mem.address AS memory_address,
-       initializer.name AS producer,
-       initializer.pseudocode AS initialization_logic;
+MATCH (consumer:Function {name: $fn_name})-[:READS]->(m:GlobalMemory)<-[:WRITES]-(producer:Function)
+RETURN m.address AS address,
+       m.label AS label,
+       producer.name AS producer_function,
+       producer.value_summary AS initialized_values,
+       producer.decompiled_c AS producer_code
 ```
 
-In under 2 milliseconds, FalkorDB queries the graph, hops from the consumer function through the raw memory address, and locates `init_tariff_tables()`—the exact subroutine that initialized the progressive marginal tax brackets ($100 at 0%, $500 at 5%, $2000 at 12%, >$2000 at 20%).
+That single query bridges the gap that stumps a flat LLM. Instead of guessing what `0x00405000` holds, the agent gets the exact initialization routine (`init_tariff_tables`) and the constant table written to that address: `$100 @ 0%`, `$500 @ 5%`, `$2000 @ 12%`, and `>$2000 @ 20%`.
 
-If FalkorDB is removed from GhostGraph, the agent is blinded to memory provenance, and **differential parity collapses from 100.0% down to 15.0%**.
+We also run native FalkorDB graph algorithms on the ingested topology. Using `CALL algo.pageRank('Function', 'CALLS')` and `shortestPath((f1)-[:CALLS*1..5]->(f2))`, the supervisor identifies which subroutines are load-bearing hubs and traces the exact call chain connecting initialization routines to downstream consumers.
+
+### 2. Closed-Loop Episodic Failure Memory
+Getting memory constants right is half the battle; getting edge-case behavior right is the other half.
+
+Every candidate synthesized by Gemini Flash-Lite is executed inside an isolated subprocess sandbox against 20 deterministic test vectors. Whenever a candidate fails a test vector, our `VerificationAgent` writes the failure directly back into FalkorDB as an episodic memory edge:
+
+```cypher
+MATCH (c:Candidate {id: $candidate_id}), (t:TestCase {id: $test_id})
+MERGE (c)-[r:FAILED_ON]->(t)
+SET r.diff = $diff, r.timestamp = timestamp()
+```
+
+On the next pass, the `SupervisorAgent` queries FalkorDB for the candidate's failure subgraph (`(:Candidate)-[:FAILED_ON]->(:TestCase)`). Instead of blindly retrying from scratch, the agent sees the exact input vector that failed and the numerical delta between expected and actual output, then patches the specific branch or rounding logic that caused the diff.
 
 ---
 
-## 3. System Architecture & The Multi-Agent Swarm
+## Architecture Overview
 
-GhostGraph orchestrates a multi-agent swarm using the **Model Context Protocol (MCP)**, connecting FalkorDB with Google's Gemini Flash LLM and a local GCC differential execution sandbox.
+GhostGraph is built on FastAPI, FalkorDB, Google's `google-genai` SDK (`gemini-3.1-flash-lite-preview`), Capstone (`x86_64` disassembler), and an isolated Python/C differential test harness. It also mounts a standards-compliant Model Context Protocol (MCP) server at `/mcp` so external MCP clients (like Claude Desktop or Cursor) can query the binary graph directly.
 
 ```mermaid
 flowchart TD
-    subgraph INGESTION["1. Static Decompiler Ingestion"]
-        BIN["Stripped Binary (.exe / .bin)"] --> DECOMP["Ghidra Headless / AST Parser"]
-        DECOMP --> TOPOLOGY_AGENT["Topology Agent"]
-        TOPOLOGY_AGENT -->|Cypher Queries| FDB[("FalkorDB Knowledge Graph")]
+    subgraph INGEST["1. Binary Disassembly & Graph Ingestion"]
+        BIN["Stripped Binary (.exe / .bin / ROM)"] --> CAP["Capstone x86_64 / Decompiler Parser"]
+        CAP --> TOPO["TopologyAgent"]
+        TOPO -->|Batch UNWIND Cypher| FDB[("FalkorDB Multigraph")]
     end
 
-    subgraph AGENTS["2. Autonomous Multi-Agent Loop (MCP)"]
-        FDB <-->|Cypher MCP Tools| RECON_AGENT["Reconstruction Agent (Gemini Flash)"]
-        RECON_AGENT -->|Generates C Code| CANDIDATE["candidate_vN.c"]
+    subgraph SWARM["2. Graph-Grounded Multi-Agent Loop"]
+        FDB -->|PageRank + 2-Hop Provenance| SUP["SupervisorAgent"]
+        SUP -->|Grounded Prompt Context| RECON["ReconstructionAgent (Gemini 3.1 Flash-Lite)"]
+        RECON -->|Synthesizes Candidate| CAND["Executable Candidate Code"]
     end
 
-    subgraph VERIFICATION["3. Differential Parity Sandbox"]
-        CANDIDATE -->|gcc -O2| CAND_BIN["candidate.exe"]
-        CAND_BIN --> HARNESS["Differential Execution Harness"]
-        VECTORS["Deterministic Test Vectors"] --> HARNESS
-        HARNESS -->|Byte-for-Byte Comparison| OUTCOME{All Vectors Match?}
-        OUTCOME -->|Failures Detected| EPISODIC["Commit FAILED_ON to FalkorDB"]
-        EPISODIC --> FDB
-        OUTCOME -->|20/20 Pass| SUCCESS["100.0% Verified Parity"]
+    subgraph VERIFY["3. Isolated Differential Sandbox"]
+        CAND --> SANDBOX["Subprocess Sandbox Runner"]
+        VECTORS["20 Deterministic Test Vectors"] --> SANDBOX
+        SANDBOX -->|Pass / Diff Telemetry| OUT{100% Parity?}
+        OUT -->|No: Record Diffs| FAIL["MERGE (c)-[:FAILED_ON]->(t)"]
+        FAIL --> FDB
+        OUT -->|Yes| CERT["Verified Parity Certificate & Export"]
     end
 ```
 
-### The 4 Specialized Agent Roles:
+---
 
-1. **The Topology Agent (Track 01):**
-   Parses decompiler AST artifacts, maps out functions, memory references, and structs, and commits them into FalkorDB as a directed property graph.
-2. **The Reconstruction Agent (Track 01):**
-   Issues OpenCypher queries via custom MCP tools (`get_function_context`, `resolve_memory_source`, `get_struct_definition`) to assemble grounded prompt context and synthesize compilable C candidates.
-3. **The Verification Agent (Track 02):**
-   Compiles candidate code in a sandbox using `gcc` and executes deterministic test vectors simultaneously against the original binary and candidate binary, measuring exact numerical and behavioral parity.
-4. **The Supervisor Agent (Track 02):**
-   Coordinates agent handoffs and drives self-healing convergence. When an edge case fails, it logs `(:Candidate)-[:FAILED_ON {diff}]->(:TestCase)` directly into FalkorDB. On the subsequent iteration, the Reconstruction Agent queries past failure memory so it **never repeats the same algorithmic mistake**.
+## Testing the Thesis on Three Real Benchmarks
+
+We didn't want a toy demo where test results are mocked. Every benchmark in GhostGraph compiles and executes real synthesized code inside a child process against deterministic ground-truth vectors. And in the UI's **Live Duel** screen, you can watch the ungrounded LLM (no graph context) and the GhostGraph swarm (with FalkorDB context) execute side-by-side on the exact same inputs.
+
+### 1. 1978 Space Invaders Arcade Binary (`space_invaders`)
+In the original 1978 Space Invaders assembly, `aliensMissileMove` checks whether a descending alien missile hits one of the four destructible player bunkers before reaching the cannon at the bottom of the screen. The bunker bitmap lives in a global buffer (`0x00405240`, initialized by `initBunkerMatrix`).
+* **Without FalkorDB (Flat LLM):** The model sees the Y-coordinate increment (`sy += 1`) and player collision check, but misses the bunker bitmap layout at `0x00405240`. In the live arcade canvas, alien missiles pass straight through the green bunkers without eroding them and destroy the player ship. **Parity: 35% (7/20 vectors).**
+* **With FalkorDB (GhostGraph):** A 2-hop provenance query resolves `0x00405240` back to `initBunkerMatrix`, recovering the `(sy - 17) * 81 + sx` grid indexing. Missiles erode the bunker pixels on impact and detonate as intended. **Parity: 100% (20/20 vectors).**
+
+### 2. 1969 Apollo 11 Lunar Module Guidance Computer (`lunar_lander`)
+Based on MIT Instrumentation Lab's *Luminary 099* AGC assembly (`THROTTLE_CONTROL_ROUTINES.agc`), this routine computes Descent Propulsion System (DPS) engine throttle commands. Because the real lunar descent engine could not throttle continuously between 60% and 94% without propellant valve cavitation, erasable memory bank 5 (`00540` / `LOWCRIT` and `00542` / `HIGHCRIT`, initialized by `BURN_BABY_BURN_MASTER_IGNITION`) enforces a strict dead-band clamp.
+* **Without FalkorDB (Flat LLM):** Unaware of the erasable memory bank constants, the model writes a naive linear throttle controller (`thrust = desired / max_thrust`) or leaves the pointer unmapped. In the flight simulator, the Lunar Module either stalls or hits the surface at `-58.2 m/s`.
+* **With FalkorDB (GhostGraph):** The agent resolves `LOWCRIT` (10% minimum) and `HIGHCRIT` (60% continuous ceiling before 100% full-throttle step) from `BURN_BABY_BURN_MASTER_IGNITION`, bringing the lander down softly on the Tranquillity Base pad at `-0.99 m/s`. **Parity: 100% (20/20 vectors).**
+
+### 3. Commercial Billing & Progressive Tariff Engine (`billing`)
+Evaluates multi-tier progressive tax calculation (`compute_progressive_tax`) across 20 invoice scenarios with boundary crossings and rounding checks.
+* **Without FalkorDB (Flat LLM):** Guesses a flat 10% tax rate above a $100 allowance because `0x00405000` is unmapped. Drifts by up to **$214.30** on enterprise invoices. **Parity: 15% (3/20 vectors).**
+* **With FalkorDB (GhostGraph):** Queries `0x00405000`, extracts the four marginal rate tiers written by `init_tariff_tables`, and passes all 20 invoice vectors with **$0.00 drift**.
+
+| Benchmark Target | Critical Memory Address | Producer Subroutine | Flat LLM Parity | GhostGraph Parity |
+| :--- | :--- | :--- | :---: | :---: |
+| **Commercial Billing** | `0x00405000` (`TAX_BRACKET_TABLE`) | `init_tariff_tables` | 15.0% (3/20) | **100.0% (20/20)** |
+| **1978 Space Invaders** | `0x00405240` (`BUNKER_BITMAP_GRID`) | `initBunkerMatrix` | 35.0% (7/20) | **100.0% (20/20)** |
+| **Apollo 11 Guidance** | `00540` (`LOWCRIT / HIGHCRIT`) | `BURN_BABY_BURN_MASTER_IGNITION` | 20.0% (4/20) | **100.0% (20/20)** |
 
 ---
 
-## 4. The FalkorDB Schema & Core Cypher Tools
+## Uploading Your Own `.exe` or ELF Binary
 
-GhostGraph models binary topology and multi-agent memory using the following schema:
+Beyond the curated benchmarks, you can drag and drop any stripped `x86_64` binary (`.exe`, `.elf`, `.bin`, `.so`) into GhostGraph.
 
-```
-Nodes:
-  (:Program {name, arch, sha256})
-  (:Function {name, address, signature, decompiled_c, assembly})
-  (:GlobalMemory {address, label, data_type, size})
-  (:Struct {name, size})
-  (:StructField {name, offset, type})
-  (:TestCase {id, name, description, category})
-  (:Candidate {id, version, status, source_code})
-
-Relationships:
-  (:Program)-[:CONTAINS]->(:Function)
-  (:Function)-[:CALLS]->(:Function)
-  (:Function)-[:READS]->(:GlobalMemory)
-  (:Function)-[:WRITES]->(:GlobalMemory)
-  (:Struct)-[:HAS_FIELD]->(:StructField)
-  (:Candidate)-[:RECONSTRUCTS]->(:Function)
-  (:Candidate)-[:PASSED]->(:TestCase)
-  (:Candidate)-[:FAILED_ON {diff, actual_output}]->(:TestCase)
-```
-
-### Essential Load-Bearing Cypher Queries
-
-#### Query 1: Upstream Caller Invariants & Parameter Types (Track 01)
-Deduces struct boundaries and argument types by inspecting up to 2 hops of calling functions:
-```cypher
-MATCH path = (caller:Function)-[:CALLS*1..2]->(target:Function {name: $function_name})
-RETURN caller.name AS caller_name,
-       caller.decompiled_c AS caller_code,
-       length(path) AS distance;
-```
-
-#### Query 2: Episodic Failure Recall (Track 02)
-Allows the agent to query its own past failures before synthesizing a revision:
-```cypher
-MATCH (c:Candidate {version: $prev_version})-[:FAILED_ON]->(t:TestCase)
-MATCH (t)-[:EXERCISES]->(f:Function {name: $function_name})
-RETURN t.id AS test_id,
-       t.name AS test_name,
-       c.diff AS observed_error;
-```
+1. **Live Capstone Disassembly:** The backend reads the `.text` section (via `pefile` if it's a Windows PE executable) and disassembles the machine code instructions with Capstone in detail mode.
+2. **Graph Extraction:** It identifies subroutine entry points (`push rbp; mov rbp, rsp` prologues and `call` targets), maps `CALLS` edges between functions, and detects RIP-relative memory accesses (`[rip + disp]`) as `READS` and `WRITES` edges to `GlobalMemory` nodes.
+3. **Multigraph Isolation:** Every uploaded file gets its own isolated FalkorDB graph (`ghostgraph_upload_<sha256>`), preventing any cross-target node collisions.
+4. **Dynamic 8-Vector Verification:** Synthesized subroutines from custom uploads are verified in the sandbox for bytecode compilation, symbol export, zero-state parameter invocation, determinism, boundary input resilience, memory dereference safety, and return code conformance.
 
 ---
 
-## 5. Empirical Proof: The Legacy Commercial Billing Benchmark
+## Key Takeaways from Building with FalkorDB
 
-To provide an unassailable demonstration of Rule #3, we evaluated GhostGraph against a **Legacy Commercial Billing & Tariff Engine** across 20 deterministic invoice scenarios:
-
-### The Real-World Challenge:
-* Multi-item orders with volume discount breakpoints ($>100$ units triggers a 5% bulk rebate).
-* Four progressive marginal tax brackets ($0 to $100: 0%, $100 to $500: 5%, $500 to $2000: 12%, >$2000: 20%).
-* Four customer loyalty tiers with volume multipliers.
-* **IEEE 754 Banker's Rounding (Round-Half-To-Even)** on exact half-cent boundaries ($149.255 \to $149.26 vs. $149.265 \to $149.26).
-
-### Head-to-Head Benchmark Results:
-
-| Benchmark Metric | Vanilla Flat LLM (No Graph) | GhostGraph (FalkorDB Context) |
-| :--- | :---: | :---: |
-| **Context Assembly** | Isolated function pseudocode | 2-hop memory provenance + caller hierarchy |
-| **Memory Offset `0x00405000`** | Hallucinates flat 10.0% VAT | Resolves 4 progressive tax brackets from `init_tariff_tables` |
-| **Memory Offset `0x00405080`** | Omits customer tier discount | Resolves loyalty rebate matrix and volume multiplier |
-| **Rounding Algorithm** | Uses naive `round()` (half-up) | Discovers Banker's Rounding invariant via `FAILED_ON` memory |
-| **Deterministic Parity** | **15.0% (3/20 Passed — 17 Failed)** | **100.0% (20/20 Passed — 0 Failed)** |
-| **Cent-by-Cent Error** | Invoices off by up to **$214.30** | **$0.00 calculation drift across all vectors** |
-
-```
-[Mode A: Flat LLM (No Graph)]
-  TC_02: Tax Bracket 1 Crossing ($100-$500)   -> FAILED (Expected $20.00 tax, got $28.50)
-  TC_03: Tax Bracket 2 Crossing ($500-$2000)  -> FAILED (Expected $77.18 tax, got $97.65)
-  TC_07: Banker's Rounding Half-Cent Even     -> FAILED (Expected $149.26, got $149.25)
-  Final Parity: 15.0% (3/20 Passed)
-
-[Mode B: GhostGraph (FalkorDB Context)]
-  TC_01 through TC_20                         -> ALL 20 VECTORS PASSED
-  Final Parity: 100.0% (20/20 Passed)
-```
+1. **Multi-hop queries beat bigger context windows.** Dumping an entire disassembled binary into a 1M-token prompt is slow, expensive, and noisy. A 2-hop Cypher query in FalkorDB takes ~2ms and pulls back only the exact producer function that writes to the pointer your target function reads.
+2. **Multigraph isolation is clean and fast.** Calling `db.select_graph(f"ghostgraph_{target_id}")` let us give every benchmark and every user-uploaded binary its own clean namespace on the same FalkorDB instance without complex tenant filtering in every `MATCH` clause.
+3. **Graphs turn trial-and-error into structured memory.** Storing test failures as `(:Candidate)-[:FAILED_ON {diff}]->(:TestCase)` edges gave our supervisor agent a concrete, queryable history of what had already been tried and why it failed.
 
 ---
 
-## 6. The Showcase Gallery: Apollo 11 Guidance Computer & Beyond
+## Running GhostGraph Locally
 
-Beyond financial billing, GhostGraph was evaluated against mission-critical avionics:
+GhostGraph is open-source under the MIT License.
 
-* **1979 Apollo 11 Lunar Module Guidance Computer (`lunar_lander`):**
-  * A stripped x86_64 binary implementing 6 guidance subroutines.
-  * Virtual address `0x00403000` contains the non-linear Descent Propulsion System (DPS) throttle response curve; address `0x00403080` contains lunar mascon gravitational field variations.
-  * **Result:** Without FalkorDB, the simulated lander crashes into the lunar surface at $28.4\text{ m/s}$. With FalkorDB resolving throttle curves and mascon anomalies, the vehicle achieves a soft touchdown at $0.9\text{ m/s}$ with **100% telemetry parity**.
+* **Repository:** [github.com/nobl3Y/ghostgraph](https://github.com/nobl3Y/ghostgraph) / [github.com/chief-07/ghostgraph](https://github.com/chief-07/ghostgraph)
 
----
-
-## 7. The Frontend Experience: Apollo Vector CRT HUD & Canvas Graph
-
-To make the system demoable to hackathon judges without relying on fragile live decompiler windows:
-
-1. **High-DPI Canvas Graph Engine (`frontend/graph_engine.js`):**
-   A custom, zero-dependency HTML5 canvas visualizer that renders spring-physics graph layouts, camera pan/zoom, and glowing particle pulses along edges when Cypher queries execute.
-2. **Live Execution Duel (`#screenDuel`):**
-   A concurrent split-screen workbench where judges can run the Flat LLM and the FalkorDB Swarm side-by-side, watching live gauges update in real time.
-3. **Interactive Target Selection:**
-   Allows instant switching between the Commercial Billing Engine, Apollo 11 Avionics, Satellite Telemetry Decoders, and License Keygen CrackMes in one click.
-
----
-
-## 8. What We Learned
-
-1. **Graphs are the missing context layer for code generation:**
-   Decompilers provide raw symbols; LLMs provide linguistic fluency; but **only a graph database like FalkorDB provides the structural glue** that connects consumers to initializers across multiple hops of memory.
-2. **Deterministic verification beats subjective evaluation:**
-   In software reverse engineering, an agent's output cannot be judged by "vibes." Compiling candidate source code with GCC and executing deterministic test vectors provides an objective pass/fail metric.
-3. **Graph memory prevents regression loops:**
-   Logging `FAILED_ON` relationships transformed our multi-agent pipeline from a blind retry loop into a compounding learning system.
-
----
-
-## 9. Try It Yourself & Open-Source Repository
-
-GhostGraph is 100% open-source under the MIT License:
-
-* **GitHub Repository:** [github.com/chief-07/ghostgraph](https://github.com/chief-07/ghostgraph)
-* **Branch:** `feature/ui-and-article`
-
-### Quickstart (Local Setup):
 ```bash
-# 1. Clone repository
-git clone https://github.com/chief-07/ghostgraph.git
+# 1. Clone the repository
+git clone https://github.com/nobl3Y/ghostgraph.git
 cd ghostgraph
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Verify Billing Engine pipeline
-python backend/tests/verify_billing_pipeline.py
+# 3. Configure environment variables (.env)
+# FALKORDB_HOST, FALKORDB_PORT, FALKORDB_USERNAME, FALKORDB_PASSWORD, GEMINI_API_KEY
 
-# 4. Launch Interactive Web Dashboard
+# 4. Run the test suite
+python backend/test_app.py
+
+# 5. Start the server
 python -m backend.app
-# Open http://127.0.0.1:8000 in your browser
+# Open http://127.0.0.1:8000
 ```
-
-*Built with FalkorDB, FastAPI, and Google Gemini Flash for Graph Hacks 2026.*

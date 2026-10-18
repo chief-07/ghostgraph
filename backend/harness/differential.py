@@ -756,7 +756,20 @@ def evaluate_billing_test(
     # If candidate callable is provided, ACTUALLY EXECUTE IT!
     if candidate_callable is not None:
         try:
-            actual_tax = candidate_callable(taxable_amount)
+            actual_tax = None
+            try:
+                actual_tax = candidate_callable(taxable_amount)
+            except Exception:
+                try:
+                    actual_tax = candidate_callable(tc)
+                except Exception:
+                    actual_tax = candidate_callable(taxable_amount=taxable_amount)
+
+            if isinstance(actual_tax, dict):
+                actual_tax = actual_tax.get("tax_amount", actual_tax.get("tax", actual_tax.get("total_tax", 0.0)))
+            elif isinstance(actual_tax, (tuple, list)):
+                actual_tax = actual_tax[0]
+
             if not isinstance(actual_tax, (int, float)):
                 return False, f"Candidate returned non-numeric type: {type(actual_tax).__name__} ({actual_tax})"
             

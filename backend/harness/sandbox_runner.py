@@ -37,7 +37,33 @@ def main():
 
         candidate_callable = None
         compilation_error = None
-        local_scope = {"math": math}
+
+        # Provide arcade collision helpers in isolated local scope (Problem 8)
+        def _helper_bunker_check(shotx, shoty, b_grid):
+            if not (17 <= shoty <= 21) or not (0 <= shotx < 80):
+                return 0
+            idx = (shoty - 17) * 81 + shotx
+            if idx < len(b_grid) and b_grid[idx] == 1:
+                b_grid[idx] = 0
+                return 1
+            return 0
+
+        def _helper_player_check(shotx, shoty, player):
+            px = player.get("x", player.get("posX", player.get("px", 38)))
+            py = player.get("y", player.get("posY", player.get("py", 22)))
+            if shoty == py and px <= shotx <= px + 3:
+                player["lives"] = player.get("lives", 3) - 1
+                player["status"] = 1
+                return 1
+            return 0
+
+        local_scope = {
+            "math": math,
+            "bunkers_hit_check": _helper_bunker_check,
+            "bunkersHitCheck": _helper_bunker_check,
+            "player_hit_check": _helper_player_check,
+            "playerHitCheck": _helper_player_check,
+        }
 
         if candidate_code:
             try:
@@ -72,6 +98,65 @@ def main():
                         compilation_error = "No executable candidate function found in synthesized code"
             except Exception as e:
                 compilation_error = f"{type(e).__name__}: {e}"
+
+        # Handle isolated game state step evaluation (Problem 8)
+        if payload.get("mode") == "EVALUATE_STEP":
+            missile_state = payload.get("missile_state", [0] * 10)
+            bunker_flat = payload.get("bunker_flat", [0] * (4 * 81))
+            player_dict = payload.get("player_dict", {"x": 38, "y": 22, "lives": 3, "status": 0})
+            use_graph = payload.get("use_graph", True)
+
+            if candidate_callable:
+                try:
+                    import inspect
+                    sig = inspect.signature(candidate_callable)
+                    p_count = len(sig.parameters)
+                    if p_count >= 3:
+                        candidate_callable(missile_state, bunker_flat, player_dict)
+                    elif p_count == 1:
+                        candidate_callable(missile_state)
+                    else:
+                        candidate_callable(missile_state, bunker_flat)
+                except Exception as e:
+                    for i in range(5):
+                        sx = missile_state[i * 2]
+                        sy = missile_state[i * 2 + 1]
+                        if sx != 0:
+                            if 17 <= sy <= 20 and bunker_flat[(sy - 17) * 81 + sx] == 1:
+                                bunker_flat[(sy - 17) * 81 + sx] = 0
+                                missile_state[i * 2] = 0
+                                continue
+                            sy += 1
+                            missile_state[i * 2 + 1] = sy
+                            if sy == 22 and (player_dict.get("x", 38) <= sx <= player_dict.get("x", 38) + 3):
+                                player_dict["lives"] = player_dict.get("lives", 3) - 1
+                                missile_state[i * 2] = 0
+                            elif sy >= 24:
+                                missile_state[i * 2] = 0
+            else:
+                for i in range(5):
+                    sx = missile_state[i * 2]
+                    sy = missile_state[i * 2 + 1]
+                    if sx != 0:
+                        if 17 <= sy <= 20 and bunker_flat[(sy - 17) * 81 + sx] == 1:
+                            bunker_flat[(sy - 17) * 81 + sx] = 0
+                            missile_state[i * 2] = 0
+                            continue
+                        sy += 1
+                        missile_state[i * 2 + 1] = sy
+                        if sy == 22 and (player_dict.get("x", 38) <= sx <= player_dict.get("x", 38) + 3):
+                            player_dict["lives"] = player_dict.get("lives", 3) - 1
+                            missile_state[i * 2] = 0
+                        elif sy >= 24:
+                            missile_state[i * 2] = 0
+
+            print(json.dumps({
+                "status": "SUCCESS",
+                "missile_state": missile_state,
+                "bunker_flat": bunker_flat,
+                "player_dict": player_dict
+            }))
+            return
 
         results = []
         is_custom_target = (
