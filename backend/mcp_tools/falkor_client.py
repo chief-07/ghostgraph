@@ -8,6 +8,8 @@ in-memory graph database fallback for offline development.
 import os
 import re
 import logging
+import contextvars
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import falkordb
@@ -15,6 +17,10 @@ import falkordb
 load_dotenv()
 
 logger = logging.getLogger("ghostgraph.falkordb")
+
+# Context-scoped active graph tracking (Problem 7: Multi-Tenant State Isolation)
+_active_graph_name: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("active_graph_name", default=None)
+
 
 class FalkorClient:
     """Manages connection and query execution to FalkorDB with in-memory graph fallback."""
@@ -31,7 +37,8 @@ class FalkorClient:
         self.port = port or int(os.getenv("FALKORDB_PORT", "6379"))
         self.username = username or os.getenv("FALKORDB_USERNAME", None)
         self.password = password or os.getenv("FALKORDB_PASSWORD", None)
-        self.graph_name = graph_name
+        self._default_graph_name = graph_name
+        _active_graph_name.set(graph_name)
         self.client = None
         self.graph = None
         self.is_connected = False
@@ -42,21 +49,75 @@ class FalkorClient:
 
         # In-Memory Graph Store (Fully resilient topological engine)
         self._target_graphs: Dict[str, Dict[str, Any]] = {}
-        self._nodes: Dict[str, Dict[str, Any]] = {}
-        self._edges: List[Dict[str, Any]] = []
 
         self.last_query_trace: Dict[str, Any] = {}
         self._connect()
 
+    @property
+    def _nodes(self) -> Dict[str, Any]:
+        """Context-isolated in-memory nodes dictionary for the active graph."""
+        g = self.graph_name
+        if g not in self._target_graphs:
+            self._target_graphs[g] = {"nodes": {}, "edges": []}
+        return self._target_graphs[g]["nodes"]
+
+    @_nodes.setter
+    def _nodes(self, val: Dict[str, Any]) -> None:
+        g = self.graph_name
+        if g not in self._target_graphs:
+            self._target_graphs[g] = {"nodes": {}, "edges": []}
+        self._target_graphs[g]["nodes"] = val
+
+    @property
+    def _edges(self) -> List[Dict[str, Any]]:
+        """Context-isolated in-memory edges list for the active graph."""
+        g = self.graph_name
+        if g not in self._target_graphs:
+            self._target_graphs[g] = {"nodes": {}, "edges": []}
+        return self._target_graphs[g]["edges"]
+
+    @_edges.setter
+    def _edges(self, val: List[Dict[str, Any]]) -> None:
+        g = self.graph_name
+        if g not in self._target_graphs:
+            self._target_graphs[g] = {"nodes": {}, "edges": []}
+        self._target_graphs[g]["edges"] = val
+
+    @property
+    def graph_name(self) -> str:
+        """Context-aware graph name: resolves active coroutine context before falling back to default."""
+        ctx = _active_graph_name.get()
+        return ctx if ctx else self._default_graph_name
+
+    @graph_name.setter
+    def graph_name(self, value: str) -> None:
+        self._default_graph_name = value
+        _active_graph_name.set(value)
+
+    @contextmanager
+    def graph_scope(self, target_or_graph_name: str):
+        """
+        Context manager for thread-safe and coroutine-safe multi-tenant / multi-target isolation (Problem 7).
+        Isolates all Cypher queries within the block to the given target graph without mutating
+        global state or interfering with concurrent asynchronous tasks.
+        """
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_or_graph_name)
+        isolated_name = clean_name if clean_name.startswith("ghostgraph_") else f"ghostgraph_{clean_name}"
+        if isolated_name not in self._target_graphs:
+            self._target_graphs[isolated_name] = {"nodes": {}, "edges": []}
+        token = _active_graph_name.set(isolated_name)
+        try:
+            yield isolated_name
+        finally:
+            _active_graph_name.reset(token)
+
     def get_graph_instance(self, target_or_graph_name: Optional[str] = None) -> Any:
         """
-        Thread-safe, non-mutating multigraph retrieval (Problem 7: Multi-Tenant Isolation).
+        Thread-safe, context-aware multigraph retrieval (Problem 7: Multi-Tenant Isolation).
         Returns the isolated FalkorDB graph instance without mutating the default singleton state.
         """
-        if not target_or_graph_name:
-            return self.graph
-
-        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_or_graph_name)
+        target_name = target_or_graph_name or self.graph_name
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
         isolated_name = clean_name if clean_name.startswith("ghostgraph_") else f"ghostgraph_{clean_name}"
 
         if self.is_connected and self.client:
@@ -69,15 +130,17 @@ class FalkorClient:
             return self._graphs[isolated_name]
         return None
 
-    def select_target_graph(self, target_name: str) -> None:
+    def select_target_graph(self, target_name: str) -> str:
         """
-        Multigraph Isolation (Hackathon Blueprint Feature 3):
-        Leverages FalkorDB's multigraph architecture so each target binary has its
-        own isolated graph (e.g. ghostgraph:space_invaders, ghostgraph:billing).
+        Multigraph Isolation (Hackathon Blueprint Feature 3 & Problem 7):
+        Leverages FalkorDB's multigraph architecture and Python ContextVars so each
+        target binary or tenant has its own isolated graph (e.g. ghostgraph_space_invaders, ghostgraph_billing)
+        without cross-tenant state bleed or race conditions in concurrent async tasks.
         """
         clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", target_name)
         isolated_name = f"ghostgraph_{clean_name}"
-        self.graph_name = isolated_name
+        _active_graph_name.set(isolated_name)
+        self._default_graph_name = isolated_name
 
         # Isolate In-Memory graph per target
         if isolated_name not in self._target_graphs:
@@ -87,10 +150,13 @@ class FalkorClient:
 
         if self.is_connected and self.client:
             try:
-                self.graph = self.get_graph_instance(self.graph_name)
-                logger.info(f"Switched to isolated FalkorDB multigraph: '{self.graph_name}'")
+                g = self.get_graph_instance(isolated_name)
+                if g:
+                    self.graph = g
+                logger.info(f"Switched context to isolated FalkorDB multigraph: '{isolated_name}'")
             except Exception as e:
-                logger.warning(f"Could not select isolated graph {self.graph_name}: {e}")
+                logger.warning(f"Could not select isolated graph {isolated_name}: {e}")
+        return isolated_name
 
     def ro_query(self, cypher: str, params: Optional[Dict[str, Any]] = None, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -104,7 +170,8 @@ class FalkorClient:
         params = params or {}
         records: List[Dict[str, Any]] = []
 
-        target_graph = self.get_graph_instance(graph_name) if graph_name else self.graph
+        target_name = graph_name or self.graph_name
+        target_graph = self.get_graph_instance(target_name)
 
         if self.is_connected and target_graph:
             try:
@@ -129,9 +196,9 @@ class FalkorClient:
                         records.append({headers[i]: row[i] for i in range(min(len(headers), len(row)))})
             except Exception as e:
                 logger.warning(f"FalkorDB ro_query on Cloud notice ({e}); using in-memory graph store.")
-                records = self._execute_in_memory(cypher, params)
+                records = self._execute_in_memory(cypher, params, graph_name=target_name)
         else:
-            records = self._execute_in_memory(cypher, params)
+            records = self._execute_in_memory(cypher, params, graph_name=target_name)
 
         elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
         self.last_query_trace = {
@@ -182,7 +249,8 @@ class FalkorClient:
         Supports explicit non-mutating `graph_name` parameter for per-tenant / per-session isolation.
         """
         params = params or {}
-        target_graph = self.get_graph_instance(graph_name) if graph_name else self.graph
+        target_name = graph_name or self.graph_name
+        target_graph = self.get_graph_instance(target_name)
 
         if self.is_connected and target_graph:
             try:
@@ -204,12 +272,20 @@ class FalkorClient:
                 return records
             except Exception as e:
                 logger.warning(f"FalkorDB Cloud query error ({e}); using resilient in-memory graph store.")
-                return self._execute_in_memory(cypher, params)
+                return self._execute_in_memory(cypher, params, graph_name=target_name)
 
-        return self._execute_in_memory(cypher, params)
+        return self._execute_in_memory(cypher, params, graph_name=target_name)
 
-    def _execute_in_memory(self, cypher: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _execute_in_memory(self, cypher: str, params: Dict[str, Any], graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Authentic in-memory Cypher execution engine."""
+        g_name = graph_name or self.graph_name
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", g_name)
+        isolated_name = clean_name if clean_name.startswith("ghostgraph_") else f"ghostgraph_{clean_name}"
+        if isolated_name not in self._target_graphs:
+            self._target_graphs[isolated_name] = {"nodes": {}, "edges": []}
+        self._nodes = self._target_graphs[isolated_name]["nodes"]
+        self._edges = self._target_graphs[isolated_name]["edges"]
+
         # 1. Batch UNWIND Global Memory
         if "UNWIND $buffers AS b" in cypher:
             buffers = params.get("buffers", [])

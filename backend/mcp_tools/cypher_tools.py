@@ -12,7 +12,7 @@ from backend.mcp_tools.falkor_client import falkor_client
 
 logger = logging.getLogger("ghostgraph.mcp_tools")
 
-def get_function_context(function_identifier: str) -> Dict[str, Any]:
+def get_function_context(function_identifier: str, graph_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Retrieves the complete topological context of a function by name or hex address:
     - Pseudocode, raw assembly, & signature
@@ -37,7 +37,7 @@ def get_function_context(function_identifier: str) -> Dict[str, Any]:
            collect(DISTINCT {address: read_mem.address, label: read_mem.label, type: read_mem.data_type}) AS reads,
            collect(DISTINCT {address: write_mem.address, label: write_mem.label, type: write_mem.data_type}) AS writes
     """
-    records = falkor_client.query(cypher, {"id": function_identifier})
+    records = falkor_client.query(cypher, {"id": function_identifier}, graph_name=graph_name)
     if records:
         return records[0]
     return {
@@ -52,7 +52,7 @@ def get_function_context(function_identifier: str) -> Dict[str, Any]:
         "writes": []
     }
 
-def resolve_memory_source(memory_address: str) -> List[Dict[str, Any]]:
+def resolve_memory_source(memory_address: str, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Multi-Hop Query (Track 01):
     Traces backwards through the graph to discover which function initialized
@@ -70,9 +70,9 @@ def resolve_memory_source(memory_address: str) -> List[Dict[str, Any]]:
            initializer.raw_asm AS producer_asm,
            caller.name AS parent_caller
     """
-    return falkor_client.query(cypher, {"addr": memory_address})
+    return falkor_client.query(cypher, {"addr": memory_address}, graph_name=graph_name)
 
-def find_memory_consumers(memory_address: str) -> List[Dict[str, Any]]:
+def find_memory_consumers(memory_address: str, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Identifies all functions in the binary that read from a given memory address.
     """
@@ -81,9 +81,9 @@ def find_memory_consumers(memory_address: str) -> List[Dict[str, Any]]:
     RETURN consumer.name AS consumer_name,
            consumer.address AS consumer_address
     """
-    return falkor_client.query(cypher, {"addr": memory_address})
+    return falkor_client.query(cypher, {"addr": memory_address}, graph_name=graph_name)
 
-def get_call_chain(start_fn: str, target_fn: str) -> List[Dict[str, Any]]:
+def get_call_chain(start_fn: str, target_fn: str, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Multi-hop pathfinding: traces the execution call path from an entry point to a target subroutine.
     """
@@ -94,9 +94,9 @@ def get_call_chain(start_fn: str, target_fn: str) -> List[Dict[str, Any]]:
     RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS call_path
     LIMIT 3
     """
-    return falkor_client.query(cypher, {"start": start_fn, "target": target_fn})
+    return falkor_client.query(cypher, {"start": start_fn, "target": target_fn}, graph_name=graph_name)
 
-def compute_function_pagerank(limit: int = 5) -> List[Dict[str, Any]]:
+def compute_function_pagerank(limit: int = 5, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Native FalkorDB Graph Algorithm (Hackathon Blueprint Feature 1):
     Calls FalkorDB's native PageRank algorithm over the Function CALLS graph
@@ -109,7 +109,7 @@ def compute_function_pagerank(limit: int = 5) -> List[Dict[str, Any]]:
     ORDER BY score DESC
     LIMIT $limit
     """
-    records = falkor_client.ro_query(cypher, {"limit": limit})
+    records = falkor_client.ro_query(cypher, {"limit": limit}, graph_name=graph_name)
     if records:
         return records
 
@@ -122,9 +122,9 @@ def compute_function_pagerank(limit: int = 5) -> List[Dict[str, Any]]:
     ORDER BY score DESC
     LIMIT $limit
     """
-    return falkor_client.ro_query(fallback_cypher, {"limit": limit})
+    return falkor_client.ro_query(fallback_cypher, {"limit": limit}, graph_name=graph_name)
 
-def find_shortest_call_path(start_fn: str, target_fn: str) -> Dict[str, Any]:
+def find_shortest_call_path(start_fn: str, target_fn: str, graph_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Explicit Multi-Hop Path (Hackathon Blueprint Feature 4 & Feature 1):
     Calls FalkorDB shortest path or traverses CALLS to return the explicit
@@ -136,7 +136,7 @@ def find_shortest_call_path(start_fn: str, target_fn: str) -> Dict[str, Any]:
     WITH f1, f2, shortestPath((f1)-[:CALLS*1..6]->(f2)) AS p
     RETURN [n IN nodes(p) | coalesce(n.name, n.address)] AS path_nodes
     """
-    records = falkor_client.ro_query(cypher, {"start": start_fn, "target": target_fn})
+    records = falkor_client.ro_query(cypher, {"start": start_fn, "target": target_fn}, graph_name=graph_name)
     if records and records[0].get("path_nodes"):
         nodes = records[0]["path_nodes"]
         return {"path_nodes": nodes, "formatted": " -> ".join(nodes)}
@@ -161,7 +161,7 @@ def verify_synthesized_symbols(code: str, allowed_symbols: List[str]) -> Dict[st
         "grounded_symbols": grounded
     }
 
-def detect_subsystem_clusters() -> List[Dict[str, Any]]:
+def detect_subsystem_clusters(graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Clusters functions into functional roles (Boot, Loop, Data Processing, Workers)
     based on call degree and memory read/write topology.
@@ -177,7 +177,7 @@ def detect_subsystem_clusters() -> List[Dict[str, Any]]:
            count(DISTINCT callee) AS callee_count,
            collect(DISTINCT m.address) AS shared_memory
     """
-    records = falkor_client.ro_query(cypher)
+    records = falkor_client.ro_query(cypher, graph_name=graph_name)
     clusters = []
     for r in records:
         callers = r.get("caller_count", 0)
@@ -203,7 +203,7 @@ def detect_subsystem_clusters() -> List[Dict[str, Any]]:
         })
     return clusters
 
-def get_struct_definition(struct_name: str) -> Dict[str, Any]:
+def get_struct_definition(struct_name: str, graph_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Returns the field layout and byte offsets of a struct,
     deduced across multiple functions.
@@ -214,12 +214,12 @@ def get_struct_definition(struct_name: str) -> Dict[str, Any]:
            s.size AS total_size,
            collect({offset: f.offset, name: f.name, type: f.type}) AS fields
     """
-    records = falkor_client.query(cypher, {"name": struct_name})
+    records = falkor_client.query(cypher, {"name": struct_name}, graph_name=graph_name)
     if records:
         return records[0]
     return {"struct_name": struct_name, "total_size": 0, "fields": []}
 
-def fetch_failure_memory(target_name: str, candidate_version: int, function_name: Optional[str] = None) -> List[Dict[str, Any]]:
+def fetch_failure_memory(target_name: str, candidate_version: int, function_name: Optional[str] = None, graph_name: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Episodic Memory Query (Track 02):
     Retrieves all test cases that failed in the previous candidate version,
@@ -238,7 +238,7 @@ def fetch_failure_memory(target_name: str, candidate_version: int, function_name
                coalesce(f.name, c.function_name) AS target_function,
                c.id AS candidate_id
         """
-        return falkor_client.query(cypher, {"version": candidate_version, "fname": function_name})
+        return falkor_client.query(cypher, {"version": candidate_version, "fname": function_name}, graph_name=graph_name)
     else:
         cypher = """
         MATCH (c:Candidate {version: $version})-[r:FAILED_ON]->(t:TestCase)
@@ -251,9 +251,9 @@ def fetch_failure_memory(target_name: str, candidate_version: int, function_name
                coalesce(f.name, c.function_name) AS target_function,
                c.id AS candidate_id
         """
-        return falkor_client.query(cypher, {"version": candidate_version})
+        return falkor_client.query(cypher, {"version": candidate_version}, graph_name=graph_name)
 
-def record_candidate(function_name: str, source_code: str, version: int, status: str = "PENDING", target_name: str = "", candidate_id: Optional[str] = None) -> str:
+def record_candidate(function_name: str, source_code: str, version: int, status: str = "PENDING", target_name: str = "", candidate_id: Optional[str] = None, graph_name: Optional[str] = None) -> str:
     """
     Commits a new candidate implementation into FalkorDB.
     """
@@ -282,11 +282,11 @@ def record_candidate(function_name: str, source_code: str, version: int, status:
         "code": source_code,
         "version": version,
         "status": status
-    })
+    }, graph_name=graph_name)
     logger.info(f"Committed Candidate {candidate_id} to FalkorDB [v{version} for {function_name}]")
     return candidate_id
 
-def record_test_outcome(candidate_id: str, test_id: str, passed: Any, diff: str = "") -> None:
+def record_test_outcome(candidate_id: str, test_id: str, passed: Any, diff: str = "", graph_name: Optional[str] = None) -> None:
     """
     Records differential verification result in FalkorDB (Track 02).
     """
@@ -297,11 +297,11 @@ def record_test_outcome(candidate_id: str, test_id: str, passed: Any, diff: str 
         MERGE (t:TestCase {id: $tid})
         MERGE (c)-[:PASSED]->(t)
         """
-        falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id})
+        falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id}, graph_name=graph_name)
     else:
         cypher = """
         MERGE (c:Candidate {id: $cid})
         MERGE (t:TestCase {id: $tid})
         CREATE (c)-[:FAILED_ON {diff: $diff, timestamp: timestamp()}]->(t)
         """
-        falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id, "diff": diff})
+        falkor_client.query(cypher, {"cid": candidate_id, "tid": test_id, "diff": diff}, graph_name=graph_name)
