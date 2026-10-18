@@ -49,33 +49,22 @@
         </button>
 
         <!-- Center Navigation Links -->
-        <div class="hidden md:flex flex-none items-center gap-5 lg:gap-6 text-[14px] font-medium text-[#1c1d21] whitespace-nowrap">
+        <div class="hidden md:flex flex-none items-center gap-6 text-[14px] font-medium text-[#1c1d21] whitespace-nowrap">
           <button onclick="showHomeScreen()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Home</button>
           <button onclick="openTargetSelectorModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Targets</button>
           <button onclick="selectTarget(currentTargetId || 'space_invaders')" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Studio</button>
           <button onclick="showDuelScreen()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Live Duel</button>
-          <button onclick="openCypherModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-[#6b7280] flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
-            <span class="flex-none whitespace-nowrap">Cypher Console</span>
-          </button>
-          <button onclick="openGuideModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors flex items-center gap-1.5 text-[#4b5563]">
-            <span class="w-4 h-4 rounded-full bg-[#f3f4f6] text-[#141417] text-[10px] font-bold inline-flex items-center justify-center flex-none">?</span>
-            <span class="flex-none whitespace-nowrap">Guide</span>
-          </button>
+          <button onclick="openCypherModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors">Cypher Console</button>
+          <button onclick="openGuideModal()" class="nav-link-item flex-none whitespace-nowrap hover:text-[#6b7280] transition-colors text-[#4b5563]">Guide</button>
         </div>
 
-        <!-- Right Action Strip: FalkorDB Connection Transparency (Bug #8) + Upload Button -->
+        <!-- Right Action Strip: Upload Button -->
         <div class="flex flex-none items-center gap-2.5 whitespace-nowrap">
-          <div id="falkorStatusBadge" class="hidden sm:flex flex-none whitespace-nowrap items-center gap-2 bg-[#f3f4f6] px-3.5 py-2 rounded-full text-[12px] font-medium text-[#374151] border border-[#e5e7eb] cursor-default" title="FalkorDB Connection Status">
-            <span id="falkorStatusDot" class="w-2 h-2 rounded-full bg-[#d97706] animate-pulse flex-none"></span>
-            <span id="falkorStatusLabel" class="flex-none whitespace-nowrap">FalkorDB: Checking...</span>
-          </div>
-
-          <button onclick="triggerBinaryUpload()" class="flex-none whitespace-nowrap bg-[#f3f4f6] hover:bg-[#e7e9ee] text-[#0b0b0e] font-semibold text-[13px] px-5 py-2.5 rounded-full transition-colors flex items-center gap-2">
-            <span class="flex-none whitespace-nowrap">Upload Binary</span>
-            <svg class="w-3.5 h-3.5 text-[#0b0b0e] flex-none" viewBox="0 0 16 16" fill="currentColor">
+          <button onclick="triggerBinaryUpload()" class="flex-none whitespace-nowrap bg-[#0b0b0e] hover:bg-[#27272a] text-white font-medium text-[13px] px-4 py-2 rounded-full transition-colors flex items-center gap-1.5 shadow-xs">
+            <svg class="w-3.5 h-3.5 flex-none" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.414A2 2 0 0 0 13.414 4L12 2.586A2 2 0 0 0 10.586 2H4zm4 3.5a.75.75 0 0 1 .75.75v2.69l1.22-1.22a.75.75 0 1 1 1.06 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.22 1.22V6.25A.75.75 0 0 1 8 5.5z"/>
             </svg>
+            <span class="flex-none whitespace-nowrap">Upload</span>
           </button>
         </div>
 

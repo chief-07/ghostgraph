@@ -53,7 +53,7 @@ html, body {
 /* Floating Top Navbar Pill */
 .nav-pill-bar {
   background: #ffffff;
-  border: 1px solid #ececef;
+  border: none;
   border-radius: 9999px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.025);
 }

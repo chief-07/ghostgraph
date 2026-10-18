@@ -47,7 +47,7 @@ class TopologyAgent:
         if target_id:
             self.client.select_target_graph(target_id)
 
-        # Step 1: Detect ELF headers if present to find code offset & entrypoint
+        # Step 1: Detect ELF or PE (.exe) headers if present to find code offset & entrypoint
         code_bytes = binary_data
         load_addr = base_address
 
@@ -74,6 +74,22 @@ class TopologyAgent:
                         load_addr = e_entry
             except Exception as e:
                 logger.debug(f"ELF parse note: {e}")
+        elif binary_data.startswith(b"MZ"):
+            try:
+                import pefile
+                pe = pefile.PE(data=binary_data)
+                # Look for executable section (usually .text)
+                for section in pe.sections:
+                    if section.Characteristics & 0x20000000:  # IMAGE_SCN_MEM_EXECUTE
+                        sec_data = section.get_data()
+                        if sec_data:
+                            code_bytes = sec_data
+                            load_addr = pe.OPTIONAL_HEADER.ImageBase + section.VirtualAddress
+                            break
+                if hasattr(pe, "OPTIONAL_HEADER") and pe.OPTIONAL_HEADER.AddressOfEntryPoint:
+                    load_addr = pe.OPTIONAL_HEADER.ImageBase + pe.OPTIONAL_HEADER.AddressOfEntryPoint
+            except Exception as e:
+                logger.debug(f"PE parse note: {e}")
 
         # Step 2: Full Instruction Disassembly with Capstone
         md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)

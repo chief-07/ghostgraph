@@ -32,24 +32,24 @@ def test_endpoints():
     print(f"  -> OK (Found {len(targets)} targets: {[t['id'] for t in targets]})")
 
     print("Testing POST /api/ingest ...")
-    res = client.post("/api/ingest", data={"target_id": "pacman"})
+    res = client.post("/api/ingest", data={"target_id": "space_invaders"})
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "INGESTED"
     print(f"  -> OK (Ingested {data['functions_count']} functions)")
 
     print("Testing GET /api/graph ...")
-    res = client.get("/api/graph")
+    res = client.get("/api/graph?target_id=space_invaders")
     assert res.status_code == 200
     graph = res.json()
     print(f"  -> OK (Cytoscape graph has {len(graph.get('nodes', []))} nodes, {len(graph.get('edges', []))} edges)")
 
-    print("Testing POST /api/snake/step ...")
-    res = client.post("/api/snake/step", json={"dir": 1, "is_broken_mode": False})
+    print("Testing POST /api/lunar/step ...")
+    res = client.post("/api/lunar/step", json={"throttle": 0.65, "pitch_rate": 0.0, "auto_guidance": True, "mode": "ghostgraph"})
     assert res.status_code == 200
-    step_data = res.json()
-    assert "body" in step_data and "food" in step_data
-    print(f"  -> OK (Snake head: {step_data['body'][0]}, Score: {step_data.get('score')})")
+    lunar_data = res.json()
+    assert "ghostgraph" in lunar_data and "flat_llm" in lunar_data
+    print(f"  -> OK (Lunar Sim: Alt={lunar_data['ghostgraph']['radar_alt']}m, Vy={lunar_data['ghostgraph']['vy']}m/s)")
 
     print("Testing POST /api/invaders/step (Dual Simultaneous Simulation) ...")
     res = client.post("/api/invaders/step", json={"action": "none"})

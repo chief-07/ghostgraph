@@ -470,13 +470,16 @@ async function handleBinaryUpload(file) {
     });
     const result = await res.json();
 
-    uploadStatusMessage.innerText = `Ingested ${result.disassembled_instructions} instructions across ${result.inferred_functions} functions.`;
+    const insnCount = result.disassembled_instructions ?? result.total_instructions ?? 0;
+    const fnCount = result.inferred_functions ?? result.functions_count ?? 0;
+
+    uploadStatusMessage.innerText = `Ingested ${insnCount} instructions across ${fnCount} functions.`;
 
     setTimeout(() => {
       const targetId = result.target_id || "custom_upload";
       selectTarget(targetId);
       document.getElementById("studioTargetMeta").innerText = 
-        `${file.name} • x86_64 stripped binary (${result.disassembled_instructions} instructions)`;
+        `${file.name} • x86_64 stripped binary (${insnCount} instructions)`;
     }, 400);
 
   } catch (err) {
@@ -1307,12 +1310,10 @@ async function fetchFalkorStatus() {
 
     const isConnected = data.connected === true;
     const dotColor = isConnected ? "bg-[#16a34a]" : "bg-[#d97706]";
-    const textLabel = isConnected 
-      ? `FalkorDB Cloud [${data.graph_name}]` 
-      : `FalkorDB In-Memory [${data.graph_name}]`;
+    const textLabel = isConnected ? "FalkorDB: Cloud" : "FalkorDB: Local";
     const tooltip = isConnected 
-      ? `Connected to FalkorDB Cloud at ${data.host}:${data.port} (${data.nodes_count} nodes, ${data.edges_count} edges)` 
-      : `Resilient In-Memory Simulation (${data.nodes_count} nodes, ${data.edges_count} edges). Set FALKORDB_HOST in .env for Cloud.`;
+      ? `Connected to FalkorDB Cloud [${data.graph_name}] at ${data.host}:${data.port} (${data.nodes_count} nodes, ${data.edges_count} edges)` 
+      : `FalkorDB In-Memory [${data.graph_name}] (${data.nodes_count} nodes, ${data.edges_count} edges). Set FALKORDB_HOST in .env for Cloud.`;
 
     if (navDot) {
       navDot.className = `w-2 h-2 rounded-full ${dotColor}`;
