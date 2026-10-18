@@ -326,23 +326,31 @@ class SupervisorAgent:
         if use_graph_context:
 
             # Feature 1: Load-Bearing Subroutines via Graph Algorithm (PageRank)
-            pagerank_ranks = cypher_tools.compute_function_pagerank(limit=3)
+            pagerank_ranks = cypher_tools.compute_function_pagerank(limit=5)
+            pr_functions = [r.get('function', '') for r in pagerank_ranks if r.get('function')]
+            top_score = pagerank_ranks[0].get('score', 0.0) if pagerank_ranks else 0.0
+            
+            # Autonomously prioritize load-bearing functions based on PageRank
+            if not fn_to_reconstruct and pr_functions:
+                fn_to_reconstruct = pr_functions[0]
+
             yield {
                 "type": "AGENT_STEP",
                 "agent": "TopologyAgent",
                 "action": "NATIVE_GRAPH_ALGORITHM_PAGERANK",
-                "message": f"FalkorDB PageRank identified load-bearing subroutines: {', '.join(r.get('function','') for r in pagerank_ranks[:3])}",
+                "message": f"FalkorDB PageRank identified load-bearing subroutines: {', '.join(pr_functions[:3])}. Subroutine '{fn_to_reconstruct}' assigned priority (PageRank score: {top_score:.3f}).",
                 "trace": falkor_client.last_query_trace
             }
 
             # Feature 4: Explicit Multi-Hop Call Path behind the answer
             shortest_path = cypher_tools.find_shortest_call_path(prod_fn, fn_to_reconstruct)
+            call_chain = shortest_path.get("path_nodes", [])
             yield {
                 "type": "AGENT_STEP",
                 "agent": "TopologyAgent",
                 "action": "MULTI_HOP_EXPLICIT_PATH",
                 "message": f"Execution Path: {shortest_path.get('formatted', '')}",
-                "path": shortest_path.get("path_nodes", [])
+                "path": call_chain
             }
 
             # Query real provenance from FalkorDB using ro_query (Bug #6: truthful check)
@@ -392,6 +400,7 @@ class SupervisorAgent:
                     "trace": falkor_client.last_query_trace
                 }
         else:
+            call_chain = []
             yield {
                 "type": "AGENT_STEP",
                 "agent": "ReconstructionAgent",
@@ -412,7 +421,8 @@ class SupervisorAgent:
             target_name=target_name,
             version=1,
             use_graph_context=use_graph_context,
-            target_language=target_language
+            target_language=target_language,
+            call_chain=call_chain
         )
         synthesized_code = recon_result["source_code"]
         candidate_id = recon_result["candidate_id"]
@@ -501,7 +511,8 @@ class SupervisorAgent:
                 target_name=target_name,
                 version=current_version,
                 use_graph_context=use_graph_context,
-                target_language=target_language
+                target_language=target_language,
+                call_chain=call_chain
             )
             synthesized_code = recon_result["source_code"]
             candidate_id = recon_result["candidate_id"]

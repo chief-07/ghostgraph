@@ -116,7 +116,7 @@ def compute_progressive_tax(taxable_amount):
     return round(total_tax, 2)
 """
 
-    def mock_reconstruct(function_name, target_name, version=1, use_graph_context=True, target_language="python"):
+    def mock_reconstruct(function_name, target_name, version=1, use_graph_context=True, target_language="python", call_chain=None, **kwargs):
         code = broken_code if version == 1 else fixed_code
         recalled = 1 if version > 1 else 0
         return {
