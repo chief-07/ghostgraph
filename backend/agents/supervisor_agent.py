@@ -186,7 +186,7 @@ class SupervisorAgent:
         use_graph_context: bool = True,
         binary_bytes: Optional[bytes] = None,
         target_language: str = "python",
-        max_iterations: int = 1
+        max_iterations: int = 5
     ) -> Generator[Dict[str, Any], None, None]:
         """
         Executes genuine end-to-end multi-agent reconstruction and verification loop.

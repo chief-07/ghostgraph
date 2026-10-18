@@ -18,7 +18,9 @@ import random
 import logging
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+import hmac
+import hashlib
 
 logger = logging.getLogger("ghostgraph.app")
 
@@ -35,6 +37,43 @@ from backend.agents.topology_agent import topology_agent
 from backend.agents.supervisor_agent import supervisor_agent, TARGET_CONFIGS
 from backend.harness.differential import differential_tester, LunarSimEngine, LUNAR_TERRAIN_PROFILE
 from backend.mcp_tools.falkor_client import falkor_client
+
+# Problem 10: Cryptographic Verification Authority Secret
+SIGNING_AUTHORITY_SECRET = os.getenv("GHOSTGRAPH_SIGNING_SECRET", "ghostgraph-falkordb-cryptographic-authority-2026")
+
+
+def generate_verification_signature(
+    target_id: str,
+    candidate_id: str,
+    version: int,
+    status: str,
+    parity: float,
+    passed_tests: int,
+    total_tests: int,
+    source_code: str,
+    timestamp: float
+) -> Tuple[str, str, str]:
+    """
+    Problem 10 (HMAC-SHA256 Cryptographic Verification Proof):
+    Computes a canonical SHA-256 payload digest and cryptographic HMAC-SHA256 signature
+    over all verification metrics, test vector outcomes, and candidate source code.
+    Returns (certificate_id, payload_digest, cryptographic_signature).
+    """
+    source_sha256 = hashlib.sha256(source_code.encode("utf-8")).hexdigest()
+    canonical_payload = (
+        f"target={target_id}:candidate={candidate_id}:version={version}:"
+        f"status={status}:parity={parity}:passed={passed_tests}:total={total_tests}:"
+        f"source_sha256={source_sha256}:timestamp={timestamp}"
+    )
+    payload_digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+    signature = hmac.new(
+        SIGNING_AUTHORITY_SECRET.encode("utf-8"),
+        payload_digest.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+    cert_id = f"CERT-SIG-{payload_digest[:12].upper()}"
+    return cert_id, payload_digest, signature
+
 
 app = FastAPI(
     title="GhostGraph: Autonomous Graph-Based Reverse Engineering Platform",
@@ -101,6 +140,30 @@ TARGETS = {
 frontend_dir = Path(__file__).parent.parent / "frontend"
 if frontend_dir.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+    assets_dir = frontend_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+@app.get("/style.css")
+async def serve_root_css():
+    css_file = frontend_dir / "style.css"
+    if css_file.exists():
+        return HTMLResponse(content=css_file.read_text(encoding="utf-8"), media_type="text/css")
+    raise HTTPException(status_code=404)
+
+@app.get("/app.js")
+async def serve_root_app_js():
+    js_file = frontend_dir / "app.js"
+    if js_file.exists():
+        return HTMLResponse(content=js_file.read_text(encoding="utf-8"), media_type="application/javascript")
+    raise HTTPException(status_code=404)
+
+@app.get("/graph_engine.js")
+async def serve_root_graph_js():
+    js_file = frontend_dir / "graph_engine.js"
+    if js_file.exists():
+        return HTMLResponse(content=js_file.read_text(encoding="utf-8"), media_type="application/javascript")
+    raise HTTPException(status_code=404)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
@@ -229,6 +292,8 @@ async def execute_custom_cypher(request: Request):
     """
     body = await request.json()
     query = body.get("query", "").strip()
+    target_id = body.get("target_id") or body.get("target") or "lunar_lander"
+    falkor_client.select_target_graph(target_id)
     if not query:
         raise HTTPException(status_code=400, detail="Empty query provided.")
 
@@ -288,7 +353,7 @@ async def stream_reconstruction(
     Streams the live multi-agent execution events (Gemini reasoning,
     Cypher MCP calls, GCC compilation, differential diffs) via Server-Sent Events.
     """
-    iterations = max_iterations if max_iterations is not None else (2 if use_graph else 1)
+    iterations = max_iterations if max_iterations is not None else (5 if use_graph else 1)
     async def event_generator():
         for event in supervisor_agent.run_reconstruction_pipeline(
             target_name=target_id,
@@ -320,33 +385,29 @@ async def stream_reconstruction(
 # ============================================================================
 
 class SpaceInvadersGameEngine:
-    live_ghost_missile_fn = None
-    live_flat_missile_fn = None
     live_ghost_candidate_code = ""
     live_flat_candidate_code = ""
 
     @classmethod
     def load_synthesized_candidate(cls, code: str, use_graph: bool):
-        """Compiles and hot-loads candidate code directly into the live execution engine."""
+        """
+        Problem 8 (API-Process exec() Untrusted Code Execution Elimination):
+        Validates candidate syntax statically via AST without in-process exec(),
+        and stores the candidate code to be executed inside the isolated sandbox subprocess.
+        """
         try:
-            compiled = compile(code, f"<live_{'ghostgraph' if use_graph else 'flat_llm'}>", "exec")
-            env = {
-                "bunkers_hit_check": lambda shotx, shoty, bunker_grid: cls._helper_bunker_check(shotx, shoty, bunker_grid),
-                "bunkersHitCheck": lambda shotx, shoty, bunker_grid: cls._helper_bunker_check(shotx, shoty, bunker_grid),
-                "player_hit_check": lambda shotx, shoty, player: cls._helper_player_check(shotx, shoty, player),
-                "playerHitCheck": lambda shotx, shoty, player: cls._helper_player_check(shotx, shoty, player),
-            }
-            exec(compiled, env)
-            fn_missile = env.get("aliens_missile_move") or env.get("aliensMissileMove")
-            if fn_missile:
+            from backend.harness.sandbox import validate_candidate_syntax
+            is_valid, err = validate_candidate_syntax(code)
+            if is_valid:
                 if use_graph:
-                    cls.live_ghost_missile_fn = fn_missile
                     cls.live_ghost_candidate_code = code
                 else:
-                    cls.live_flat_missile_fn = fn_missile
                     cls.live_flat_candidate_code = code
+                logger.info(f"[SpaceInvadersGameEngine] Successfully loaded candidate (mode: {'ghostgraph' if use_graph else 'flat_llm'})")
+            else:
+                logger.warning(f"[SpaceInvadersGameEngine] Candidate syntax validation rejected: {err}")
         except Exception as e:
-            print(f"[SpaceInvadersGameEngine] Candidate compilation notice: {e}")
+            logger.warning(f"[SpaceInvadersGameEngine] Candidate compilation notice: {e}")
 
     @staticmethod
     def _helper_bunker_check(shotx, shoty, bunker_grid):
@@ -500,18 +561,31 @@ class SpaceInvadersGameEngine:
         }
 
         if is_broken_mode:
-            # Execute LIVE FLAT LLM FUNCTION (if synthesized)
-            if self.live_flat_missile_fn:
+            # Execute LIVE FLAT LLM FUNCTION in sandbox
+            if self.live_flat_candidate_code:
                 try:
-                    self.live_flat_missile_fn(missile_state)
+                    from backend.harness.sandbox import run_sandboxed_step
+                    step_res = run_sandboxed_step(
+                        self.live_flat_candidate_code,
+                        missile_state,
+                        bunker_flat,
+                        player_dict,
+                        use_graph=False
+                    )
+                    if step_res.get("status") == "SUCCESS":
+                        missile_state = step_res["missile_state"]
+                    else:
+                        for i in range(5):
+                            if missile_state[i * 2] != 0:
+                                missile_state[i * 2 + 1] += 1
                 except Exception:
                     for i in range(5):
-                        if missile_state[i*2] != 0:
-                            missile_state[i*2+1] += 1
+                        if missile_state[i * 2] != 0:
+                            missile_state[i * 2 + 1] += 1
             else:
                 for i in range(5):
-                    if missile_state[i*2] != 0:
-                        missile_state[i*2+1] += 1
+                    if missile_state[i * 2] != 0:
+                        missile_state[i * 2 + 1] += 1
             # In flat mode, bunker_flat is ungrounded -> zero erosion occurs!
             # Check player collision or out of bounds for missiles in broken mode
             for i in range(5):
@@ -526,19 +600,24 @@ class SpaceInvadersGameEngine:
                     elif sy >= 24:
                         missile_state[i * 2] = 0
         else:
-            # Execute LIVE GHOSTGRAPH FUNCTION (synthesized via FalkorDB topology)
-            if self.live_ghost_missile_fn:
+            # Execute LIVE GHOSTGRAPH FUNCTION (synthesized via FalkorDB topology) in sandbox
+            if self.live_ghost_candidate_code:
                 try:
-                    import inspect
-                    sig = inspect.signature(self.live_ghost_missile_fn)
-                    p_count = len(sig.parameters)
-                    if p_count >= 3:
-                        self.live_ghost_missile_fn(missile_state, bunker_flat, player_dict)
-                    elif p_count == 1:
-                        self.live_ghost_missile_fn(missile_state)
+                    from backend.harness.sandbox import run_sandboxed_step
+                    step_res = run_sandboxed_step(
+                        self.live_ghost_candidate_code,
+                        missile_state,
+                        bunker_flat,
+                        player_dict,
+                        use_graph=True
+                    )
+                    if step_res.get("status") == "SUCCESS":
+                        missile_state = step_res["missile_state"]
+                        bunker_flat = step_res["bunker_flat"]
+                        player_dict = step_res["player_dict"]
                     else:
-                        self.live_ghost_missile_fn(missile_state, bunker_flat)
-                except Exception as e:
+                        self._fallback_missile_step(missile_state, bunker_flat, player_dict)
+                except Exception:
                     self._fallback_missile_step(missile_state, bunker_flat, player_dict)
             else:
                 self._fallback_missile_step(missile_state, bunker_flat, player_dict)
@@ -598,7 +677,7 @@ class SpaceInvadersGameEngine:
             "player_bullets": self.player_bullets,
             "alien_missiles": self.alien_missiles,
             "tick_count": self.tick_count,
-            "is_live_candidate": self.live_ghost_missile_fn is not None,
+            "is_live_candidate": bool(self.live_ghost_candidate_code),
             "live_ghost_code": self.live_ghost_candidate_code,
             "live_flat_code": self.live_flat_candidate_code
         }
@@ -735,8 +814,22 @@ async def export_reconstructed_project(target_id: str = "lunar_lander"):
         makefile = f"PYTHON = python3\n\nall: run\n\nrun:\n\t$(PYTHON) {filename}\n\ntest:\n\t$(PYTHON) -m pytest backend/tests/\n"
         compile_cmd = f"python3 {filename}"
 
+    now_ts = time.time()
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now_ts))
+    cert_id, payload_digest, signature = generate_verification_signature(
+        target_id=target_id,
+        candidate_id=candidate_id,
+        version=version,
+        status=cert_status,
+        parity=parity,
+        passed_tests=passed_tests,
+        total_tests=total_tests,
+        source_code=source_code,
+        timestamp=now_ts
+    )
+
     certificate = {
-        "certificate_id": f"CERT-{uuid.uuid4().hex[:8].upper()}",
+        "certificate_id": cert_id,
         "target_program": display_name,
         "target_id": target_id,
         "primary_subroutine": primary_fn,
@@ -746,11 +839,16 @@ async def export_reconstructed_project(target_id: str = "lunar_lander"):
         "parity_percentage": parity,
         "test_vectors_passed": passed_tests,
         "test_vectors_total": total_tests,
+        "source_code_sha256": hashlib.sha256(source_code.encode("utf-8")).hexdigest(),
         "graph_engine": falkor_client.graph_name,
         "database_mode": "FalkorDB Cloud" if falkor_client.is_connected else "In-Memory Simulation",
         "verification_agent": "GhostGraph Differential AST Verification Engine",
-        "timestamp": time.time(),
-        "verified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        "timestamp": now_ts,
+        "verified_at": now_iso,
+        "canonical_digest_sha256": payload_digest,
+        "cryptographic_signature": signature,
+        "signature_algorithm": "HMAC-SHA256",
+        "signing_authority": "GhostGraph Cryptographic Verification Authority v1.0"
     }
 
     cypher_audit_trail = f"""// GhostGraph Autonomous FalkorDB Reconstruction Audit Trail
@@ -794,6 +892,65 @@ RETURN count(t) AS passed_tests;
         "cypher_audit_trail": cypher_audit_trail
     })
 
+
+@app.post("/api/verify-certificate")
+async def verify_certificate(request: Request):
+    """
+    Problem 10 (Cryptographic Verification Authority Endpoint):
+    Cryptographically verifies an HMAC-SHA256 verification certificate.
+    Detects any tampering in parity scores, passing test counts, or source code.
+    """
+    try:
+        body = await request.json()
+        target_id = str(body.get("target_id", ""))
+        candidate_id = str(body.get("candidate_id", ""))
+        version = int(body.get("candidate_version", 1))
+        status = str(body.get("status", ""))
+        parity = float(body.get("parity_percentage", 0.0))
+        passed_tests = int(body.get("test_vectors_passed", 0))
+        total_tests = int(body.get("test_vectors_total", 0))
+        source_code = str(body.get("source_code", ""))
+        timestamp = float(body.get("timestamp", 0.0))
+        provided_sig = str(body.get("cryptographic_signature", ""))
+
+        if not source_code and body.get("source_code_sha256"):
+            source_sha256 = str(body.get("source_code_sha256"))
+        else:
+            source_sha256 = hashlib.sha256(source_code.encode("utf-8")).hexdigest()
+
+        canonical_payload = (
+            f"target={target_id}:candidate={candidate_id}:version={version}:"
+            f"status={status}:parity={parity}:passed={passed_tests}:total={total_tests}:"
+            f"source_sha256={source_sha256}:timestamp={timestamp}"
+        )
+        payload_digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+        expected_sig = hmac.new(
+            SIGNING_AUTHORITY_SECRET.encode("utf-8"),
+            payload_digest.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        is_valid = hmac.compare_digest(expected_sig, provided_sig)
+        return JSONResponse({
+            "valid": is_valid,
+            "status": "VALID_CRYPTOGRAPHIC_SIGNATURE" if is_valid else "INVALID_SIGNATURE_TAMPERED",
+            "certificate_id": body.get("certificate_id"),
+            "target_id": target_id,
+            "candidate_id": candidate_id,
+            "parity_percentage": parity,
+            "canonical_digest_sha256": payload_digest,
+            "expected_signature": expected_sig,
+            "provided_signature": provided_sig,
+            "signing_authority": "GhostGraph Cryptographic Verification Authority v1.0"
+        })
+    except Exception as e:
+        return JSONResponse({
+            "valid": False,
+            "status": "VERIFICATION_ERROR",
+            "error": str(e)
+        }, status_code=400)
+
+
 @app.post("/api/upload")
 async def upload_custom_binary(file: UploadFile = File(...)):
     """
@@ -801,8 +958,8 @@ async def upload_custom_binary(file: UploadFile = File(...)):
     Disassembles binary using Capstone, extracts call targets and memory dereferences,
     and ingests directly into an isolated FalkorDB multigraph via TopologyAgent.
     """
-    if file.size and file.size > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large (max 2MB).")
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 50MB).")
 
     contents = await file.read()
     filename = file.filename or "uploaded.bin"

@@ -29,7 +29,7 @@ class ReconstructionAgent:
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
-        self.active_model = "gemini-flash-lite-latest"
+        self.active_model = "gemini-3.1-flash-lite"
 
     def reconstruct_function(
         self,
@@ -243,7 +243,8 @@ Output ONLY the complete code inside a ```{target_language} ``` block."""
 
             # Dynamically parse brackets directly from FalkorDB initialization code
             init_code = tax_node.get("initialization_code", "")
-            matches = re.findall(r"\*\s*\(\s*double\s*\*\s*\)\s*\([^)]*\+\s*(\d+)\)\s*=\s*([0-9.e+]+);", init_code)
+            target_addr = tax_node.get("address", "0x00405000")
+            matches = re.findall(rf"\*\s*\(\s*double\s*\*\s*\)\s*\(\s*{re.escape(target_addr)}\s*\+\s*(\d+)\)\s*=\s*([0-9.e+]+);", init_code)
             brackets = []
             if matches:
                 pairs = {int(offset): float(val) for offset, val in matches}
@@ -356,10 +357,12 @@ Output ONLY the complete code inside a ```{target_language} ``` block."""
             raise ValueError("GEMINI_API_KEY environment variable is not configured.")
 
         models_to_try = [
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash",
             "gemini-flash-lite-latest",
             "gemini-flash-latest",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
+            "gemini-2.5-pro",
         ]
         if model and model not in models_to_try:
             models_to_try.insert(0, model)

@@ -23,6 +23,7 @@
     }
   </script>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-[#efefef] text-[#141417] min-h-screen flex flex-col font-sans antialiased selection:bg-[#0b0b0e] selection:text-white p-3 md:p-6">
 
@@ -74,25 +75,26 @@
     <!-- ================================================================== -->
     <!-- SCREEN 1: CLEAN MINIMALIST HERO + UNBOXED 3D ICONS                 -->
     <!-- ================================================================== -->
-    <section id="screenHero" class="screen-view active flex-1 flex-col justify-center">
+    <section id="screenHero" class="screen-view active flex-1 flex flex-col items-center justify-center w-full min-h-[580px]">
 
-      <!-- Center Hero Region with Clean Unboxed 3D Icons -->
-      <div class="relative flex-1 flex flex-col items-center justify-center px-6 py-16 md:py-24">
+      <!-- Center Hero Region (Dead-Center Symmetrical Layout) -->
+      <div class="relative w-full max-w-[1140px] mx-auto flex-1 flex items-center justify-center px-4 py-6 md:py-10">
 
-        <div class="w-full max-w-[1060px] mx-auto grid grid-cols-1 lg:grid-cols-12 items-center gap-6">
+        <div class="w-full flex items-center justify-between relative">
 
           <!-- LEFT 3D ICON (Ghost with tactile soft drop shadow) -->
-          <div class="hidden lg:flex lg:col-span-2 items-center justify-center select-none -mt-8">
+          <div class="hidden lg:flex w-[140px] flex-none items-center justify-center select-none">
             <img
               src="/static/assets/icon_ghost_3d.png"
               alt="GhostGraph 3D"
               onclick="selectTarget('space_invaders')"
               class="hero-3d-left cursor-pointer"
+              title="1978 Space Invaders Arcade Target"
             />
           </div>
 
-          <!-- CENTER HERO TEXT & CTA -->
-          <div class="lg:col-span-8 flex flex-col items-center text-center">
+          <!-- CENTER HERO TEXT & CTA (100% Dead-Center) -->
+          <div class="flex-1 max-w-[680px] mx-auto flex flex-col items-center text-center px-2">
 
             <!-- Main Display Headline in Outfit Sans -->
             <h1 class="text-[44px] sm:text-[60px] md:text-[68px] font-semibold tracking-[-0.032em] leading-[1.08] text-[#0b0b0e]">
@@ -133,15 +135,24 @@
             </div>
             <div id="uploadStatusMessage" class="hidden text-xs font-mono text-[#16a34a] pt-2"></div>
 
-            <!-- Mobile / Tablet 3D Ghost Icon -->
-            <div class="flex lg:hidden items-center justify-center mt-8">
-              <img src="/static/assets/icon_ghost_3d.png" alt="GhostGraph 3D" onclick="selectTarget('space_invaders')" class="hero-3d-left cursor-pointer"/>
+            <!-- Mobile / Tablet 3D Icons -->
+            <div class="flex lg:hidden items-center justify-center gap-6 mt-8">
+              <img src="/static/assets/icon_ghost_3d.png" alt="GhostGraph 3D" onclick="selectTarget('space_invaders')" class="hero-3d-left cursor-pointer w-20 h-20"/>
+              <img src="/static/assets/icon_graph_3d.png" alt="Graph 3D" onclick="selectTarget('lunar_lander')" class="hero-3d-right cursor-pointer w-20 h-20"/>
             </div>
 
           </div>
 
-          <!-- Empty 2-column spacer for balanced grid without graph icon -->
-          <div class="hidden lg:block lg:col-span-2"></div>
+          <!-- RIGHT 3D ICON (Graph / Crystal with tactile soft drop shadow) -->
+          <div class="hidden lg:flex w-[140px] flex-none items-center justify-center select-none">
+            <img
+              src="/static/assets/icon_graph_3d.png"
+              alt="Graph 3D"
+              onclick="selectTarget('lunar_lander')"
+              class="hero-3d-right cursor-pointer"
+              title="1969 Apollo 11 Lunar Guidance Target"
+            />
+          </div>
 
         </div>
 
@@ -373,6 +384,37 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- Custom Binary Compilation & Local Execution Guide (Custom Specimen Support) -->
+      <div id="customUploadCompileGuide" class="hidden border border-[#e2e8f0] bg-[#f8fafc] rounded-2xl p-5 space-y-3 shadow-xs">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></span>
+            <span class="text-[14px] font-bold text-[#0b0b0e]">Custom Binary Specimen: Local Compilation &amp; Execution Guide</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="copyReconstructedCode()" class="px-3 py-1.5 bg-white hover:bg-[#f1f5f9] text-[#0b0b0e] border border-[#cbd5e1] text-[12px] font-medium rounded-full transition-colors flex items-center gap-1.5 cursor-pointer">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy Code</span>
+            </button>
+            <button onclick="downloadReconstructedSource()" class="px-3 py-1.5 bg-[#0b0b0e] hover:bg-[#1e293b] text-white text-[12px] font-medium rounded-full transition-colors flex items-center gap-1.5 cursor-pointer">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Download Source</span>
+            </button>
+          </div>
+        </div>
+        <p class="text-[12.5px] text-[#475569] leading-relaxed">
+          GhostGraph has reverse-engineered your uploaded binary into clean source code grounded by FalkorDB graph memory. Because custom binaries require their specific host OS runtime, compile and execute the reconstructed logic directly on your local system:
+        </p>
+        <div class="bg-[#0f172a] text-[#f8fafc] font-mono text-[12px] rounded-xl p-3.5 overflow-x-auto leading-relaxed border border-[#334155]">
+          <div class="text-[#94a3b8] mb-1"># 1. Compile as standalone native executable:</div>
+          <div class="text-[#38bdf8] select-all">gcc -O2 -o reconstructed_bin candidate.c</div>
+          <div class="text-[#94a3b8] mt-2 mb-1"># 2. Or compile as shared library for differential test injection:</div>
+          <div class="text-[#38bdf8] select-all">gcc -O2 -fPIC -shared -o candidate.so candidate.c</div>
+          <div class="text-[#94a3b8] mt-2 mb-1"># 3. Run and verify on host:</div>
+          <div class="text-[#34d399] select-all">./reconstructed_bin</div>
+        </div>
       </div>
 
     </section>
