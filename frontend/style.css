@@ -43,6 +43,9 @@ html, body {
   background-color: var(--bg-canvas);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.045), 0 1px 3px rgba(0, 0, 0, 0.03);
   border: 1px solid #e6e6e8;
+  min-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
 }
 
 /* Subtle Micro-Dot Matrix Background (Exact Match to Reference Hero) */
@@ -96,16 +99,31 @@ html, body {
 
 /* Hero 3D Ghost Icon with tactile soft drop shadow */
 .hero-3d-left {
-  width: 112px;
-  height: 112px;
+  width: 120px;
+  height: 120px;
   object-fit: contain;
-  transform: rotate(-8deg);
+  transform: rotate(-6deg);
   filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.16)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.08));
   transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 .hero-3d-left:hover {
-  transform: rotate(-4deg) scale(1.05);
+  transform: rotate(-2deg) scale(1.06);
+  filter: drop-shadow(0 24px 30px rgba(0, 0, 0, 0.22)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.1));
+}
+
+/* Hero 3D Graph Icon with tactile soft drop shadow */
+.hero-3d-right {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  transform: rotate(6deg);
+  filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.16)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.08));
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.hero-3d-right:hover {
+  transform: rotate(2deg) scale(1.06);
   filter: drop-shadow(0 24px 30px rgba(0, 0, 0, 0.22)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.1));
 }
 
@@ -168,6 +186,9 @@ pre, code {
 .screen-view.active {
   display: flex;
   opacity: 1;
+  flex: 1 1 0%;
+  flex-direction: column;
+  width: 100%;
 }
 
 /* Graph Canvas Container (Daylight Blueprint Theme) */

@@ -75,33 +75,34 @@
     <!-- ================================================================== -->
     <!-- SCREEN 1: CLEAN MINIMALIST HERO + UNBOXED 3D ICONS                 -->
     <!-- ================================================================== -->
-    <section id="screenHero" class="screen-view active flex-1 flex-col justify-center">
+    <section id="screenHero" class="screen-view active flex-1 flex flex-col items-center justify-center w-full min-h-[580px]">
 
-      <!-- Center Hero Region with Clean Unboxed 3D Icons -->
-      <div class="relative flex-1 flex flex-col items-center justify-center px-6 py-16 md:py-24">
+      <!-- Center Hero Region (Dead-Center Symmetrical Layout) -->
+      <div class="relative w-full max-w-[1140px] mx-auto flex-1 flex items-center justify-center px-4 py-6 md:py-10">
 
-        <div class="w-full max-w-[1060px] mx-auto grid grid-cols-1 lg:grid-cols-12 items-center gap-6">
+        <div class="w-full flex items-center justify-between relative">
 
           <!-- LEFT 3D ICON (Ghost with tactile soft drop shadow) -->
-          <div class="hidden lg:flex lg:col-span-2 items-center justify-center select-none -mt-8">
+          <div class="hidden lg:flex w-[140px] flex-none items-center justify-center select-none">
             <img
               src="/static/assets/icon_ghost_3d.png"
               alt="GhostGraph 3D"
               onclick="selectTarget('space_invaders')"
               class="hero-3d-left cursor-pointer"
+              title="1978 Space Invaders Arcade Target"
             />
           </div>
 
-          <!-- CENTER HERO TEXT & CTA -->
-          <div class="lg:col-span-8 flex flex-col items-center text-center">
+          <!-- CENTER HERO TEXT & CTA (100% Dead-Center) -->
+          <div class="flex-1 max-w-[680px] mx-auto flex flex-col items-center text-center px-2">
 
             <!-- Main Display Headline in Outfit Sans -->
-            <h1 class="text-[44px] sm:text-[60px] md:text-[68px] font-semibold tracking-[-0.032em] leading-[1.08] text-[#0b0b0e]">
+            <h1 class="text-[44px] sm:text-[60px] md:text-[68px] font-semibold tracking-[-0.032em] leading-[1.08] text-[#0b0b0e] text-center">
               Power Up Binary<br>Reconstruction
             </h1>
 
             <!-- Simple, Plain-English Subtitle -->
-            <p class="mt-5 text-[15px] md:text-[16px] font-normal text-[#686c75] leading-[1.6] max-w-[500px] mx-auto">
+            <p class="mt-5 text-[15px] md:text-[16px] font-normal text-[#686c75] leading-[1.6] max-w-[500px] mx-auto text-center">
               Turn mystery binary code back into working, verified software using AI and FalkorDB knowledge graphs.
             </p>
 
@@ -137,15 +138,24 @@
             </div>
             <div id="uploadStatusMessage" class="hidden text-xs font-mono text-[#16a34a] pt-2"></div>
 
-            <!-- Mobile / Tablet 3D Ghost Icon -->
-            <div class="flex lg:hidden items-center justify-center mt-8">
-              <img src="/static/assets/icon_ghost_3d.png" alt="GhostGraph 3D" onclick="selectTarget('space_invaders')" class="hero-3d-left cursor-pointer"/>
+            <!-- Mobile / Tablet 3D Icons -->
+            <div class="flex lg:hidden items-center justify-center gap-6 mt-8">
+              <img src="/static/assets/icon_ghost_3d.png" alt="GhostGraph 3D" onclick="selectTarget('space_invaders')" class="hero-3d-left cursor-pointer w-20 h-20"/>
+              <img src="/static/assets/icon_graph_3d.png" alt="Graph 3D" onclick="selectTarget('lunar_lander')" class="hero-3d-right cursor-pointer w-20 h-20"/>
             </div>
 
           </div>
 
-          <!-- Empty 2-column spacer for balanced grid without graph icon -->
-          <div class="hidden lg:block lg:col-span-2"></div>
+          <!-- RIGHT 3D ICON (Graph / Crystal with tactile soft drop shadow) -->
+          <div class="hidden lg:flex w-[140px] flex-none items-center justify-center select-none">
+            <img
+              src="/static/assets/icon_graph_3d.png"
+              alt="Graph 3D"
+              onclick="selectTarget('lunar_lander')"
+              class="hero-3d-right cursor-pointer"
+              title="1969 Apollo 11 Lunar Guidance Target"
+            />
+          </div>
 
         </div>
 
