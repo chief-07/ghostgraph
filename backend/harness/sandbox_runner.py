@@ -57,7 +57,7 @@ def main():
                     "billing": ["compute_progressive_tax", "process_invoice"],
                     "lunar_lander": ["THROTTLE_CONTROL_ROUTINES", "calculate_throttle", "update_newtonian_physics", "apply_thrust_vector"],
                     "snake": ["step_snake_tick", "step"],
-                    "space_invaders": ["aliens_missile_move", "handle_missiles"],
+                    "space_invaders": ["aliensMissileMove", "aliens_missile_move", "handle_missiles"],
                     "telemetry": ["verify_crc16_checksum"],
                     "pacman": ["update_blinky_ai"],
                     "keygen": ["hash_fnv1a_block", "validate_license_tier"]
