@@ -67,7 +67,7 @@ def test_truthful_lunar_lander_execution():
     assert res_syntax["parity_percentage"] == 0.0, "Syntax error candidate must score 0.0%!"
     assert "Candidate Compilation/Syntax Error" in res_syntax["results"][0]["diff"]
 
-    # 2. Broken candidate (returns 0 throttle everywhere)
+    # 2. Broken candidate (returns 0 throttle everywhere and lacks subroutines)
     broken_code = """
 def THROTTLE_CONTROL_ROUTINES(desired_accel):
     return 0.0
@@ -75,29 +75,45 @@ def THROTTLE_CONTROL_ROUTINES(desired_accel):
     res_broken = differential_tester.run_tests(target_name="lunar_lander", candidate_code=broken_code)
     print("\n--- TEST 5: LUNAR BROKEN THROTTLE CANDIDATE ---")
     print(f"Parity: {res_broken['parity_percentage']}% (Passed: {res_broken['passed']}/{res_broken['total_vectors']})")
-    assert res_broken["parity_percentage"] == 60.0, "Broken throttle candidate must fail all propulsion/trajectory tests!"
+    assert res_broken["parity_percentage"] <= 10.0, f"Broken candidate must fail all candidate-driven tests, got {res_broken['parity_percentage']}%"
     failed_tests = [r["name"] for r in res_broken["results"] if r["status"] == "FAILED"]
+    assert "State Register Initialization" in failed_tests
     assert "Hover Equilibrium Threshold" in failed_tests
     assert "Maximum Rate Climb Vector" in failed_tests
-    assert "Tsiolkovsky Propellant Depletion Rate" in failed_tests
-    assert "Positive Pitch Gimbal Vectoring" in failed_tests
-    assert "Negative Pitch Deceleration Vectoring" in failed_tests
-    assert "Throttle Table 0x00403000 Non-Linearity" in failed_tests
-    assert "Deceleration Burn Trajectory" in failed_tests
-    assert "End-to-End Guided Lunar Descent" in failed_tests
+    assert "Terrain Raycast: Crater Ridge" in failed_tests
+    assert "Apollo Nominal Soft Touchdown" in failed_tests
 
-    # 3. Grounded candidate (authentic Apollo guidance routine)
+    # 3. Grounded candidate (authentic Apollo guidance routine with grounded subroutines)
     grounded_code = """
+LM_INITIAL_MASS = 15103.0
+LOWCRIT = 0.10
+HIGHCRIT = 0.60
+MAX_DPS_THRUST = 45000.0
+
+LUNAR_TERRAIN = [75.0 - (i * 5.0) if i < 11 else (10.0 if i <= 19 else 10.0 + (i - 19) * 6.25) for i in range(32)]
+
 def THROTTLE_CONTROL_ROUTINES(desired_accel):
-    lowcrit = 0.10
-    highcrit = 0.60
-    fc = desired_accel * 15103.0
-    throttle = fc / 45000.0
-    if throttle <= lowcrit:
-        return lowcrit
-    elif throttle > highcrit:
+    fc = desired_accel * LM_INITIAL_MASS
+    effective_throttle = fc / MAX_DPS_THRUST
+    if effective_throttle <= LOWCRIT:
+        return LOWCRIT
+    elif effective_throttle > HIGHCRIT:
         return 1.00
-    return throttle
+    return effective_throttle
+
+def check_altitude_raycast(x, y):
+    dx = 1000.0 / 31.0
+    seg = max(0, min(30, int(x / dx)))
+    t = (x - (seg * dx)) / dx
+    terrain_y = (1.0 - t) * LUNAR_TERRAIN[seg] + t * LUNAR_TERRAIN[seg + 1]
+    return y - terrain_y
+
+def evaluate_touchdown(vy, vx, pitch, slope=0.0):
+    if abs(vy) > 3.0: return -1
+    if abs(vx) > 1.5: return -2
+    if abs(pitch) > 0.10: return -3
+    if slope > 0.08: return -4
+    return 1
 """
     res_grounded = differential_tester.run_tests(target_name="lunar_lander", candidate_code=grounded_code)
     print("\n--- TEST 6: LUNAR GROUNDED APOLLO GUIDANCE CANDIDATE ---")

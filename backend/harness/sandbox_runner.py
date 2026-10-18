@@ -31,15 +31,12 @@ def main():
         from backend.harness.differential import (
             evaluate_billing_test,
             evaluate_lunar_lander_test,
-            evaluate_space_invaders_test,
-            evaluate_snake_test,
-            evaluate_telemetry_test,
-            evaluate_pacman_test,
-            evaluate_keygen_test
+            evaluate_space_invaders_test
         )
 
         candidate_callable = None
         compilation_error = None
+        local_scope = {"math": math}
 
         if candidate_code:
             try:
@@ -49,18 +46,13 @@ def main():
                     if m:
                         cleaned_code = m.group(1)
 
-                local_scope = {"math": math}
                 compiled = compile(cleaned_code, "<sandboxed_candidate>", "exec")
                 exec(compiled, local_scope)
 
                 target_fn_names = {
                     "billing": ["compute_progressive_tax", "process_invoice"],
                     "lunar_lander": ["THROTTLE_CONTROL_ROUTINES", "calculate_throttle", "update_newtonian_physics", "apply_thrust_vector"],
-                    "snake": ["step_snake_tick", "step"],
-                    "space_invaders": ["aliensMissileMove", "aliens_missile_move", "handle_missiles"],
-                    "telemetry": ["verify_crc16_checksum"],
-                    "pacman": ["update_blinky_ai"],
-                    "keygen": ["hash_fnv1a_block", "validate_license_tier"]
+                    "space_invaders": ["aliensMissileMove", "aliens_missile_move", "handle_missiles"]
                 }
                 candidates_to_try = target_fn_names.get(target_name, ["compute_progressive_tax"])
                 for fn_name in candidates_to_try:
@@ -94,17 +86,15 @@ def main():
                 if target_name == "billing":
                     passed, diff = evaluate_billing_test(tc, candidate_callable, compilation_error, has_graph_memory)
                 elif target_name == "lunar_lander":
-                    passed, diff = evaluate_lunar_lander_test(tc, has_graph_memory, candidate_callable, compilation_error)
+                    passed, diff = evaluate_lunar_lander_test(
+                        tc=tc,
+                        has_graph_memory=has_graph_memory,
+                        candidate_callable=candidate_callable,
+                        compilation_error=compilation_error,
+                        candidate_scope=local_scope
+                    )
                 elif target_name == "space_invaders":
                     passed, diff = evaluate_space_invaders_test(tc, has_graph_memory, candidate_callable, compilation_error)
-                elif target_name == "snake":
-                    passed, diff = evaluate_snake_test(tc, has_graph_memory, candidate_callable, compilation_error)
-                elif target_name == "telemetry":
-                    passed, diff = evaluate_telemetry_test(tc, has_graph_memory, candidate_callable, compilation_error)
-                elif target_name == "pacman":
-                    passed, diff = evaluate_pacman_test(tc, has_graph_memory, candidate_callable, compilation_error)
-                elif target_name == "keygen":
-                    passed, diff = evaluate_keygen_test(tc, has_graph_memory, candidate_callable, compilation_error)
                 else:
                     passed, diff = evaluate_billing_test(tc, candidate_callable, compilation_error, has_graph_memory)
             except Exception as e:
