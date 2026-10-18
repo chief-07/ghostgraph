@@ -31,7 +31,8 @@ def main():
         from backend.harness.differential import (
             evaluate_billing_test,
             evaluate_lunar_lander_test,
-            evaluate_space_invaders_test
+            evaluate_space_invaders_test,
+            evaluate_custom_upload_test
         )
 
         candidate_callable = None
@@ -54,7 +55,7 @@ def main():
                     "lunar_lander": ["THROTTLE_CONTROL_ROUTINES", "calculate_throttle", "update_newtonian_physics", "apply_thrust_vector"],
                     "space_invaders": ["aliensMissileMove", "aliens_missile_move", "handle_missiles"]
                 }
-                candidates_to_try = target_fn_names.get(target_name, ["compute_progressive_tax"])
+                candidates_to_try = target_fn_names.get(target_name, [])
                 for fn_name in candidates_to_try:
                     for k, v in local_scope.items():
                         if callable(v) and (k == fn_name or fn_name.lower() in k.lower()):
@@ -73,6 +74,12 @@ def main():
                 compilation_error = f"{type(e).__name__}: {e}"
 
         results = []
+        is_custom_target = (
+            target_name.startswith("upload_")
+            or target_name == "custom_upload"
+            or target_name not in ("billing", "lunar_lander", "space_invaders", "snake", "telemetry", "pacman", "keygen")
+        )
+
         for idx, tc in enumerate(test_vectors):
             tid = tc.get("id", f"TC_{idx+1:02d}")
             name = tc.get("name", tid)
@@ -83,7 +90,9 @@ def main():
             diff = ""
 
             try:
-                if target_name == "billing":
+                if is_custom_target or tc.get("test_type"):
+                    passed, diff = evaluate_custom_upload_test(tc, candidate_callable, compilation_error, has_graph_memory)
+                elif target_name == "billing":
                     passed, diff = evaluate_billing_test(tc, candidate_callable, compilation_error, has_graph_memory)
                 elif target_name == "lunar_lander":
                     passed, diff = evaluate_lunar_lander_test(
@@ -96,7 +105,7 @@ def main():
                 elif target_name == "space_invaders":
                     passed, diff = evaluate_space_invaders_test(tc, has_graph_memory, candidate_callable, compilation_error)
                 else:
-                    passed, diff = evaluate_billing_test(tc, candidate_callable, compilation_error, has_graph_memory)
+                    passed, diff = evaluate_custom_upload_test(tc, candidate_callable, compilation_error, has_graph_memory)
             except Exception as e:
                 passed = False
                 diff = f"Runtime Exception in test {tid}: {type(e).__name__}: {e}"

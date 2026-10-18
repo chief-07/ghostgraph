@@ -801,8 +801,8 @@ async def upload_custom_binary(file: UploadFile = File(...)):
     Disassembles binary using Capstone, extracts call targets and memory dereferences,
     and ingests directly into an isolated FalkorDB multigraph via TopologyAgent.
     """
-    if file.size and file.size > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large (max 2MB).")
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 50MB).")
 
     contents = await file.read()
     filename = file.filename or "uploaded.bin"
